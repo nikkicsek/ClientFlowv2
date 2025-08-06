@@ -56,11 +56,7 @@ function EditCategoryForm({ category, onClose }: EditCategoryFormProps) {
 
   const updateMutation = useMutation({
     mutationFn: (data: Partial<InsertServiceCategory>) =>
-      apiRequest(`/api/service-categories/${category.id}`, {
-        method: "PUT",
-        body: JSON.stringify(data),
-        headers: { "Content-Type": "application/json" },
-      }),
+      apiRequest("PUT", `/api/service-categories/${category.id}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/service-categories"] });
       toast({ title: "Category updated successfully!" });
@@ -77,9 +73,7 @@ function EditCategoryForm({ category, onClose }: EditCategoryFormProps) {
 
   const deleteMutation = useMutation({
     mutationFn: () =>
-      apiRequest(`/api/service-categories/${category.id}`, {
-        method: "DELETE",
-      }),
+      apiRequest("DELETE", `/api/service-categories/${category.id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/service-categories"] });
       toast({ title: "Category deleted successfully!" });
@@ -183,11 +177,7 @@ function CreateCategoryForm({ onClose }: { onClose: () => void }) {
     mutationFn: async (data: InsertServiceCategory) => {
       console.log("Creating category with data:", data);
       try {
-        const response = await apiRequest("/api/service-categories", {
-          method: "POST",
-          body: JSON.stringify(data),
-          headers: { "Content-Type": "application/json" },
-        });
+        const response = await apiRequest("POST", "/api/service-categories", data);
         console.log("Category created successfully:", response);
         return response;
       } catch (error) {
