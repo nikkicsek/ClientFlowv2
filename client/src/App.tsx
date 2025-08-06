@@ -7,6 +7,7 @@ import { useAuth } from "@/hooks/useAuth";
 import Landing from "@/pages/landing";
 import Dashboard from "@/pages/dashboard";
 import AdminDashboard from "@/pages/admin-dashboard";
+import ClientView from "@/pages/client-view";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -22,6 +23,7 @@ function Router() {
         <Route path="/" component={Landing} />
       ) : (
         <>
+          <Route path="/client-view" component={ClientView} />
           {(user as any)?.role === 'admin' ? (
             <Route path="/" component={AdminDashboard} />
           ) : (
