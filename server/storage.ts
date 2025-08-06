@@ -66,6 +66,7 @@ export interface IStorage {
   // Task operations
   getTasksByProject(projectId: string): Promise<Task[]>;
   getTasksByProjectWithDetails(projectId: string): Promise<(Task & { service?: Service })[]>;
+  getAllTasksWithDetails(): Promise<(Task & { service?: Service; project?: Project })[]>;
   createTask(task: InsertTask): Promise<Task>;
   updateTask(id: string, updates: Partial<InsertTask>): Promise<Task>;
   
@@ -211,6 +212,25 @@ export class DatabaseStorage implements IStorage {
     return result.map(({ task, service }) => ({
       ...task,
       service: service || undefined,
+    }));
+  }
+
+  async getAllTasksWithDetails(): Promise<(Task & { service?: Service; project?: Project })[]> {
+    const result = await db
+      .select({
+        task: tasks,
+        service: services,
+        project: projects,
+      })
+      .from(tasks)
+      .leftJoin(services, eq(tasks.serviceId, services.id))
+      .leftJoin(projects, eq(tasks.projectId, projects.id))
+      .orderBy(desc(tasks.createdAt));
+
+    return result.map(({ task, service, project }) => ({
+      ...task,
+      service: service || undefined,
+      project: project || undefined,
     }));
   }
 

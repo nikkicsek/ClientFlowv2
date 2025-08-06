@@ -90,6 +90,27 @@ export default function AdminDashboard() {
     },
   });
 
+  const { data: allTasks, isLoading: tasksLoading } = useQuery({
+    queryKey: ["/api/admin/tasks"],
+    queryFn: async () => {
+      const response = await apiRequest("GET", "/api/admin/tasks");
+      return response.json();
+    },
+    onError: (error: Error) => {
+      if (isUnauthorizedError(error)) {
+        toast({
+          title: "Unauthorized",
+          description: "You are logged out. Logging in again...",
+          variant: "destructive",
+        });
+        setTimeout(() => {
+          window.location.href = "/api/login";
+        }, 500);
+        return;
+      }
+    },
+  });
+
   const handleProjectCreated = () => {
     queryClient.invalidateQueries({ queryKey: ["/api/admin/projects"] });
     setShowCreateProject(false);
@@ -101,6 +122,7 @@ export default function AdminDashboard() {
 
   const handleTaskCreated = () => {
     queryClient.invalidateQueries({ queryKey: ["/api/projects", selectedProject, "tasks"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/admin/tasks"] });
     setShowCreateTask(false);
     toast({
       title: "Task Created",
@@ -161,8 +183,9 @@ export default function AdminDashboard() {
       {/* Main Content */}
       <div className="p-6">
         <Tabs defaultValue="projects" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="projects">Projects</TabsTrigger>
+            <TabsTrigger value="tasks">Tasks</TabsTrigger>
             <TabsTrigger value="clients">Clients</TabsTrigger>
             <TabsTrigger value="organizations">Organizations</TabsTrigger>
             <TabsTrigger value="services">Services</TabsTrigger>
@@ -256,6 +279,74 @@ export default function AdminDashboard() {
                             <Eye className="h-3 w-3 mr-1" />
                             View as Client
                           </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="tasks" className="space-y-6">
+            <div className="flex justify-between items-center">
+              <h2 className="text-xl font-semibold text-gray-900">All Tasks</h2>
+              <p className="text-gray-600">View and manage tasks across all projects</p>
+            </div>
+
+            {tasksLoading ? (
+              <div className="animate-pulse space-y-4">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="h-24 bg-gray-200 rounded"></div>
+                ))}
+              </div>
+            ) : !allTasks || allTasks.length === 0 ? (
+              <Card>
+                <CardContent className="p-8 text-center">
+                  <Settings className="h-16 w-16 mx-auto mb-4 text-gray-400" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No Tasks Yet</h3>
+                  <p className="text-gray-600 mb-4">Tasks will appear here as you add them to your projects.</p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-4">
+                {allTasks.map((task: any) => (
+                  <Card key={task.id} className="hover:shadow-md transition-shadow">
+                    <CardContent className="p-4">
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-2">
+                            <h3 className="font-medium text-gray-900">{task.title}</h3>
+                            <Badge variant={
+                              task.status === 'completed' ? 'default' :
+                              task.status === 'in_progress' ? 'secondary' :
+                              task.status === 'needs_approval' ? 'outline' :
+                              'destructive'
+                            }>
+                              {task.status === 'in_progress' ? 'In Progress' :
+                               task.status === 'completed' ? 'Completed' :
+                               task.status === 'needs_approval' ? 'Needs Approval' :
+                               task.status === 'outstanding' ? 'Outstanding' :
+                               'Needs Clarification'}
+                            </Badge>
+                          </div>
+                          {task.description && (
+                            <p className="text-sm text-gray-600 mb-2">{task.description}</p>
+                          )}
+                          <div className="flex items-center gap-4 text-sm text-gray-500">
+                            <span>Project: <strong>{task.project?.name || 'Unknown Project'}</strong></span>
+                            {task.service && (
+                              <span>Service: <strong>{task.service.name}</strong></span>
+                            )}
+                            {task.dueDate && (
+                              <span>Due: <strong>{new Date(task.dueDate).toLocaleDateString()}</strong></span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="text-right text-sm text-gray-500">
+                          {task.createdAt && (
+                            <p>Created: {new Date(task.createdAt).toLocaleDateString()}</p>
+                          )}
                         </div>
                       </div>
                     </CardContent>
