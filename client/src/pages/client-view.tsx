@@ -410,8 +410,14 @@ export default function ClientView() {
             )}
           </TabsContent>
 
-          <TabsContent value="analytics" className="space-y-4">
-            <h3 className="text-lg font-semibold text-gray-900">Project Analytics</h3>
+          <TabsContent value="analytics" className="space-y-6">
+            <div className="flex justify-between items-center">
+              <h3 className="text-lg font-semibold text-gray-900">Project Analytics</h3>
+              <Badge variant="outline" className="bg-green-50 text-green-700">
+                Live Data Connected
+              </Badge>
+            </div>
+            
             {!analytics || analytics.length === 0 ? (
               <Card>
                 <CardContent className="p-8 text-center">
@@ -419,22 +425,188 @@ export default function ClientView() {
                 </CardContent>
               </Card>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {analytics?.map((metric: any, index: number) => (
-                  <Card key={index}>
-                    <CardContent className="p-4">
-                      <h4 className="font-medium text-gray-900 capitalize">
-                        {metric.metricType.replace('_', ' ')}
-                      </h4>
-                      <p className="text-2xl font-bold text-blue-600 mt-2">
-                        {Number(metric.metricValue).toLocaleString()}
-                      </p>
-                      <p className="text-sm text-gray-500 mt-1">
-                        {metric.period} • {new Date(metric.date).toLocaleDateString()}
-                      </p>
-                    </CardContent>
-                  </Card>
-                ))}
+              <div className="space-y-6">
+                {/* Website & Organic Performance */}
+                <div>
+                  <h4 className="text-md font-medium text-gray-800 mb-3">Website & Organic Performance</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {analytics
+                      ?.filter((metric: any) => ['website_visits', 'leads_generated', 'social_engagement'].includes(metric.metricType))
+                      .map((metric: any, index: number) => (
+                        <Card key={index} className="border-l-4 border-l-green-500">
+                          <CardContent className="p-4">
+                            <div className="flex items-center justify-between mb-2">
+                              <h5 className="text-sm font-medium text-gray-700 capitalize">
+                                {metric.metricType.replace('_', ' ')}
+                              </h5>
+                              {metric.additionalData?.source && (
+                                <Badge variant="secondary" className="text-xs">
+                                  {metric.additionalData.source.replace('_', ' ')}
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="text-2xl font-bold text-green-600">
+                              {Number(metric.metricValue).toLocaleString()}
+                            </p>
+                            <div className="text-xs text-gray-500 mt-1 space-y-1">
+                              <p>{metric.period} • {new Date(metric.date).toLocaleDateString()}</p>
+                              {metric.additionalData?.bounce_rate && (
+                                <p>Bounce Rate: {(metric.additionalData.bounce_rate * 100).toFixed(1)}%</p>
+                              )}
+                              {metric.additionalData?.conversion_rate && (
+                                <p>Conversion Rate: {(metric.additionalData.conversion_rate * 100).toFixed(1)}%</p>
+                              )}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                  </div>
+                </div>
+
+                {/* Paid Advertising Performance */}
+                <div>
+                  <h4 className="text-md font-medium text-gray-800 mb-3">Paid Advertising Campaigns</h4>
+                  
+                  {/* Ad Spend Overview */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                    {analytics
+                      ?.filter((metric: any) => metric.metricType.includes('_ads_spend') || metric.metricType === 'total_ad_spend')
+                      .slice(0, 5)
+                      .map((metric: any, index: number) => {
+                        const platform = metric.metricType === 'total_ad_spend' ? 'Total' : 
+                          metric.metricType.replace('_ads_spend', '').replace('_', ' ');
+                        const platformColor = {
+                          'google': 'border-l-blue-500 text-blue-600',
+                          'facebook': 'border-l-blue-600 text-blue-600', 
+                          'linkedin': 'border-l-blue-700 text-blue-700',
+                          'youtube': 'border-l-red-500 text-red-600',
+                          'tiktok': 'border-l-black text-black',
+                          'Total': 'border-l-purple-500 text-purple-600'
+                        }[platform.toLowerCase()] || 'border-l-gray-500 text-gray-600';
+                        
+                        return (
+                          <Card key={index} className={`border-l-4 ${platformColor.split(' ')[0]}`}>
+                            <CardContent className="p-3">
+                              <div className="flex items-center justify-between mb-1">
+                                <h5 className="text-sm font-medium text-gray-700 capitalize">
+                                  {platform} Ads
+                                </h5>
+                              </div>
+                              <p className={`text-xl font-bold ${platformColor.split(' ')[1]}`}>
+                                ${Number(metric.metricValue).toLocaleString()}
+                              </p>
+                              <div className="text-xs text-gray-500 mt-1">
+                                <p>{new Date(metric.date).toLocaleDateString()}</p>
+                                {metric.additionalData?.roas && (
+                                  <p>ROAS: {metric.additionalData.roas}x</p>
+                                )}
+                                {metric.additionalData?.blended_roas && (
+                                  <p>Blended ROAS: {metric.additionalData.blended_roas}x</p>
+                                )}
+                              </div>
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
+                  </div>
+
+                  {/* Campaign Performance Details */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {analytics
+                      ?.filter((metric: any) => metric.metricType.includes('_ads_') && !metric.metricType.includes('_spend'))
+                      .slice(0, 6)
+                      .map((metric: any, index: number) => {
+                        const platform = metric.metricType.split('_')[0];
+                        const metricName = metric.metricType.split('_').slice(-1)[0];
+                        
+                        return (
+                          <Card key={index} className="bg-gradient-to-r from-blue-50 to-purple-50">
+                            <CardContent className="p-4">
+                              <div className="flex justify-between items-start mb-2">
+                                <div>
+                                  <h5 className="text-sm font-semibold text-gray-800 capitalize">
+                                    {platform} {metricName}
+                                  </h5>
+                                  {metric.additionalData?.campaign_name && (
+                                    <p className="text-xs text-gray-600">{metric.additionalData.campaign_name}</p>
+                                  )}
+                                </div>
+                                <Badge variant="outline" className="text-xs">
+                                  {platform.toUpperCase()}
+                                </Badge>
+                              </div>
+                              
+                              <p className="text-2xl font-bold text-gray-800 mb-2">
+                                {Number(metric.metricValue).toLocaleString()}
+                                {metricName === 'conversions' && ' conversions'}
+                                {metricName === 'leads' && ' leads'}
+                              </p>
+                              
+                              <div className="text-xs text-gray-600 space-y-1">
+                                {metric.additionalData?.conversion_rate && (
+                                  <p>Conversion Rate: {metric.additionalData.conversion_rate}%</p>
+                                )}
+                                {metric.additionalData?.cost_per_conversion && (
+                                  <p>Cost/Conversion: ${metric.additionalData.cost_per_conversion}</p>
+                                )}
+                                {metric.additionalData?.cost_per_lead && (
+                                  <p>Cost/Lead: ${metric.additionalData.cost_per_lead}</p>
+                                )}
+                                {metric.additionalData?.ctr && (
+                                  <p>CTR: {metric.additionalData.ctr}%</p>
+                                )}
+                                {metric.additionalData?.impressions && (
+                                  <p>Impressions: {Number(metric.additionalData.impressions).toLocaleString()}</p>
+                                )}
+                              </div>
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
+                  </div>
+                </div>
+
+                {/* Attribution & Cross-Platform Analysis */}
+                {analytics?.some((metric: any) => metric.metricType === 'attribution_analysis') && (
+                  <div>
+                    <h4 className="text-md font-medium text-gray-800 mb-3">Attribution Analysis</h4>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                      {analytics
+                        ?.filter((metric: any) => metric.metricType === 'attribution_analysis')
+                        .map((metric: any, index: number) => (
+                          <Card key={index} className="border-2 border-purple-200">
+                            <CardContent className="p-4">
+                              <h5 className="text-sm font-semibold text-gray-800 mb-3">
+                                Multi-Touch Attribution
+                              </h5>
+                              
+                              <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                  <p className="text-xs font-medium text-gray-600 mb-2">First Touch Attribution</p>
+                                  {Object.entries(metric.additionalData?.first_touch || {}).map(([platform, percentage]: [string, any]) => (
+                                    <div key={platform} className="flex justify-between text-xs mb-1">
+                                      <span className="capitalize">{platform.replace('_', ' ')}</span>
+                                      <span className="font-medium">{percentage}%</span>
+                                    </div>
+                                  ))}
+                                </div>
+                                
+                                <div>
+                                  <p className="text-xs font-medium text-gray-600 mb-2">Last Touch Attribution</p>
+                                  {Object.entries(metric.additionalData?.last_touch || {}).map(([platform, percentage]: [string, any]) => (
+                                    <div key={platform} className="flex justify-between text-xs mb-1">
+                                      <span className="capitalize">{platform.replace('_', ' ')}</span>
+                                      <span className="font-medium">{percentage}%</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </TabsContent>
