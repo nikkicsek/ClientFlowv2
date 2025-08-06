@@ -57,6 +57,29 @@ function updateUserSession(
 async function upsertUser(
   claims: any,
 ) {
+  // Check if this user has an accepted invitation
+  const userEmail = claims["email"];
+  if (userEmail) {
+    const invitations = await storage.getTeamInvitations();
+    const acceptedInvitation = invitations.find(inv => 
+      inv.email === userEmail && inv.status === 'accepted'
+    );
+    
+    // If user has an accepted invitation, create them with admin role
+    if (acceptedInvitation) {
+      await storage.upsertUser({
+        id: claims["sub"],
+        email: claims["email"],
+        firstName: claims["first_name"],
+        lastName: claims["last_name"],
+        profileImageUrl: claims["profile_image_url"],
+        role: 'admin', // Team members get admin access
+      });
+      return;
+    }
+  }
+  
+  // Default user creation (no role specified, will be client)
   await storage.upsertUser({
     id: claims["sub"],
     email: claims["email"],

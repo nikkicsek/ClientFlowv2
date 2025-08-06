@@ -634,6 +634,113 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Team invitation routes (admin only)
+  app.get('/api/admin/team-invitations', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Only admins can view team invitations" });
+      }
+
+      const invitations = await storage.getTeamInvitations();
+      res.json(invitations);
+    } catch (error) {
+      console.error("Error fetching team invitations:", error);
+      res.status(500).json({ message: "Failed to fetch team invitations" });
+    }
+  });
+
+  app.post('/api/admin/team-invitations', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Only admins can send invitations" });
+      }
+
+      const { email } = req.body;
+      if (!email) {
+        return res.status(400).json({ message: "Email is required" });
+      }
+
+      // Check if user already exists
+      const existingUser = await storage.getUserByEmail?.(email);
+      if (existingUser) {
+        return res.status(400).json({ message: "User with this email already exists" });
+      }
+
+      // Check if invitation already exists
+      const existingInvitations = await storage.getTeamInvitations();
+      const pendingInvitation = existingInvitations.find(inv => 
+        inv.email === email && inv.status === 'pending'
+      );
+      
+      if (pendingInvitation) {
+        return res.status(400).json({ message: "Invitation already sent to this email" });
+      }
+
+      // Create invitation token
+      const invitationToken = Math.random().toString(36).substr(2, 32);
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 7); // 7 days expiry
+
+      const invitation = await storage.createTeamInvitation({
+        email,
+        invitedBy: userId,
+        role: 'admin',
+        status: 'pending',
+        invitationToken,
+        expiresAt,
+      });
+
+      res.status(201).json({ 
+        message: "Invitation sent successfully",
+        invitation: {
+          ...invitation,
+          invitationToken: undefined // Don't send token in response
+        },
+        invitationLink: `${req.protocol}://${req.get('host')}/invite/${invitationToken}`
+      });
+    } catch (error) {
+      console.error("Error creating team invitation:", error);
+      res.status(500).json({ message: "Failed to create invitation" });
+    }
+  });
+
+  // Accept invitation endpoint
+  app.post('/api/accept-invitation/:token', async (req, res) => {
+    try {
+      const { token } = req.params;
+      
+      const invitation = await storage.getTeamInvitationByToken(token);
+      if (!invitation) {
+        return res.status(404).json({ message: "Invalid invitation token" });
+      }
+
+      if (invitation.status !== 'pending') {
+        return res.status(400).json({ message: "Invitation has already been used or expired" });
+      }
+
+      if (new Date() > invitation.expiresAt) {
+        return res.status(400).json({ message: "Invitation has expired" });
+      }
+
+      // Mark invitation as accepted
+      await storage.updateTeamInvitationStatus(invitation.id, 'accepted', new Date());
+
+      res.json({ 
+        message: "Invitation accepted successfully",
+        redirectTo: "/api/login" // Redirect to login to complete registration
+      });
+    } catch (error) {
+      console.error("Error accepting invitation:", error);
+      res.status(500).json({ message: "Failed to accept invitation" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

@@ -7,6 +7,7 @@ import {
   analytics,
   messages,
   kpis,
+  teamInvitations,
   type User,
   type UpsertUser,
   type Project,
@@ -23,6 +24,8 @@ import {
   type InsertMessage,
   type Kpi,
   type InsertKpi,
+  type TeamInvitation,
+  type InsertTeamInvitation,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, gte, lte } from "drizzle-orm";
@@ -68,6 +71,12 @@ export interface IStorage {
   getKpisByProject(projectId: string): Promise<Kpi[]>;
   createKpi(kpi: InsertKpi): Promise<Kpi>;
   updateKpi(id: string, updates: Partial<InsertKpi>): Promise<Kpi | undefined>;
+
+  // Team invitation operations
+  createTeamInvitation(invitation: InsertTeamInvitation): Promise<TeamInvitation>;
+  getTeamInvitationByToken(token: string): Promise<TeamInvitation | undefined>;
+  getTeamInvitations(): Promise<TeamInvitation[]>;
+  updateTeamInvitationStatus(id: string, status: string, acceptedAt?: Date): Promise<TeamInvitation | undefined>;
   deleteKpi(id: string): Promise<void>;
 }
 
@@ -75,6 +84,11 @@ export class DatabaseStorage implements IStorage {
   // User operations
   async getUser(id: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
+  }
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.email, email));
     return user;
   }
 
@@ -253,6 +267,33 @@ export class DatabaseStorage implements IStorage {
 
   async deleteKpi(id: string): Promise<void> {
     await db.delete(kpis).where(eq(kpis.id, id));
+  }
+
+  // Team invitation operations
+  async createTeamInvitation(invitation: InsertTeamInvitation): Promise<TeamInvitation> {
+    const [newInvitation] = await db.insert(teamInvitations).values(invitation).returning();
+    return newInvitation;
+  }
+
+  async getTeamInvitationByToken(token: string): Promise<TeamInvitation | undefined> {
+    const [invitation] = await db.select().from(teamInvitations).where(eq(teamInvitations.invitationToken, token));
+    return invitation;
+  }
+
+  async getTeamInvitations(): Promise<TeamInvitation[]> {
+    return db.select().from(teamInvitations).orderBy(desc(teamInvitations.createdAt));
+  }
+
+  async updateTeamInvitationStatus(id: string, status: string, acceptedAt?: Date): Promise<TeamInvitation | undefined> {
+    const [updatedInvitation] = await db
+      .update(teamInvitations)
+      .set({ 
+        status: status as any,
+        acceptedAt: acceptedAt || null 
+      })
+      .where(eq(teamInvitations.id, id))
+      .returning();
+    return updatedInvitation;
   }
 }
 
