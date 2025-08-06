@@ -944,6 +944,133 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // HeyGen Avatar integration routes
+  app.post('/api/heygen/generate-video', isAuthenticated, async (req: any, res) => {
+    try {
+      const { message, clientName, organizationName, videoType } = req.body;
+      
+      if (!message || !clientName) {
+        return res.status(400).json({ message: "Message and client name are required" });
+      }
+
+      // Check if HeyGen API key is configured
+      const heygenApiKey = process.env.HEYGEN_API_KEY;
+      if (!heygenApiKey) {
+        return res.status(500).json({ 
+          message: "HeyGen API key not configured. Please add HEYGEN_API_KEY to environment variables." 
+        });
+      }
+
+      console.log("Generating HeyGen video for:", clientName);
+
+      // Call HeyGen API to generate video
+      const heygenResponse = await fetch('https://api.heygen.com/v2/video/generate', {
+        method: 'POST',
+        headers: {
+          'X-Api-Key': heygenApiKey,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          video_inputs: [{
+            character: {
+              type: "avatar",
+              avatar_id: "Daisy-inskirt-20220818", // Default professional avatar
+              avatar_style: "normal"
+            },
+            voice: {
+              type: "text", 
+              input_text: message,
+              voice_id: "2d5b0e6cf36f460aa7fc47e3eee4ba54" // Professional female voice
+            },
+            background: {
+              type: "color",
+              value: "#f8fafc" // Light gray background
+            }
+          }],
+          dimension: {
+            width: 1280,
+            height: 720
+          },
+          aspect_ratio: "16:9"
+        })
+      });
+
+      if (!heygenResponse.ok) {
+        const errorData = await heygenResponse.text();
+        console.error("HeyGen API error:", errorData);
+        return res.status(500).json({ 
+          message: "Failed to generate video with HeyGen API",
+          error: errorData
+        });
+      }
+
+      const heygenData = await heygenResponse.json();
+      console.log("HeyGen video generation initiated:", heygenData.data.video_id);
+
+      res.json({
+        success: true,
+        videoId: heygenData.data.video_id,
+        message: "Video generation started. Check status to get download URL."
+      });
+    } catch (error) {
+      console.error("Error generating HeyGen video:", error);
+      res.status(500).json({ 
+        message: "Failed to generate welcome video",
+        error: error.message 
+      });
+    }
+  });
+
+  // Check HeyGen video generation status
+  app.get('/api/heygen/video-status/:videoId', isAuthenticated, async (req: any, res) => {
+    try {
+      const { videoId } = req.params;
+      const heygenApiKey = process.env.HEYGEN_API_KEY;
+      
+      if (!heygenApiKey) {
+        return res.status(500).json({ message: "HeyGen API key not configured" });
+      }
+
+      const statusResponse = await fetch(`https://api.heygen.com/v1/video_status/${videoId}`, {
+        headers: {
+          'X-Api-Key': heygenApiKey
+        }
+      });
+
+      if (!statusResponse.ok) {
+        const errorData = await statusResponse.text();
+        return res.status(500).json({ 
+          message: "Failed to check video status",
+          error: errorData 
+        });
+      }
+
+      const statusData = await statusResponse.json();
+      res.json(statusData);
+    } catch (error) {
+      console.error("Error checking video status:", error);
+      res.status(500).json({ 
+        message: "Failed to check video status",
+        error: error.message 
+      });
+    }
+  });
+
+  // Get video thumbnail placeholder
+  app.get('/api/heygen/video-thumbnail', async (req, res) => {
+    res.setHeader('Content-Type', 'image/svg+xml');
+    res.send(`
+      <svg width="640" height="360" xmlns="http://www.w3.org/2000/svg">
+        <rect width="100%" height="100%" fill="#f1f5f9"/>
+        <circle cx="320" cy="140" r="40" fill="#3b82f6"/>
+        <polygon points="310,125 310,155 340,140" fill="white"/>
+        <text x="320" y="200" text-anchor="middle" font-family="Arial" font-size="16" fill="#64748b">
+          Welcome Video Thumbnail
+        </text>
+      </svg>
+    `);
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
