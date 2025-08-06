@@ -471,8 +471,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log("Creating service with data:", req.body);
       
       // Validate required fields
-      const { name, category } = req.body;
-      if (!name || !category) {
+      const { name, categoryId } = req.body;
+      if (!name || !categoryId) {
         return res.status(400).json({ message: "Service name and category are required" });
       }
 
