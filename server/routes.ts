@@ -823,6 +823,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Assign user to organization
+  app.put('/api/admin/users/:userId/organization', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Only admins can manage user organizations" });
+      }
+
+      const { organizationId } = req.body;
+      
+      if (organizationId) {
+        const updatedUser = await storage.assignUserToOrganization(req.params.userId, organizationId);
+        res.json(updatedUser);
+      } else {
+        const updatedUser = await storage.removeUserFromOrganization(req.params.userId);
+        res.json(updatedUser);
+      }
+    } catch (error) {
+      console.error("Error updating user organization:", error);
+      res.status(500).json({ message: "Failed to update user organization" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
