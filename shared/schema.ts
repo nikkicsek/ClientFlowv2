@@ -151,7 +151,20 @@ export const kpis = pgTable("kpis", {
 });
 
 // Relations
-export const usersRelations = relations(users, ({ many }) => ({
+export const organizationsRelations = relations(organizations, ({ one, many }) => ({
+  primaryContact: one(users, {
+    fields: [organizations.primaryContactId],
+    references: [users.id],
+  }),
+  users: many(users),
+  projects: many(projects),
+}));
+
+export const usersRelations = relations(users, ({ one, many }) => ({
+  organization: one(organizations, {
+    fields: [users.organizationId],
+    references: [organizations.id],
+  }),
   projects: many(projects),
   assignedTasks: many(tasks),
   uploadedFiles: many(projectFiles),
@@ -294,10 +307,10 @@ export const insertKpiSchema = createInsertSchema(kpis).omit({
 });
 
 // Types
+export type Organization = typeof organizations.$inferSelect;
+export type InsertOrganization = z.infer<typeof insertOrganizationSchema>;
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
-export type Organization = typeof organizations.$inferSelect;
-export type InsertOrganization = typeof organizations.$inferInsert;
 
 // Team invitation system for agency staff
 export const teamInvitations = pgTable("team_invitations", {
