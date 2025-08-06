@@ -60,6 +60,8 @@ export interface IStorage {
   // Service operations
   getServices(): Promise<Service[]>;
   createService(service: InsertService): Promise<Service>;
+  updateService(id: string, updates: Partial<InsertService>): Promise<Service>;
+  deleteService(id: string): Promise<void>;
   
   // Task operations
   getTasksByProject(projectId: string): Promise<Task[]>;
@@ -160,6 +162,29 @@ export class DatabaseStorage implements IStorage {
   // Service operations
   async getServices(): Promise<Service[]> {
     return db.select().from(services).where(eq(services.isActive, true));
+  }
+
+  async createService(serviceData: InsertService): Promise<Service> {
+    const [newService] = await db
+      .insert(services)
+      .values(serviceData)
+      .returning();
+    return newService;
+  }
+
+  async updateService(id: string, updates: Partial<InsertService>): Promise<Service> {
+    const [updatedService] = await db
+      .update(services)
+      .set(updates)
+      .where(eq(services.id, id))
+      .returning();
+    return updatedService;
+  }
+
+  async deleteService(id: string): Promise<void> {
+    await db
+      .delete(services)
+      .where(eq(services.id, id));
   }
 
   async createService(service: InsertService): Promise<Service> {

@@ -369,6 +369,75 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Create new service
+  app.post('/api/services', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Only admins can create services" });
+      }
+
+      console.log("Creating service with data:", req.body);
+      
+      // Validate required fields
+      const { name, category } = req.body;
+      if (!name || !category) {
+        return res.status(400).json({ message: "Service name and category are required" });
+      }
+
+      const newService = await storage.createService(req.body);
+      console.log("Successfully created service:", newService);
+      res.status(201).json(newService);
+    } catch (error) {
+      console.error("Error creating service:", error);
+      res.status(500).json({ message: `Failed to create service: ${error.message}` });
+    }
+  });
+
+  // Update service
+  app.put('/api/services/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Only admins can update services" });
+      }
+
+      console.log("Updating service with data:", req.body);
+      
+      const updatedService = await storage.updateService(req.params.id, req.body);
+      console.log("Successfully updated service:", updatedService);
+      res.json(updatedService);
+    } catch (error) {
+      console.error("Error updating service:", error);
+      res.status(500).json({ message: `Failed to update service: ${error.message}` });
+    }
+  });
+
+  // Delete service
+  app.delete('/api/services/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Only admins can delete services" });
+      }
+
+      console.log("Deleting service:", req.params.id);
+      
+      await storage.deleteService(req.params.id);
+      console.log("Successfully deleted service:", req.params.id);
+      res.json({ message: "Service deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting service:", error);
+      res.status(500).json({ message: `Failed to delete service: ${error.message}` });
+    }
+  });
+
   // Admin routes
   app.get('/api/admin/projects', isAuthenticated, async (req: any, res) => {
     try {
