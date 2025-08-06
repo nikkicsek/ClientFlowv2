@@ -14,6 +14,7 @@ import CreateTaskModal from "@/components/create-task-modal";
 import { TeamManagementModal } from "@/components/team-management-modal";
 import { OrganizationManagementModal } from "@/components/organization-management-modal";
 import { AssignOrganizationModal } from "@/components/assign-organization-modal";
+import { CreateClientModal } from "@/components/create-client-modal";
 import type { Project, Task, Service } from "@shared/schema";
 
 export default function AdminDashboard() {
@@ -253,6 +254,7 @@ export default function AdminDashboard() {
           <TabsContent value="clients" className="space-y-6">
             <div className="flex justify-between items-center">
               <h2 className="text-xl font-semibold text-gray-900">Client Accounts</h2>
+              <CreateClientModal />
             </div>
 
             {!clients || clients.length === 0 ? (
