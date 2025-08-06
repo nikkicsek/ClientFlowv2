@@ -271,6 +271,22 @@ export const insertKpiSchema = createInsertSchema(kpis).omit({
 // Types
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
+
+// Team invitation system for agency staff
+export const teamInvitations = pgTable("team_invitations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  email: varchar("email").notNull(),
+  invitedBy: varchar("invited_by").notNull().references(() => users.id),
+  role: varchar("role").notNull().default("admin"), // Agency team members get admin access
+  status: varchar("status").notNull().default("pending"), // pending, accepted, expired
+  invitationToken: varchar("invitation_token").notNull().unique(),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  acceptedAt: timestamp("accepted_at"),
+});
+
+export type TeamInvitation = typeof teamInvitations.$inferSelect;
+export type InsertTeamInvitation = typeof teamInvitations.$inferInsert;
 export type InsertProject = z.infer<typeof insertProjectSchema>;
 export type Project = typeof projects.$inferSelect;
 export type InsertService = z.infer<typeof insertServiceSchema>;

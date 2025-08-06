@@ -9,6 +9,7 @@ import Dashboard from "@/pages/dashboard";
 import AdminDashboard from "@/pages/admin-dashboard";
 import ClientView from "@/pages/client-view";
 import NotFound from "@/pages/not-found";
+import InvitationPage from "@/pages/invitation-page";
 
 function Router() {
   const { user, isAuthenticated, isLoading } = useAuth();
@@ -19,6 +20,9 @@ function Router() {
 
   return (
     <Switch>
+      {/* Public invitation route - accessible without auth */}
+      <Route path="/invite/:token" component={InvitationPage} />
+      
       {!isAuthenticated ? (
         <Route path="/" component={Landing} />
       ) : (

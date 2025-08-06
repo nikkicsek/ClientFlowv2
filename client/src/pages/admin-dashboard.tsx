@@ -11,6 +11,7 @@ import { isUnauthorizedError } from "@/lib/authUtils";
 import { apiRequest } from "@/lib/queryClient";
 import CreateProjectModal from "@/components/create-project-modal";
 import CreateTaskModal from "@/components/create-task-modal";
+import { TeamManagementModal } from "@/components/team-management-modal";
 import type { Project, Task, Service } from "@shared/schema";
 
 export default function AdminDashboard() {
@@ -128,6 +129,7 @@ export default function AdminDashboard() {
               <p className="text-gray-600">Manage clients, projects, and team activities</p>
             </div>
             <div className="flex items-center gap-4">
+              <TeamManagementModal />
               <Badge variant="secondary">Admin</Badge>
               <div className="text-right">
                 <p className="text-sm font-medium text-gray-900">
