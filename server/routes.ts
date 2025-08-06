@@ -95,6 +95,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const projectData = insertProjectSchema.parse(req.body);
       const project = await storage.createProject(projectData);
+      
+      // Auto-generate tasks for Faces of Kelowna services
+      if (project.serviceId) {
+        const service = await storage.getServices();
+        const selectedService = service.find(s => s.id === project.serviceId);
+        if (selectedService && selectedService.name.includes('Faces of Kelowna')) {
+          await storage.createTasksFromTemplates(project.id, project.serviceId);
+        }
+      }
+      
       res.status(201).json(project);
     } catch (error) {
       console.error("Error creating project:", error);
