@@ -11,7 +11,7 @@ import { ArrowLeft, Calendar, DollarSign, CheckCircle, Clock, AlertCircle, FileT
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { apiRequest } from "@/lib/queryClient";
-import type { Project, Task, ProjectFile, Message, Service } from "@shared/schema";
+import type { Project, Task, ProjectFile, Message, Service, Kpi } from "@shared/schema";
 
 export default function ClientView() {
   const [, setLocation] = useLocation();
@@ -52,6 +52,11 @@ export default function ClientView() {
 
   const { data: analytics } = useQuery<any[]>({
     queryKey: ["/api/projects", projectId, "analytics"],
+    enabled: !!projectId,
+  });
+
+  const { data: kpis } = useQuery<Kpi[]>({
+    queryKey: ["/api/projects", projectId, "kpis"],
     enabled: !!projectId,
   });
 
@@ -406,6 +411,110 @@ export default function ClientView() {
                     </CardContent>
                   </Card>
                 ))}
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="kpis" className="space-y-6">
+            <div className="flex justify-between items-center">
+              <h3 className="text-lg font-semibold text-gray-900">Key Performance Indicators</h3>
+              <Badge variant="outline" className="bg-blue-50 text-blue-700">
+                {kpis?.length || 0} Active KPIs
+              </Badge>
+            </div>
+            
+            {!kpis || kpis.length === 0 ? (
+              <Card>
+                <CardContent className="p-8 text-center">
+                  <p className="text-gray-600">No KPIs have been set up for this project yet.</p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-6">
+                {/* KPI Categories */}
+                {['marketing', 'sales', 'engagement', 'revenue', 'traffic'].map(category => {
+                  const categoryKpis = kpis?.filter(kpi => kpi.category === category);
+                  if (!categoryKpis || categoryKpis.length === 0) return null;
+                  
+                  return (
+                    <div key={category}>
+                      <h4 className="text-md font-medium text-gray-800 mb-3 capitalize">
+                        {category} KPIs
+                      </h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {categoryKpis.map((kpi: Kpi) => {
+                          const progress = Number(kpi.currentValue) / Number(kpi.targetValue) * 100;
+                          const isOverTarget = progress > 100;
+                          const progressColor = progress >= 80 ? 'text-green-600' : progress >= 60 ? 'text-yellow-600' : 'text-red-600';
+                          const bgColor = progress >= 80 ? 'bg-green-50 border-green-200' : progress >= 60 ? 'bg-yellow-50 border-yellow-200' : 'bg-red-50 border-red-200';
+                          
+                          return (
+                            <Card key={kpi.id} className={`${bgColor} border-2`}>
+                              <CardContent className="p-4">
+                                <div className="space-y-3">
+                                  <div className="flex justify-between items-start">
+                                    <h5 className="text-sm font-semibold text-gray-800">
+                                      {kpi.name}
+                                    </h5>
+                                    <div className="flex items-center gap-2">
+                                      <Badge variant="outline" className="text-xs">
+                                        {kpi.period}
+                                      </Badge>
+                                      {kpi.integrationSource && kpi.integrationSource !== 'manual' && (
+                                        <Badge variant="secondary" className="text-xs">
+                                          {kpi.integrationSource.toUpperCase()}
+                                        </Badge>
+                                      )}
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="space-y-2">
+                                    <div className="flex justify-between items-baseline">
+                                      <div>
+                                        <p className={`text-2xl font-bold ${progressColor}`}>
+                                          {kpi.unit === 'percentage' ? `${Number(kpi.currentValue)}%` :
+                                           kpi.unit === 'dollars' ? `$${Number(kpi.currentValue).toLocaleString()}` :
+                                           kpi.unit === 'ratio' ? `${Number(kpi.currentValue)}x` :
+                                           Number(kpi.currentValue).toLocaleString()}
+                                        </p>
+                                        <p className="text-xs text-gray-600">
+                                          Target: {kpi.unit === 'percentage' ? `${Number(kpi.targetValue)}%` :
+                                                  kpi.unit === 'dollars' ? `$${Number(kpi.targetValue).toLocaleString()}` :
+                                                  kpi.unit === 'ratio' ? `${Number(kpi.targetValue)}x` :
+                                                  Number(kpi.targetValue).toLocaleString()}
+                                        </p>
+                                      </div>
+                                      <div className="text-right">
+                                        <p className={`text-lg font-semibold ${progressColor}`}>
+                                          {Math.round(progress)}%
+                                        </p>
+                                        <p className="text-xs text-gray-500">
+                                          {isOverTarget ? 'Exceeded!' : 'Complete'}
+                                        </p>
+                                      </div>
+                                    </div>
+                                    
+                                    <Progress 
+                                      value={Math.min(progress, 100)} 
+                                      className="h-2"
+                                    />
+                                  </div>
+                                  
+                                  <div className="text-xs text-gray-600 space-y-1">
+                                    <p>Period: {new Date(kpi.startDate).toLocaleDateString()} - {new Date(kpi.endDate).toLocaleDateString()}</p>
+                                    {kpi.notes && (
+                                      <p className="italic">{kpi.notes}</p>
+                                    )}
+                                  </div>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </TabsContent>

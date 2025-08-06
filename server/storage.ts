@@ -6,6 +6,7 @@ import {
   projectFiles,
   analytics,
   messages,
+  kpis,
   type User,
   type UpsertUser,
   type Project,
@@ -20,6 +21,8 @@ import {
   type InsertAnalytics,
   type Message,
   type InsertMessage,
+  type Kpi,
+  type InsertKpi,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, gte, lte } from "drizzle-orm";
@@ -60,6 +63,12 @@ export interface IStorage {
   // Message operations
   getMessagesByProject(projectId: string): Promise<(Message & { sender: User })[]>;
   createMessage(message: InsertMessage): Promise<Message>;
+
+  // KPI operations
+  getKpisByProject(projectId: string): Promise<Kpi[]>;
+  createKpi(kpi: InsertKpi): Promise<Kpi>;
+  updateKpi(id: string, updates: Partial<InsertKpi>): Promise<Kpi | undefined>;
+  deleteKpi(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -221,6 +230,29 @@ export class DatabaseStorage implements IStorage {
   async createMessage(message: InsertMessage): Promise<Message> {
     const [newMessage] = await db.insert(messages).values(message).returning();
     return newMessage;
+  }
+
+  // KPI operations
+  async getKpisByProject(projectId: string): Promise<Kpi[]> {
+    return db.select().from(kpis).where(eq(kpis.projectId, projectId)).orderBy(desc(kpis.createdAt));
+  }
+
+  async createKpi(kpi: InsertKpi): Promise<Kpi> {
+    const [newKpi] = await db.insert(kpis).values(kpi).returning();
+    return newKpi;
+  }
+
+  async updateKpi(id: string, updates: Partial<InsertKpi>): Promise<Kpi | undefined> {
+    const [updatedKpi] = await db
+      .update(kpis)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(kpis.id, id))
+      .returning();
+    return updatedKpi;
+  }
+
+  async deleteKpi(id: string): Promise<void> {
+    await db.delete(kpis).where(eq(kpis.id, id));
   }
 }
 

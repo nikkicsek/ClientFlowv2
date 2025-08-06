@@ -558,6 +558,82 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get project KPIs
+  app.get('/api/projects/:projectId/kpis', isAuthenticated, async (req: any, res) => {
+    try {
+      const { projectId } = req.params;
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+
+      // Get the project to check permissions
+      const project = await storage.getProject(projectId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
+      // Check access permissions
+      if (user?.role !== 'admin' && project.clientId !== userId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const kpis = await storage.getKpisByProject(projectId);
+      res.json(kpis);
+    } catch (error) {
+      console.error("Error fetching KPIs:", error);
+      res.status(500).json({ message: "Failed to fetch KPIs" });
+    }
+  });
+
+  // Create project KPI (admin only)
+  app.post('/api/projects/:projectId/kpis', isAuthenticated, async (req: any, res) => {
+    try {
+      const { projectId } = req.params;
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+
+      // Only admins can create KPIs
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Only admins can create KPIs" });
+      }
+
+      const kpiData = {
+        ...req.body,
+        projectId,
+        createdBy: userId,
+      };
+
+      const kpi = await storage.createKpi(kpiData);
+      res.status(201).json(kpi);
+    } catch (error) {
+      console.error("Error creating KPI:", error);
+      res.status(500).json({ message: "Failed to create KPI" });
+    }
+  });
+
+  // Update KPI (admin only)
+  app.put('/api/projects/:projectId/kpis/:kpiId', isAuthenticated, async (req: any, res) => {
+    try {
+      const { kpiId } = req.params;
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+
+      // Only admins can update KPIs
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Only admins can update KPIs" });
+      }
+
+      const updatedKpi = await storage.updateKpi(kpiId, req.body);
+      if (!updatedKpi) {
+        return res.status(404).json({ message: "KPI not found" });
+      }
+
+      res.json(updatedKpi);
+    } catch (error) {
+      console.error("Error updating KPI:", error);
+      res.status(500).json({ message: "Failed to update KPI" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

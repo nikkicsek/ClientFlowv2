@@ -115,12 +115,33 @@ export const messages = pgTable("messages", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const kpis = pgTable("kpis", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull().references(() => projects.id),
+  name: text("name").notNull(), // e.g. "Lead Generation", "Brand Awareness", "Sales Revenue"
+  category: varchar("category").notNull(), // "marketing", "sales", "engagement", "revenue", "traffic"
+  targetValue: decimal("target_value", { precision: 15, scale: 2 }).notNull(),
+  currentValue: decimal("current_value", { precision: 15, scale: 2 }).default("0"),
+  unit: varchar("unit").notNull(), // "leads", "dollars", "visitors", "conversions", "percentage"
+  period: varchar("period").notNull(), // "monthly", "quarterly", "annual", "campaign"
+  startDate: timestamp("start_date").notNull(),
+  endDate: timestamp("end_date").notNull(),
+  integrationSource: varchar("integration_source"), // "google_ads", "facebook_ads", "ga4", "manual", etc.
+  integrationConfig: jsonb("integration_config"), // API connection details and mapping
+  status: varchar("status").default("active"), // "active", "paused", "completed"
+  notes: text("notes"),
+  createdBy: varchar("created_by").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   projects: many(projects),
   assignedTasks: many(tasks),
   uploadedFiles: many(projectFiles),
   sentMessages: many(messages),
+  createdKpis: many(kpis),
 }));
 
 export const projectsRelations = relations(projects, ({ one, many }) => ({
@@ -132,6 +153,7 @@ export const projectsRelations = relations(projects, ({ one, many }) => ({
   files: many(projectFiles),
   analytics: many(analytics),
   messages: many(messages),
+  kpis: many(kpis),
 }));
 
 export const servicesRelations = relations(services, ({ many }) => ({
@@ -190,6 +212,17 @@ export const messagesRelations = relations(messages, ({ one }) => ({
   }),
 }));
 
+export const kpisRelations = relations(kpis, ({ one }) => ({
+  project: one(projects, {
+    fields: [kpis.projectId],
+    references: [projects.id],
+  }),
+  creator: one(users, {
+    fields: [kpis.createdBy],
+    references: [users.id],
+  }),
+}));
+
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
@@ -229,6 +262,12 @@ export const insertMessageSchema = createInsertSchema(messages).omit({
   createdAt: true,
 });
 
+export const insertKpiSchema = createInsertSchema(kpis).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Types
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -244,3 +283,5 @@ export type InsertAnalytics = z.infer<typeof insertAnalyticsSchema>;
 export type Analytics = typeof analytics.$inferSelect;
 export type InsertMessage = z.infer<typeof insertMessageSchema>;
 export type Message = typeof messages.$inferSelect;
+export type InsertKpi = z.infer<typeof insertKpiSchema>;
+export type Kpi = typeof kpis.$inferSelect;
