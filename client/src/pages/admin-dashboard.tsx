@@ -399,20 +399,24 @@ export default function AdminDashboard() {
                             )}
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setEditingClient(client)}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <WelcomeVideoModal
-                            clientName={`${client.firstName} ${client.lastName}`}
-                            organizationName={client.companyName}
-                            projectDetails="Thank you for choosing our agency for your project needs."
-                          />
-                          <AssignOrganizationModal user={client} />
+                        <div className="flex flex-col gap-2">
+                          <div className="flex items-center gap-2 justify-end">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setEditingClient(client)}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <AssignOrganizationModal user={client} />
+                          </div>
+                          <div className="flex justify-end">
+                            <WelcomeVideoModal
+                              clientName={`${client.firstName} ${client.lastName}`}
+                              organizationName={client.companyName}
+                              projectDetails="Thank you for choosing our agency for your project needs."
+                            />
+                          </div>
                         </div>
                       </div>
                     </CardContent>

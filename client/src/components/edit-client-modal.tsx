@@ -47,7 +47,7 @@ export function EditClientModal({ client, isOpen, onClose }: EditClientModalProp
         lastName: client.lastName || "",
         email: client.email || "",
         companyName: client.companyName || "",
-        organizationId: client.organizationId || "",
+        organizationId: client.organizationId || "none",
         jobTitle: client.jobTitle || "",
         phone: client.phone || "",
         address: client.address || "",
@@ -64,7 +64,7 @@ export function EditClientModal({ client, isOpen, onClose }: EditClientModalProp
         lastName: clientData.lastName.trim() || null,
         email: clientData.email.trim(),
         companyName: clientData.companyName.trim() || null,
-        organizationId: clientData.organizationId || null,
+        organizationId: clientData.organizationId === "none" ? null : clientData.organizationId || null,
         jobTitle: clientData.jobTitle.trim() || null,
         phone: clientData.phone.trim() || null,
         address: clientData.address.trim() || null,
@@ -212,7 +212,7 @@ export function EditClientModal({ client, isOpen, onClose }: EditClientModalProp
                 <SelectValue placeholder="Select organization (optional)" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">No organization</SelectItem>
+                <SelectItem value="none">No organization</SelectItem>
                 {sortedOrganizations.map((org) => (
                   <SelectItem key={org.id} value={org.id}>
                     {org.name}
