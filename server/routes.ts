@@ -848,6 +848,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Create new client
+  app.post('/api/admin/clients', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Only admins can create clients" });
+      }
+
+      const newClient = await storage.createClient(req.body);
+      res.status(201).json(newClient);
+    } catch (error) {
+      console.error("Error creating client:", error);
+      res.status(500).json({ message: "Failed to create client" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
