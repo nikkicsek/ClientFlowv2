@@ -17,6 +17,7 @@ export function OrganizationManagementModal() {
   const [isOpen, setIsOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [selectedOrg, setSelectedOrg] = useState<Organization | null>(null);
+  const [viewingContacts, setViewingContacts] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -35,6 +36,11 @@ export function OrganizationManagementModal() {
   const { data: clients } = useQuery<User[]>({
     queryKey: ["/api/admin/clients"],
     enabled: isOpen,
+  });
+
+  const { data: orgUsers } = useQuery<User[]>({
+    queryKey: ["/api/admin/organizations", viewingContacts, "users"],
+    enabled: !!viewingContacts,
   });
 
   const createOrgMutation = useMutation({
@@ -92,10 +98,43 @@ export function OrganizationManagementModal() {
     createOrgMutation.mutate(formData);
   };
 
+  const assignClientMutation = useMutation({
+    mutationFn: async ({ userId, organizationId }: { userId: string; organizationId: string | null }) => {
+      const response = await apiRequest("PUT", `/api/admin/users/${userId}/organization`, {
+        organizationId
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Failed to update client assignment");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Assignment Updated",
+        description: "Client assignment has been updated successfully",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/clients"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/organizations", viewingContacts, "users"] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Assignment Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const resetForm = () => {
     setFormData({ name: "", description: "", website: "", industry: "", primaryContactId: "" });
     setIsCreating(false);
     setSelectedOrg(null);
+    setViewingContacts(null);
+  };
+
+  const handleAssignClient = (userId: string, organizationId: string | null) => {
+    assignClientMutation.mutate({ userId, organizationId });
   };
 
   return (
@@ -268,9 +307,13 @@ export function OrganizationManagementModal() {
                           </div>
                           
                           <div className="flex items-center gap-2">
-                            <Button size="sm" variant="outline">
+                            <Button 
+                              size="sm" 
+                              variant="outline"
+                              onClick={() => setViewingContacts(org.id)}
+                            >
                               <Users className="h-4 w-4 mr-1" />
-                              View Contacts
+                              Manage Contacts
                             </Button>
                             <Button size="sm" variant="outline">
                               <Edit className="h-4 w-4" />
@@ -282,6 +325,90 @@ export function OrganizationManagementModal() {
                   ))}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Contact Management Modal Content */}
+          {viewingContacts && (
+            <div className="mt-6 border-t pt-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold">
+                  Organization Contacts: {organizations?.find(o => o.id === viewingContacts)?.name}
+                </h3>
+                <Button 
+                  variant="outline" 
+                  onClick={() => setViewingContacts(null)}
+                  size="sm"
+                >
+                  Back to Organizations
+                </Button>
+              </div>
+
+              {/* Current Members */}
+              <div className="mb-6">
+                <h4 className="font-medium mb-3">Current Members ({orgUsers?.length || 0})</h4>
+                {!orgUsers || orgUsers.length === 0 ? (
+                  <p className="text-gray-600 text-sm">No clients assigned to this organization yet.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {orgUsers.map((user) => (
+                      <div key={user.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div>
+                          <p className="font-medium">{user.firstName} {user.lastName}</p>
+                          <p className="text-sm text-gray-600">{user.email}</p>
+                          {user.companyName && (
+                            <p className="text-xs text-gray-500">{user.companyName}</p>
+                          )}
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleAssignClient(user.id, null)}
+                          disabled={assignClientMutation.isPending}
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Available Clients to Add */}
+              <div>
+                <h4 className="font-medium mb-3">Available Clients to Add</h4>
+                {(() => {
+                  const availableClients = clients?.filter(
+                    client => client.role === 'client' && !client.organizationId
+                  ) || [];
+                  
+                  return availableClients.length === 0 ? (
+                    <p className="text-gray-600 text-sm">All clients are either already assigned to organizations or there are no clients available.</p>
+                  ) : (
+                    <div className="space-y-2 max-h-60 overflow-y-auto">
+                      {availableClients.map((client) => (
+                        <div key={client.id} className="flex items-center justify-between p-3 border rounded-lg">
+                          <div>
+                            <p className="font-medium">{client.firstName} {client.lastName}</p>
+                            <p className="text-sm text-gray-600">{client.email}</p>
+                            {client.companyName && (
+                              <p className="text-xs text-gray-500">{client.companyName}</p>
+                            )}
+                          </div>
+                          <Button
+                            size="sm"
+                            onClick={() => handleAssignClient(client.id, viewingContacts)}
+                            disabled={assignClientMutation.isPending}
+                          >
+                            <Plus className="h-3 w-3 mr-1" />
+                            Add
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </div>
             </div>
           )}
         </div>
