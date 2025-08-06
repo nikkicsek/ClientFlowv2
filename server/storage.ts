@@ -34,7 +34,7 @@ import {
   type InsertTeamInvitation,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and, gte, lte } from "drizzle-orm";
+import { eq, desc, and, gte, lte, inArray } from "drizzle-orm";
 
 export interface IStorage {
   // User operations (required for Replit Auth)
@@ -447,6 +447,28 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteUser(id: string): Promise<void> {
+    // Delete related records first to avoid foreign key constraint violations
+    
+    // Delete messages sent by this user
+    await db.delete(messages).where(eq(messages.senderId, id));
+    
+    // Remove user from projects (set clientId to null instead of deleting projects)
+    await db.update(projects).set({ clientId: null }).where(eq(projects.clientId, id));
+    
+    // Delete KPIs associated with projects owned by this user
+    const userProjects = await db.select({ id: projects.id }).from(projects).where(eq(projects.clientId, id));
+    if (userProjects.length > 0) {
+      const projectIds = userProjects.map(p => p.id);
+      await db.delete(kpis).where(inArray(kpis.projectId, projectIds));
+      await db.delete(analytics).where(inArray(analytics.projectId, projectIds));
+      await db.delete(projectFiles).where(inArray(projectFiles.projectId, projectIds));
+      await db.delete(tasks).where(inArray(tasks.projectId, projectIds));
+    }
+    
+    // Remove as primary contact from organizations
+    await db.update(organizations).set({ primaryContactId: null }).where(eq(organizations.primaryContactId, id));
+    
+    // Finally delete the user
     await db.delete(users).where(eq(users.id, id));
   }
 }
