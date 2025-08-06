@@ -465,30 +465,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Admin access required" });
       }
 
-      const { clientEmail, clientFirstName, clientLastName, clientCompanyName, ...projectData } = req.body;
+      const { 
+        name, 
+        description, 
+        clientId,
+        organizationId,
+        budget, 
+        startDate, 
+        expectedCompletion 
+      } = req.body;
 
-      // Create or get client user
-      let clientUser = await storage.getUserByEmail(clientEmail);
-      if (!clientUser) {
-        clientUser = await storage.upsertUser({
-          id: clientEmail, // Use email as ID for now
-          email: clientEmail,
-          firstName: clientFirstName,
-          lastName: clientLastName,
-          companyName: clientCompanyName,
-          role: 'client',
-        });
+      console.log("Creating project with data:", req.body);
+
+      if (!name || !clientId) {
+        return res.status(400).json({ message: "Project name and client selection are required" });
       }
 
-      const project = await storage.createProject({
-        ...projectData,
-        clientId: clientUser.id,
-      });
+      // Verify that the client exists
+      const client = await storage.getUser(clientId);
+      if (!client) {
+        return res.status(400).json({ message: "Selected client not found" });
+      }
 
-      res.status(201).json(project);
+      if (client.role !== 'client') {
+        return res.status(400).json({ message: "Selected user is not a client" });
+      }
+
+      const projectData = {
+        name,
+        description: description || null,
+        clientId: client.id,
+        organizationId: organizationId || client.organizationId || null,
+        budget: budget || null,
+        startDate: startDate ? new Date(startDate) : null,
+        expectedCompletion: expectedCompletion ? new Date(expectedCompletion) : null,
+        status: 'active',
+        progress: 0
+      };
+
+      const newProject = await storage.createProject(projectData);
+      console.log("Successfully created project:", newProject);
+      res.status(201).json(newProject);
     } catch (error) {
-      console.error("Error creating admin project:", error);
-      res.status(500).json({ message: "Failed to create project" });
+      console.error("Error creating project:", error);
+      res.status(500).json({ message: `Failed to create project: ${error.message}` });
     }
   });
 
