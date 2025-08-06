@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Users, Briefcase, Settings, Eye } from "lucide-react";
+import { Plus, Users, Briefcase, Settings, Eye, Building2 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
@@ -12,6 +12,7 @@ import { apiRequest } from "@/lib/queryClient";
 import CreateProjectModal from "@/components/create-project-modal";
 import CreateTaskModal from "@/components/create-task-modal";
 import { TeamManagementModal } from "@/components/team-management-modal";
+import { OrganizationManagementModal } from "@/components/organization-management-modal";
 import type { Project, Task, Service } from "@shared/schema";
 
 export default function AdminDashboard() {
@@ -130,6 +131,7 @@ export default function AdminDashboard() {
             </div>
             <div className="flex items-center gap-4">
               <TeamManagementModal />
+              <OrganizationManagementModal />
               <Badge variant="secondary">Admin</Badge>
               <div className="text-right">
                 <p className="text-sm font-medium text-gray-900">
@@ -151,9 +153,10 @@ export default function AdminDashboard() {
       {/* Main Content */}
       <div className="p-6">
         <Tabs defaultValue="projects" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="projects">Projects</TabsTrigger>
             <TabsTrigger value="clients">Clients</TabsTrigger>
+            <TabsTrigger value="organizations">Organizations</TabsTrigger>
             <TabsTrigger value="services">Services</TabsTrigger>
           </TabsList>
 
@@ -283,6 +286,37 @@ export default function AdminDashboard() {
                 ))}
               </div>
             )}
+          </TabsContent>
+
+          <TabsContent value="organizations" className="space-y-6">
+            <div className="flex justify-between items-center">
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900">Business Organizations</h2>
+                <p className="text-gray-600">Manage client business entities and group multiple contacts under organizations</p>
+              </div>
+            </div>
+
+            <Card>
+              <CardContent className="p-8 text-center">
+                <Building2 className="h-16 w-16 mx-auto mb-4 text-gray-400" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">Organize Your Clients</h3>
+                <p className="text-gray-600 mb-4">
+                  Create business organizations to group multiple client contacts together. This helps manage 
+                  projects for companies with multiple stakeholders and points of contact.
+                </p>
+                <div className="bg-blue-50 p-4 rounded-lg mb-6">
+                  <h4 className="font-medium text-blue-900 mb-2">Benefits of Organization Management:</h4>
+                  <ul className="text-blue-800 text-sm space-y-1 text-left max-w-lg mx-auto">
+                    <li>• Group multiple client contacts under one business entity</li>
+                    <li>• Assign projects to organizations instead of individual clients</li>
+                    <li>• Track business relationships and hierarchy</li>
+                    <li>• Streamline communication with primary contacts</li>
+                    <li>• Better organize large enterprise clients</li>
+                  </ul>
+                </div>
+                <OrganizationManagementModal />
+              </CardContent>
+            </Card>
           </TabsContent>
 
           <TabsContent value="services" className="space-y-6">
