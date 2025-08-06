@@ -385,6 +385,68 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Service category routes
+  app.get('/api/service-categories', isAuthenticated, async (req: any, res) => {
+    try {
+      const categories = await storage.getServiceCategories();
+      res.json(categories);
+    } catch (error) {
+      console.error("Error fetching service categories:", error);
+      res.status(500).json({ message: "Failed to fetch service categories" });
+    }
+  });
+
+  app.post('/api/service-categories', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Only admins can create service categories" });
+      }
+
+      const category = await storage.createServiceCategory(req.body);
+      res.status(201).json(category);
+    } catch (error) {
+      console.error("Error creating service category:", error);
+      res.status(500).json({ message: "Failed to create service category" });
+    }
+  });
+
+  app.put('/api/service-categories/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Only admins can update service categories" });
+      }
+
+      const category = await storage.updateServiceCategory(req.params.id, req.body);
+      res.json(category);
+    } catch (error) {
+      console.error("Error updating service category:", error);
+      res.status(500).json({ message: "Failed to update service category" });
+    }
+  });
+
+  app.delete('/api/service-categories/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Only admins can delete service categories" });
+      }
+
+      await storage.deleteServiceCategory(req.params.id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting service category:", error);
+      res.status(500).json({ message: "Failed to delete service category" });
+    }
+  });
+
   // Services routes (for admin to manage available services)
   app.get('/api/services', isAuthenticated, async (req: any, res) => {
     try {

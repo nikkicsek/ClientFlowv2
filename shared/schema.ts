@@ -69,10 +69,18 @@ export const projects = pgTable("projects", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+export const serviceCategories = pgTable("service_categories", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull().unique(),
+  description: text("description"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const services = pgTable("services", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
-  category: varchar("category").notNull(), // "design", "development", "marketing", etc.
+  categoryId: varchar("category_id").references(() => serviceCategories.id),
+  category: varchar("category").notNull(), // Main category field for now
   description: text("description"),
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
@@ -174,6 +182,10 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   createdKpis: many(kpis),
 }));
 
+export const serviceCategoriesRelations = relations(serviceCategories, ({ many }) => ({
+  services: many(services),
+}));
+
 export const projectsRelations = relations(projects, ({ one, many }) => ({
   client: one(users, {
     fields: [projects.clientId],
@@ -190,7 +202,11 @@ export const projectsRelations = relations(projects, ({ one, many }) => ({
   kpis: many(kpis),
 }));
 
-export const servicesRelations = relations(services, ({ many }) => ({
+export const servicesRelations = relations(services, ({ one, many }) => ({
+  category: one(serviceCategories, {
+    fields: [services.categoryId],
+    references: [serviceCategories.id],
+  }),
   tasks: many(tasks),
 }));
 
@@ -276,6 +292,11 @@ export const insertProjectSchema = createInsertSchema(projects).omit({
   updatedAt: true,
 });
 
+export const insertServiceCategorySchema = createInsertSchema(serviceCategories).omit({
+  id: true,
+  createdAt: true,
+});
+
 export const insertServiceSchema = createInsertSchema(services).omit({
   id: true,
   createdAt: true,
@@ -332,6 +353,8 @@ export type TeamInvitation = typeof teamInvitations.$inferSelect;
 export type InsertTeamInvitation = typeof teamInvitations.$inferInsert;
 export type InsertProject = z.infer<typeof insertProjectSchema>;
 export type Project = typeof projects.$inferSelect;
+export type InsertServiceCategory = z.infer<typeof insertServiceCategorySchema>;
+export type ServiceCategory = typeof serviceCategories.$inferSelect;
 export type InsertService = z.infer<typeof insertServiceSchema>;
 export type Service = typeof services.$inferSelect;
 export type InsertTask = z.infer<typeof insertTaskSchema>;
