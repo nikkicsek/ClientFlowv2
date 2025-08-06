@@ -20,7 +20,7 @@ export function CreateClientModal() {
     companyName: "",
     phone: "",
     address: "",
-    organizationId: "",
+    organizationId: "none",
   });
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -40,7 +40,7 @@ export function CreateClientModal() {
         companyName: clientData.companyName?.trim() || null,
         phone: clientData.phone?.trim() || null,
         address: clientData.address?.trim() || null,
-        organizationId: clientData.organizationId || null,
+        organizationId: clientData.organizationId === "none" ? null : clientData.organizationId || null,
         role: "client"
       };
 
@@ -66,7 +66,7 @@ export function CreateClientModal() {
         companyName: "",
         phone: "",
         address: "",
-        organizationId: "",
+        organizationId: "none",
       });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/clients"] });
     },
@@ -160,7 +160,7 @@ export function CreateClientModal() {
                 <SelectValue placeholder="Select organization (optional)" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">No Organization (Individual Client)</SelectItem>
+                <SelectItem value="none">No Organization (Individual Client)</SelectItem>
                 {organizations?.map((org) => (
                   <SelectItem key={org.id} value={org.id}>
                     <div className="flex items-center gap-2">
