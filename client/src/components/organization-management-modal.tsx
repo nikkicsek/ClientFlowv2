@@ -39,7 +39,7 @@ export function OrganizationManagementModal() {
   });
 
   const { data: orgUsers } = useQuery<User[]>({
-    queryKey: ["/api/admin/organizations", viewingContacts, "users"],
+    queryKey: [`/api/admin/organizations/${viewingContacts}/users`],
     enabled: !!viewingContacts,
   });
 
@@ -115,7 +115,7 @@ export function OrganizationManagementModal() {
         description: "Client assignment has been updated successfully",
       });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/clients"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/organizations", viewingContacts, "users"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/admin/organizations/${viewingContacts}/users`] });
     },
     onError: (error: Error) => {
       toast({
