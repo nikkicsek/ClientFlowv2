@@ -187,6 +187,20 @@ export const taskTemplates = pgTable("task_templates", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Team members table for task assignments and notifications
+export const teamMembers = pgTable("team_members", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  email: text("email").notNull().unique(),
+  role: varchar("role").notNull(), // "project_manager", "content_writer", "photographer", "designer"
+  isActive: boolean("is_active").default(true),
+  profileImageUrl: text("profile_image_url"),
+  phoneNumber: text("phone_number"),
+  notificationPreferences: jsonb("notification_preferences").default({}),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Relations
 export const organizationsRelations = relations(organizations, ({ one, many }) => ({
   primaryContact: one(users, {
@@ -356,6 +370,12 @@ export const insertKpiSchema = createInsertSchema(kpis).omit({
   updatedAt: true,
 });
 
+export const insertTeamMemberSchema = createInsertSchema(teamMembers).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Types
 export type Organization = typeof organizations.$inferSelect;
 export type InsertOrganization = z.infer<typeof insertOrganizationSchema>;
@@ -378,6 +398,9 @@ export const teamInvitations = pgTable("team_invitations", {
 
 export type TeamInvitation = typeof teamInvitations.$inferSelect;
 export type InsertTeamInvitation = typeof teamInvitations.$inferInsert;
+
+export type TeamMember = typeof teamMembers.$inferSelect;
+export type InsertTeamMember = typeof teamMembers.$inferInsert;
 export type InsertProject = z.infer<typeof insertProjectSchema>;
 export type Project = typeof projects.$inferSelect;
 export type InsertServiceCategory = z.infer<typeof insertServiceCategorySchema>;
