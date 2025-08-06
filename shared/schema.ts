@@ -48,6 +48,8 @@ export const users = pgTable("users", {
   companyName: varchar("company_name"),
   organizationId: varchar("organization_id").references(() => organizations.id),
   jobTitle: varchar("job_title"),
+  phone: varchar("phone"),
+  address: text("address"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -310,6 +312,7 @@ export const insertKpiSchema = createInsertSchema(kpis).omit({
 export type Organization = typeof organizations.$inferSelect;
 export type InsertOrganization = z.infer<typeof insertOrganizationSchema>;
 export type UpsertUser = typeof users.$inferInsert;
+export type InsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
 
 // Team invitation system for agency staff
