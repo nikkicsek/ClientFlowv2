@@ -38,10 +38,13 @@ export function OrganizationManagementModal() {
     enabled: isOpen,
   });
 
-  const { data: orgUsers } = useQuery<User[]>({
+  const { data: orgUsers, isLoading: orgUsersLoading, error: orgUsersError } = useQuery<User[]>({
     queryKey: [`/api/admin/organizations/${viewingContacts}/users`],
     enabled: !!viewingContacts,
   });
+
+  // Debug logging
+  console.log("Organization users query:", { orgUsers, orgUsersLoading, orgUsersError, viewingContacts });
 
   const createOrgMutation = useMutation({
     mutationFn: async (orgData: typeof formData) => {
@@ -347,7 +350,11 @@ export function OrganizationManagementModal() {
               {/* Current Members */}
               <div className="mb-6">
                 <h4 className="font-medium mb-3">Current Members ({orgUsers?.length || 0})</h4>
-                {!orgUsers || orgUsers.length === 0 ? (
+                {orgUsersLoading ? (
+                  <p className="text-gray-600 text-sm">Loading members...</p>
+                ) : orgUsersError ? (
+                  <p className="text-red-600 text-sm">Error loading members: {(orgUsersError as Error).message}</p>
+                ) : !orgUsers || orgUsers.length === 0 ? (
                   <p className="text-gray-600 text-sm">No clients assigned to this organization yet.</p>
                 ) : (
                   <div className="space-y-2">
