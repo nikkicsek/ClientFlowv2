@@ -858,11 +858,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Only admins can create clients" });
       }
 
+      console.log("Creating client with data:", req.body);
+      
+      // Validate required fields
+      const { firstName, lastName, email } = req.body;
+      if (!firstName || !lastName || !email) {
+        return res.status(400).json({ message: "First name, last name, and email are required" });
+      }
+
       const newClient = await storage.createClient(req.body);
+      console.log("Successfully created client:", newClient);
       res.status(201).json(newClient);
     } catch (error) {
       console.error("Error creating client:", error);
-      res.status(500).json({ message: "Failed to create client" });
+      res.status(500).json({ message: `Failed to create client: ${error.message}` });
     }
   });
 
