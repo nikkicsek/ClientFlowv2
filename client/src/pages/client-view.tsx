@@ -13,6 +13,7 @@ import { isUnauthorizedError } from "@/lib/authUtils";
 import { apiRequest } from "@/lib/queryClient";
 import type { Project, Task, ProjectFile, Message, Service, Kpi } from "@shared/schema";
 import { ClientWelcomeSection } from "@/components/client-welcome-section";
+import ProjectProgressCard from "@/components/project-progress-card";
 
 export default function ClientView() {
   const [, setLocation] = useLocation();
@@ -251,58 +252,10 @@ export default function ClientView() {
         />
       </div>
 
-      {/* Project Overview */}
+      {/* Enhanced Project Progress Overview */}
       <div className="p-6 pt-0">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-blue-100 rounded-full">
-                  <Calendar className="h-6 w-6 text-blue-600" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Progress</p>
-                  <p className="text-2xl font-bold text-gray-900">{project.progress || 0}%</p>
-                </div>
-              </div>
-              <Progress value={project.progress || 0} className="mt-4" />
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-green-100 rounded-full">
-                  <DollarSign className="h-6 w-6 text-green-600" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Budget</p>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {project.budget ? `$${Number(project.budget).toLocaleString()}` : 'Not set'}
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-purple-100 rounded-full">
-                  <CheckCircle className="h-6 w-6 text-purple-600" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Completion Date</p>
-                  <p className="text-lg font-semibold text-gray-900">
-                    {project?.expectedCompletion ? 
-                      new Date(project.expectedCompletion).toLocaleDateString() : 
-                      'TBD'
-                    }
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+        <div className="mb-6">
+          <ProjectProgressCard project={project} />
         </div>
 
         {/* Main Content Tabs */}
