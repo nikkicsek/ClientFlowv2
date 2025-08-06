@@ -463,6 +463,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // File preview route (for viewing images and documents)
+  app.get('/api/projects/:projectId/files/:fileId/preview', isAuthenticated, async (req: any, res) => {
+    try {
+      const { projectId, fileId } = req.params;
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+
+      // Get the project to check permissions
+      const project = await storage.getProject(projectId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
+      // Check access permissions
+      if (user?.role !== 'admin' && project.clientId !== userId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      // Get the file
+      const file = await storage.getProjectFile(fileId);
+      if (!file || file.projectId !== projectId) {
+        return res.status(404).json({ message: "File not found" });
+      }
+
+      // For clients, same access rules apply for preview as download
+      if (user?.role !== 'admin' && file.isApprovalRequired && file.isApproved === null) {
+        return res.status(403).json({ message: "File is pending approval and cannot be viewed yet" });
+      }
+
+      // Set appropriate headers for inline viewing
+      res.setHeader('Content-Type', file.fileType || 'application/octet-stream');
+      
+      // For now, return a placeholder response since we don't have actual file storage
+      // In a real implementation, you would stream the actual file content
+      res.status(200).send("File preview placeholder - actual file content would be streamed here");
+    } catch (error) {
+      console.error("Error previewing file:", error);
+      res.status(500).json({ message: "Failed to preview file" });
+    }
+  });
+
   // File download route with access control
   app.get('/api/projects/:projectId/files/:fileId/download', isAuthenticated, async (req: any, res) => {
     try {
