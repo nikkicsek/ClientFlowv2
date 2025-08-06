@@ -191,7 +191,7 @@ export function AgencyTasksModal({ isOpen, onClose, project }: AgencyTasksModalP
                         <SelectValue placeholder="Choose team member" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">Unassigned</SelectItem>
+                        <SelectItem value="unassigned">Unassigned</SelectItem>
                         {teamMembers.map((member) => (
                           <SelectItem key={member} value={member}>{member}</SelectItem>
                         ))}
@@ -225,9 +225,10 @@ export function AgencyTasksModal({ isOpen, onClose, project }: AgencyTasksModalP
                   <Button
                     size="sm"
                     onClick={() => {
+                      const assigneeValue = newAssignee === "unassigned" ? null : newAssignee;
                       updateTaskMutation.mutate({ 
                         taskId: task.id, 
-                        updates: { assignedToMember: newAssignee } 
+                        updates: { assignedToMember: assigneeValue } 
                       });
                       setEditingTaskId(null);
                       setNewAssignee("");
@@ -256,7 +257,7 @@ export function AgencyTasksModal({ isOpen, onClose, project }: AgencyTasksModalP
                   variant="outline"
                   onClick={() => {
                     setEditingTaskId(task.id);
-                    setNewAssignee(task.assignedToMember || "");
+                    setNewAssignee(task.assignedToMember || "unassigned");
                   }}
                   className="h-7 text-xs"
                 >
