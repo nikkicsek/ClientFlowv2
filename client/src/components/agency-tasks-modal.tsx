@@ -5,12 +5,15 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { 
   CheckSquare, 
   Clock, 
@@ -25,7 +28,9 @@ import {
   Camera,
   PenTool,
   Palette,
-  BarChart3
+  BarChart3,
+  UserPlus,
+  Edit3
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import type { Project, Task } from "@shared/schema";
@@ -41,6 +46,19 @@ export function AgencyTasksModal({ isOpen, onClose, project }: AgencyTasksModalP
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterPriority, setFilterPriority] = useState<string>("all");
   const [filterRole, setFilterRole] = useState<string>("all");
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [newAssignee, setNewAssignee] = useState("");
+
+  // Common team member names for quick assignment
+  const teamMembers = [
+    "Sarah (Content Writer)",
+    "Mike (Photographer)", 
+    "Alex (Designer)",
+    "Jamie (Project Manager)",
+    "Taylor (Content Writer)",
+    "Chris (Photographer)",
+    "Sam (Designer)"
+  ];
 
   const { data: tasks, isLoading } = useQuery({
     queryKey: ["/api/projects", project?.id, "tasks"],
@@ -127,6 +145,17 @@ export function AgencyTasksModal({ isOpen, onClose, project }: AgencyTasksModalP
             {task.description && (
               <p className="text-sm text-gray-600 mb-2">{task.description}</p>
             )}
+            
+            {/* Assignment Section */}
+            {task.assignedToMember && (
+              <div className="mb-2 p-2 bg-blue-50 rounded text-sm">
+                <div className="flex items-center gap-1 text-blue-700">
+                  <User className="h-3 w-3" />
+                  <span className="font-medium">Assigned to: {task.assignedToMember}</span>
+                </div>
+              </div>
+            )}
+            
             <div className="flex items-center gap-4 text-xs text-gray-500">
               {task.assigneeRole && (
                 <div className="flex items-center gap-1">
@@ -147,6 +176,95 @@ export function AgencyTasksModal({ isOpen, onClose, project }: AgencyTasksModalP
                 </div>
               )}
             </div>
+            
+            {/* Assignment and Priority Controls */}
+            {editingTaskId === task.id ? (
+              <div className="mt-3 space-y-2 p-3 bg-gray-50 rounded">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs">Assign to Team Member</Label>
+                    <Select
+                      value={newAssignee}
+                      onValueChange={setNewAssignee}
+                    >
+                      <SelectTrigger className="h-8 text-xs">
+                        <SelectValue placeholder="Choose team member" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">Unassigned</SelectItem>
+                        {teamMembers.map((member) => (
+                          <SelectItem key={member} value={member}>{member}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs">Priority</Label>
+                    <Select
+                      value={task.priority}
+                      onValueChange={(newPriority) => 
+                        updateTaskMutation.mutate({ 
+                          taskId: task.id, 
+                          updates: { priority: newPriority } 
+                        })
+                      }
+                    >
+                      <SelectTrigger className="h-8 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="low">Low</SelectItem>
+                        <SelectItem value="medium">Medium</SelectItem>
+                        <SelectItem value="high">High</SelectItem>
+                        <SelectItem value="urgent">URGENT</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      updateTaskMutation.mutate({ 
+                        taskId: task.id, 
+                        updates: { assignedToMember: newAssignee } 
+                      });
+                      setEditingTaskId(null);
+                      setNewAssignee("");
+                    }}
+                    className="h-7 text-xs"
+                  >
+                    Save Assignment
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setEditingTaskId(null);
+                      setNewAssignee("");
+                    }}
+                    className="h-7 text-xs"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-2 flex gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setEditingTaskId(task.id);
+                    setNewAssignee(task.assignedToMember || "");
+                  }}
+                  className="h-7 text-xs"
+                >
+                  <UserPlus className="h-3 w-3 mr-1" />
+                  Assign/Edit
+                </Button>
+              </div>
+            )}
           </div>
           <div className="flex flex-col gap-2">
             <Select
@@ -183,6 +301,9 @@ export function AgencyTasksModal({ isOpen, onClose, project }: AgencyTasksModalP
             <CheckSquare className="h-5 w-5" />
             Agency Tasks: {project.name}
           </DialogTitle>
+          <DialogDescription>
+            Manage internal team workflows, assign tasks to specific team members, and track project progress.
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6">
@@ -202,8 +323,29 @@ export function AgencyTasksModal({ isOpen, onClose, project }: AgencyTasksModalP
             </div>
           </div>
 
+          {/* Team Workload Summary */}
+          <div className="bg-blue-50 p-4 rounded-lg">
+            <h4 className="font-medium text-blue-900 mb-2 flex items-center gap-2">
+              <BarChart3 className="h-4 w-4" />
+              Team Workload Summary
+            </h4>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+              {teamMembers.map((member) => {
+                const memberTasks = filteredTasks.filter((t: any) => t.assignedToMember === member);
+                const activeTasks = memberTasks.filter((t: any) => t.status === 'in_progress').length;
+                const completedTasks = memberTasks.filter((t: any) => t.status === 'completed').length;
+                return (
+                  <div key={member} className="text-center bg-white p-2 rounded">
+                    <div className="font-medium text-blue-800">{member.split(' (')[0]}</div>
+                    <div className="text-blue-600 text-xs">{activeTasks} active • {completedTasks} done</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
           {/* Filters */}
-          <div className="flex gap-4 items-center">
+          <div className="flex gap-4 items-center flex-wrap">
             <div className="flex items-center gap-2">
               <label className="text-sm font-medium">Status:</label>
               <Select value={filterStatus} onValueChange={setFilterStatus}>

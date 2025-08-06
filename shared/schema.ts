@@ -104,6 +104,7 @@ export const tasks = pgTable("tasks", {
   estimatedHours: integer("estimated_hours"),
   actualHours: integer("actual_hours"),
   assigneeRole: varchar("assignee_role"), // "project_manager", "content_writer", "photographer", "designer", "client"
+  assignedToMember: varchar("assigned_to_member"), // Specific team member name assignment
   clientVisible: boolean("client_visible").default(true), // Whether client can see this task
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
