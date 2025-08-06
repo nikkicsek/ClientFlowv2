@@ -18,6 +18,7 @@ import { AssignOrganizationModal } from "@/components/assign-organization-modal"
 import { CreateClientModal } from "@/components/create-client-modal";
 import { CreateServiceModal } from "@/components/create-service-modal";
 import { EditServiceModal } from "@/components/edit-service-modal";
+import { ServiceCategoryModal } from "@/components/service-category-modal";
 import { WelcomeVideoModal } from "@/components/welcome-video-modal";
 import type { Project, Task, Service } from "@shared/schema";
 
@@ -449,7 +450,10 @@ export default function AdminDashboard() {
                 <h2 className="text-xl font-semibold text-gray-900">Available Services</h2>
                 <p className="text-gray-600">Manage the services your agency offers to clients</p>
               </div>
-              <CreateServiceModal />
+              <div className="flex gap-2">
+                <ServiceCategoryModal />
+                <CreateServiceModal />
+              </div>
             </div>
 
             {!services || services.length === 0 ? (

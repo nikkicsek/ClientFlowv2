@@ -3,6 +3,7 @@ import {
   organizations,
   projects,
   services,
+  serviceCategories,
   tasks,
   projectFiles,
   analytics,
@@ -17,6 +18,8 @@ import {
   type InsertProject,
   type Service,
   type InsertService,
+  type ServiceCategory,
+  type InsertServiceCategory,
   type Task,
   type InsertTask,
   type ProjectFile,
@@ -57,6 +60,12 @@ export interface IStorage {
   createProject(project: InsertProject): Promise<Project>;
   updateProject(id: string, updates: Partial<InsertProject>): Promise<Project>;
   
+  // Service category operations
+  getServiceCategories(): Promise<ServiceCategory[]>;
+  createServiceCategory(category: InsertServiceCategory): Promise<ServiceCategory>;
+  updateServiceCategory(id: string, updates: Partial<InsertServiceCategory>): Promise<ServiceCategory>;
+  deleteServiceCategory(id: string): Promise<void>;
+
   // Service operations
   getServices(): Promise<Service[]>;
   createService(service: InsertService): Promise<Service>;
@@ -160,16 +169,38 @@ export class DatabaseStorage implements IStorage {
     return updatedProject;
   }
 
+  // Service category operations
+  async getServiceCategories(): Promise<ServiceCategory[]> {
+    return db.select().from(serviceCategories).orderBy(serviceCategories.name);
+  }
+
+  async createServiceCategory(category: InsertServiceCategory): Promise<ServiceCategory> {
+    const [newCategory] = await db.insert(serviceCategories).values(category).returning();
+    return newCategory;
+  }
+
+  async updateServiceCategory(id: string, updates: Partial<InsertServiceCategory>): Promise<ServiceCategory> {
+    const [updatedCategory] = await db
+      .update(serviceCategories)
+      .set(updates)
+      .where(eq(serviceCategories.id, id))
+      .returning();
+    return updatedCategory;
+  }
+
+  async deleteServiceCategory(id: string): Promise<void> {
+    await db
+      .delete(serviceCategories)
+      .where(eq(serviceCategories.id, id));
+  }
+
   // Service operations
   async getServices(): Promise<Service[]> {
     return db.select().from(services).where(eq(services.isActive, true));
   }
 
-  async createService(serviceData: InsertService): Promise<Service> {
-    const [newService] = await db
-      .insert(services)
-      .values(serviceData)
-      .returning();
+  async createService(service: InsertService): Promise<Service> {
+    const [newService] = await db.insert(services).values(service).returning();
     return newService;
   }
 
@@ -186,11 +217,6 @@ export class DatabaseStorage implements IStorage {
     await db
       .delete(services)
       .where(eq(services.id, id));
-  }
-
-  async createService(service: InsertService): Promise<Service> {
-    const [newService] = await db.insert(services).values(service).returning();
-    return newService;
   }
 
   // Task operations
