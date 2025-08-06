@@ -17,6 +17,7 @@ import { AssignOrganizationModal } from "@/components/assign-organization-modal"
 import { CreateClientModal } from "@/components/create-client-modal";
 import { CreateServiceModal } from "@/components/create-service-modal";
 import { EditServiceModal } from "@/components/edit-service-modal";
+import { WelcomeVideoModal } from "@/components/welcome-video-modal";
 import type { Project, Task, Service } from "@shared/schema";
 
 export default function AdminDashboard() {
@@ -295,6 +296,11 @@ export default function AdminDashboard() {
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
+                          <WelcomeVideoModal
+                            clientName={`${client.firstName} ${client.lastName}`}
+                            organizationName={client.companyName}
+                            projectDetails="Thank you for choosing our agency for your project needs."
+                          />
                           <AssignOrganizationModal user={client} />
                         </div>
                       </div>

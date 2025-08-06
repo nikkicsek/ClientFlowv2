@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { apiRequest } from "@/lib/queryClient";
 import type { Project, Task, ProjectFile, Message, Service, Kpi } from "@shared/schema";
+import { ClientWelcomeSection } from "@/components/client-welcome-section";
 
 export default function ClientView() {
   const [, setLocation] = useLocation();
@@ -235,8 +236,23 @@ export default function ClientView() {
         </div>
       </div>
 
+      {/* Welcome Section for New Clients */}
+      <div className="p-6 pt-0">
+        <ClientWelcomeSection
+          clientName={project.clientName || "Valued Client"}
+          organizationName={project.organizationName}
+          projectCount={1}
+          onStartTour={() => {
+            toast({
+              title: "Welcome Tour",
+              description: "This would start an interactive tour of the dashboard features.",
+            });
+          }}
+        />
+      </div>
+
       {/* Project Overview */}
-      <div className="p-6">
+      <div className="p-6 pt-0">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
           <Card>
             <CardContent className="p-6">
