@@ -512,6 +512,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Update project endpoint
+  app.put('/api/admin/projects/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const { 
+        name, 
+        description, 
+        budget, 
+        startDate, 
+        expectedCompletion,
+        status,
+        progress
+      } = req.body;
+
+      console.log("Updating project with data:", req.body);
+
+      if (!name) {
+        return res.status(400).json({ message: "Project name is required" });
+      }
+
+      // Verify project exists
+      const existingProject = await storage.getProject(req.params.id);
+      if (!existingProject) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
+      const updateData = {
+        name,
+        description: description || null,
+        budget: budget || null,
+        startDate: startDate ? new Date(startDate) : null,
+        expectedCompletion: expectedCompletion ? new Date(expectedCompletion) : null,
+        status: status || 'active',
+        progress: typeof progress === 'number' ? progress : 0,
+        updatedAt: new Date()
+      };
+
+      const updatedProject = await storage.updateProject(req.params.id, updateData);
+      console.log("Successfully updated project:", updatedProject);
+      res.json(updatedProject);
+    } catch (error) {
+      console.error("Error updating project:", error);
+      res.status(500).json({ message: `Failed to update project: ${error.message}` });
+    }
+  });
+
   app.get('/api/admin/clients', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;

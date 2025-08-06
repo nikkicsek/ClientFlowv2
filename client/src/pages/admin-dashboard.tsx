@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { apiRequest } from "@/lib/queryClient";
 import CreateProjectModal from "@/components/create-project-modal";
+import EditProjectModal from "@/components/edit-project-modal";
 import CreateTaskModal from "@/components/create-task-modal";
 import { TeamManagementModal } from "@/components/team-management-modal";
 import { OrganizationManagementModal } from "@/components/organization-management-modal";
@@ -28,6 +29,7 @@ export default function AdminDashboard() {
   const [showCreateTask, setShowCreateTask] = useState(false);
   const [selectedProject, setSelectedProject] = useState<string>("");
   const [editingService, setEditingService] = useState<Service | null>(null);
+  const [editingProject, setEditingProject] = useState<Project | null>(null);
 
   const { data: projects, isLoading: projectsLoading } = useQuery({
     queryKey: ["/api/admin/projects"],
@@ -230,6 +232,14 @@ export default function AdminDashboard() {
                           <Button 
                             variant="outline" 
                             size="sm"
+                            onClick={() => setEditingProject(project)}
+                          >
+                            <Settings className="h-3 w-3 mr-1" />
+                            Edit
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm"
                             onClick={() => {
                               setSelectedProject(project.id);
                               setShowCreateTask(true);
@@ -411,6 +421,12 @@ export default function AdminDashboard() {
         service={editingService}
         isOpen={!!editingService}
         onClose={() => setEditingService(null)}
+      />
+
+      <EditProjectModal
+        project={editingProject}
+        isOpen={!!editingProject}
+        onClose={() => setEditingProject(null)}
       />
     </div>
   );
