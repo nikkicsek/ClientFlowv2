@@ -46,7 +46,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "User not found" });
       }
 
-      let projects;
+      let projects: any[];
       if (user.role === 'admin') {
         // Admins can see all projects - for now just return empty array
         // In a real implementation, you'd have a method to get all projects
@@ -437,6 +437,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching clients:", error);
       res.status(500).json({ message: "Failed to fetch clients" });
+    }
+  });
+
+  // Individual project route (for client view)
+  app.get('/api/projects/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const project = await storage.getProject(req.params.id);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+      res.json(project);
+    } catch (error) {
+      console.error("Error fetching project:", error);
+      res.status(500).json({ message: "Failed to fetch project" });
     }
   });
 
