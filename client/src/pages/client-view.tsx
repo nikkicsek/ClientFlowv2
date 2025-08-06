@@ -291,9 +291,10 @@ export default function ClientView() {
 
         {/* Main Content Tabs */}
         <Tabs defaultValue="tasks" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="tasks">Tasks & Progress</TabsTrigger>
             <TabsTrigger value="files">Project Files</TabsTrigger>
+            <TabsTrigger value="kpis">KPIs & Goals</TabsTrigger>
             <TabsTrigger value="analytics">Analytics</TabsTrigger>
             <TabsTrigger value="messages">Messages</TabsTrigger>
           </TabsList>
