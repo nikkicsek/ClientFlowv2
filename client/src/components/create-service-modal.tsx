@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -9,25 +9,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { Plus } from "lucide-react";
-
-const serviceCategories = [
-  "design",
-  "development", 
-  "marketing",
-  "seo",
-  "content",
-  "social_media",
-  "advertising",
-  "consulting",
-  "maintenance",
-  "other"
-];
+import type { ServiceCategory } from "@shared/schema";
 
 export function CreateServiceModal() {
   const [isOpen, setIsOpen] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     category: "",
+    categoryId: "",
     description: "",
     isActive: true,
   });
@@ -35,11 +24,24 @@ export function CreateServiceModal() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  // Fetch service categories
+  const { data: serviceCategories = [] } = useQuery<ServiceCategory[]>({
+    queryKey: ["/api/service-categories"],
+    enabled: isOpen,
+  });
+
+  // Sort categories alphabetically
+  const sortedCategories = [...serviceCategories].sort((a, b) => a.name.localeCompare(b.name));
+
   const createServiceMutation = useMutation({
     mutationFn: async (serviceData: typeof formData) => {
+      // Find the selected category to get both name and ID
+      const selectedCategory = sortedCategories.find(cat => cat.id === serviceData.categoryId);
+      
       const cleanData = {
         name: serviceData.name.trim(),
-        category: serviceData.category,
+        category: selectedCategory?.name || serviceData.category, // Keep for backwards compatibility
+        categoryId: serviceData.categoryId,
         description: serviceData.description?.trim() || null,
         isActive: serviceData.isActive,
       };
@@ -62,6 +64,7 @@ export function CreateServiceModal() {
       setFormData({
         name: "",
         category: "",
+        categoryId: "",
         description: "",
         isActive: true,
       });
@@ -82,7 +85,7 @@ export function CreateServiceModal() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name || !formData.category) {
+    if (!formData.name || !formData.categoryId) {
       toast({
         title: "Validation Error",
         description: "Service name and category are required",
@@ -122,14 +125,14 @@ export function CreateServiceModal() {
 
           <div>
             <Label htmlFor="category">Category *</Label>
-            <Select value={formData.category} onValueChange={(value) => handleInputChange("category", value)}>
+            <Select value={formData.categoryId} onValueChange={(value) => handleInputChange("categoryId", value)}>
               <SelectTrigger>
                 <SelectValue placeholder="Select service category" />
               </SelectTrigger>
               <SelectContent>
-                {serviceCategories.map((category) => (
-                  <SelectItem key={category} value={category}>
-                    {category.charAt(0).toUpperCase() + category.slice(1).replace('_', ' ')}
+                {sortedCategories.map((category) => (
+                  <SelectItem key={category.id} value={category.id}>
+                    {category.name}
                   </SelectItem>
                 ))}
               </SelectContent>
