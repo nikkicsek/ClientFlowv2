@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useState, useEffect } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { apiRequest } from "@/lib/queryClient";
+import { Badge } from "@/components/ui/badge";
+import { Building2, User } from "lucide-react";
 
 interface CreateProjectModalProps {
   isOpen: boolean;
@@ -21,14 +23,20 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
   const [formData, setFormData] = useState({
     name: "",
     description: "",
-    clientEmail: "",
-    clientFirstName: "",
-    clientLastName: "",
-    clientCompanyName: "",
+    selectedClientId: "",
     budget: "",
     startDate: "",
     expectedCompletion: "",
   });
+
+  // Fetch all clients to populate company dropdown
+  const { data: clients = [] } = useQuery({
+    queryKey: ["/api/admin/clients"],
+    enabled: isOpen,
+  });
+
+  // Get selected client details
+  const selectedClient = clients.find((client: any) => client.id === formData.selectedClientId);
 
   const createProjectMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -40,10 +48,7 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
       setFormData({
         name: "",
         description: "",
-        clientEmail: "",
-        clientFirstName: "",
-        clientLastName: "",
-        clientCompanyName: "",
+        selectedClientId: "",
         budget: "",
         startDate: "",
         expectedCompletion: "",
@@ -72,10 +77,10 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.name || !formData.clientEmail) {
+    if (!formData.name || !formData.selectedClientId) {
       toast({
         title: "Missing Information",
-        description: "Please fill in the project name and client email.",
+        description: "Please fill in the project name and select a client company.",
         variant: "destructive",
       });
       return;
@@ -84,10 +89,8 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
     createProjectMutation.mutate({
       name: formData.name,
       description: formData.description,
-      clientEmail: formData.clientEmail,
-      clientFirstName: formData.clientFirstName,
-      clientLastName: formData.clientLastName,
-      clientCompanyName: formData.clientCompanyName,
+      clientId: formData.selectedClientId,
+      organizationId: selectedClient?.organizationId || null,
       budget: formData.budget ? parseFloat(formData.budget) : null,
       startDate: formData.startDate ? new Date(formData.startDate) : null,
       expectedCompletion: formData.expectedCompletion ? new Date(formData.expectedCompletion) : null,
@@ -100,15 +103,77 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Create New Project</DialogTitle>
         </DialogHeader>
         
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Client Selection */}
+          <div className="space-y-4">
+            <h3 className="font-medium text-gray-900 flex items-center gap-2">
+              <Building2 className="h-4 w-4" />
+              Select Client Company
+            </h3>
+            
+            <div className="space-y-2">
+              <Label htmlFor="client">Company Name *</Label>
+              <Select
+                value={formData.selectedClientId}
+                onValueChange={(value) => handleInputChange('selectedClientId', value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a client company..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {clients.map((client: any) => (
+                    <SelectItem key={client.id} value={client.id}>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">
+                          {client.companyName || `${client.firstName} ${client.lastName}`}
+                        </span>
+                        {client.organizationId && (
+                          <Badge variant="secondary" className="text-xs">
+                            Organization
+                          </Badge>
+                        )}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Show selected client details */}
+            {selectedClient && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                    <User className="h-4 w-4 text-blue-600" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h4 className="font-medium text-blue-900">
+                      {selectedClient.firstName} {selectedClient.lastName}
+                    </h4>
+                    <p className="text-sm text-blue-700">{selectedClient.email}</p>
+                    {selectedClient.companyName && (
+                      <p className="text-sm text-blue-600">{selectedClient.companyName}</p>
+                    )}
+                    {selectedClient.organizationId && (
+                      <Badge variant="secondary" className="mt-2 text-xs">
+                        <Building2 className="h-3 w-3 mr-1" />
+                        Organization Member
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Project Information */}
           <div className="space-y-4">
-            <h3 className="font-medium text-gray-900">Project Information</h3>
+            <h3 className="font-medium text-gray-900">Project Details</h3>
             
             <div className="space-y-2">
               <Label htmlFor="name">Project Name *</Label>
@@ -116,7 +181,7 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
                 id="name"
                 value={formData.name}
                 onChange={(e) => handleInputChange('name', e.target.value)}
-                placeholder="e.g., Website Redesign for ABC Corp"
+                placeholder="e.g., Website Redesign"
                 required
               />
             </div>
@@ -138,6 +203,7 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
                 <Input
                   id="budget"
                   type="number"
+                  step="0.01"
                   value={formData.budget}
                   onChange={(e) => handleInputChange('budget', e.target.value)}
                   placeholder="10000"
@@ -165,61 +231,13 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
             </div>
           </div>
 
-          {/* Client Information */}
-          <div className="space-y-4 border-t pt-4">
-            <h3 className="font-medium text-gray-900">Client Information</h3>
-            
-            <div className="space-y-2">
-              <Label htmlFor="clientEmail">Client Email *</Label>
-              <Input
-                id="clientEmail"
-                type="email"
-                value={formData.clientEmail}
-                onChange={(e) => handleInputChange('clientEmail', e.target.value)}
-                placeholder="client@company.com"
-                required
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="clientFirstName">First Name</Label>
-                <Input
-                  id="clientFirstName"
-                  value={formData.clientFirstName}
-                  onChange={(e) => handleInputChange('clientFirstName', e.target.value)}
-                  placeholder="John"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="clientLastName">Last Name</Label>
-                <Input
-                  id="clientLastName"
-                  value={formData.clientLastName}
-                  onChange={(e) => handleInputChange('clientLastName', e.target.value)}
-                  placeholder="Smith"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="clientCompanyName">Company Name</Label>
-              <Input
-                id="clientCompanyName"
-                value={formData.clientCompanyName}
-                onChange={(e) => handleInputChange('clientCompanyName', e.target.value)}
-                placeholder="ABC Corporation"
-              />
-            </div>
-          </div>
-
           <div className="flex gap-2 pt-4">
             <Button type="button" variant="outline" onClick={onClose} className="flex-1">
               Cancel
             </Button>
             <Button 
               type="submit"
-              disabled={createProjectMutation.isPending}
+              disabled={createProjectMutation.isPending || !formData.selectedClientId}
               className="flex-1 bg-blue-600 hover:bg-blue-700"
             >
               {createProjectMutation.isPending ? 'Creating...' : 'Create Project'}
