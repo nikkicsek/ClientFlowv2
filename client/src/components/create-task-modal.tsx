@@ -129,11 +129,13 @@ export default function CreateTaskModal({ isOpen, onClose, onSuccess, projectId,
                 <SelectValue placeholder="Select a service (optional)" />
               </SelectTrigger>
               <SelectContent>
-                {services.map((service) => (
-                  <SelectItem key={service.id} value={service.id}>
-                    {service.name}
-                  </SelectItem>
-                ))}
+                {services
+                  .sort((a, b) => a.name.localeCompare(b.name))
+                  .map((service) => (
+                    <SelectItem key={service.id} value={service.id}>
+                      {service.name}
+                    </SelectItem>
+                  ))}
               </SelectContent>
             </Select>
           </div>
