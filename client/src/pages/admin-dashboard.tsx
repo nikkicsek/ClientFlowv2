@@ -15,6 +15,8 @@ import { TeamManagementModal } from "@/components/team-management-modal";
 import { OrganizationManagementModal } from "@/components/organization-management-modal";
 import { AssignOrganizationModal } from "@/components/assign-organization-modal";
 import { CreateClientModal } from "@/components/create-client-modal";
+import { CreateServiceModal } from "@/components/create-service-modal";
+import { EditServiceModal } from "@/components/edit-service-modal";
 import type { Project, Task, Service } from "@shared/schema";
 
 export default function AdminDashboard() {
@@ -24,6 +26,7 @@ export default function AdminDashboard() {
   const [showCreateProject, setShowCreateProject] = useState(false);
   const [showCreateTask, setShowCreateTask] = useState(false);
   const [selectedProject, setSelectedProject] = useState<string>("");
+  const [editingService, setEditingService] = useState<Service | null>(null);
 
   const { data: projects, isLoading: projectsLoading } = useQuery({
     queryKey: ["/api/admin/projects"],
@@ -335,7 +338,11 @@ export default function AdminDashboard() {
 
           <TabsContent value="services" className="space-y-6">
             <div className="flex justify-between items-center">
-              <h2 className="text-xl font-semibold text-gray-900">Available Services</h2>
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900">Available Services</h2>
+                <p className="text-gray-600">Manage the services your agency offers to clients</p>
+              </div>
+              <CreateServiceModal />
             </div>
 
             {!services || services.length === 0 ? (
@@ -343,20 +350,33 @@ export default function AdminDashboard() {
                 <CardContent className="p-8 text-center">
                   <Settings className="h-16 w-16 mx-auto mb-4 text-gray-400" />
                   <h3 className="text-lg font-medium text-gray-900 mb-2">No Services</h3>
-                  <p className="text-gray-600">No services are currently configured.</p>
+                  <p className="text-gray-600 mb-4">No services are currently configured. Add your first service to start organizing your offerings.</p>
+                  <CreateServiceModal />
                 </CardContent>
               </Card>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {services.map((service: Service) => (
-                  <Card key={service.id}>
+                  <Card key={service.id} className="hover:shadow-md transition-shadow cursor-pointer">
                     <CardContent className="p-4">
-                      <div className="flex justify-between items-start">
-                        <div>
+                      <div className="flex justify-between items-start mb-3">
+                        <div className="flex-1">
                           <h3 className="font-medium text-gray-900">{service.name}</h3>
                           <p className="text-sm text-gray-600 mt-1">{service.description}</p>
                         </div>
-                        <Badge variant="outline">{service.category}</Badge>
+                        <Badge variant="outline" className="ml-2">{service.category}</Badge>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <Badge variant={service.isActive ? "default" : "secondary"}>
+                          {service.isActive ? "Active" : "Inactive"}
+                        </Badge>
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          onClick={() => setEditingService(service)}
+                        >
+                          Edit
+                        </Button>
                       </div>
                     </CardContent>
                   </Card>
@@ -379,6 +399,12 @@ export default function AdminDashboard() {
         onSuccess={handleTaskCreated}
         projectId={selectedProject}
         services={services || []}
+      />
+
+      <EditServiceModal
+        service={editingService}
+        isOpen={!!editingService}
+        onClose={() => setEditingService(null)}
       />
     </div>
   );
