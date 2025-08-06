@@ -768,11 +768,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Only admins can create organizations" });
       }
 
-      const organization = await storage.createOrganization(req.body);
+      // Validate required fields
+      const { name, description, website, industry, primaryContactId } = req.body;
+      
+      if (!name || typeof name !== 'string' || name.trim().length === 0) {
+        return res.status(400).json({ message: "Organization name is required" });
+      }
+
+      const organizationData = {
+        name: name.trim(),
+        description: description || null,
+        website: website || null,
+        industry: industry || null,
+        primaryContactId: primaryContactId || null,
+      };
+
+      console.log("Creating organization with data:", organizationData);
+      const organization = await storage.createOrganization(organizationData);
+      console.log("Successfully created organization:", organization);
+      
       res.status(201).json(organization);
     } catch (error) {
-      console.error("Error creating organization:", error);
-      res.status(500).json({ message: "Failed to create organization" });
+      console.error("Detailed error creating organization:", error);
+      
+      // Check if it's a database constraint error
+      if (error.message && error.message.includes('unexpected token')) {
+        return res.status(400).json({ 
+          message: "Invalid data format. Please check all fields are properly filled.",
+          details: error.message 
+        });
+      }
+      
+      res.status(500).json({ 
+        message: "Failed to create organization",
+        details: error.message || "Unknown error"
+      });
     }
   });
 

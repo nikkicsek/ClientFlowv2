@@ -39,14 +39,29 @@ export function OrganizationManagementModal() {
 
   const createOrgMutation = useMutation({
     mutationFn: async (orgData: typeof formData) => {
-      const response = await apiRequest("POST", "/api/admin/organizations", orgData);
+      console.log("Sending organization data:", orgData);
+      
+      // Clean the data before sending
+      const cleanData = {
+        name: orgData.name.trim(),
+        description: orgData.description.trim() || undefined,
+        website: orgData.website.trim() || undefined,
+        industry: orgData.industry.trim() || undefined,
+        primaryContactId: orgData.primaryContactId || undefined,
+      };
+      
+      console.log("Cleaned organization data:", cleanData);
+      
+      const response = await apiRequest("POST", "/api/admin/organizations", cleanData);
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.message || "Failed to create organization");
+        console.error("Server error response:", error);
+        throw new Error(error.message || error.details || "Failed to create organization");
       }
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      console.log("Organization created successfully:", data);
       toast({
         title: "Organization Created",
         description: "New organization has been created successfully",
@@ -56,9 +71,10 @@ export function OrganizationManagementModal() {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/organizations"] });
     },
     onError: (error: Error) => {
+      console.error("Organization creation error:", error);
       toast({
         title: "Creation Failed",
-        description: error.message,
+        description: error.message || "An unexpected error occurred",
         variant: "destructive",
       });
     },
