@@ -447,10 +447,73 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!project) {
         return res.status(404).json({ message: "Project not found" });
       }
+
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      // Check access permissions
+      if (user?.role !== 'admin' && project.clientId !== userId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
       res.json(project);
     } catch (error) {
       console.error("Error fetching project:", error);
       res.status(500).json({ message: "Failed to fetch project" });
+    }
+  });
+
+  // File download route with access control
+  app.get('/api/projects/:projectId/files/:fileId/download', isAuthenticated, async (req: any, res) => {
+    try {
+      const { projectId, fileId } = req.params;
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+
+      // Get the project to check permissions
+      const project = await storage.getProject(projectId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
+      // Check access permissions
+      if (user?.role !== 'admin' && project.clientId !== userId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      // Get the file
+      const file = await storage.getProjectFile(fileId);
+      if (!file || file.projectId !== projectId) {
+        return res.status(404).json({ message: "File not found" });
+      }
+
+      // For clients, they can download files that are:
+      // - Approved (is_approved = true)
+      // - Need changes (is_approved = false) - so they can see iteration history
+      // - Don't require approval (is_approval_required = false)
+      // They cannot download files pending approval (is_approved = null)
+      if (user?.role !== 'admin' && file.isApprovalRequired && file.isApproved === null) {
+        return res.status(403).json({ message: "File is pending approval and cannot be downloaded yet" });
+      }
+
+      // Set appropriate headers for file download
+      res.setHeader('Content-Disposition', `attachment; filename="${file.fileName}"`);
+      res.setHeader('Content-Type', file.fileType || 'application/octet-stream');
+
+      // In a real implementation, you would serve the actual file from storage
+      // For now, we'll just return file metadata
+      res.json({
+        message: `Downloading ${file.fileName}`,
+        fileName: file.fileName,
+        fileType: file.fileType,
+        filePath: file.filePath,
+        category: file.category,
+        isApproved: file.isApproved,
+        uploadedAt: file.uploadedAt
+      });
+    } catch (error) {
+      console.error("Error downloading file:", error);
+      res.status(500).json({ message: "Failed to download file" });
     }
   });
 

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
-import { ArrowLeft, Calendar, DollarSign, CheckCircle, Clock, AlertCircle, FileText, MessageSquare } from "lucide-react";
+import { ArrowLeft, Calendar, DollarSign, CheckCircle, Clock, AlertCircle, FileText, MessageSquare, Download, Eye } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { apiRequest } from "@/lib/queryClient";
@@ -56,6 +56,46 @@ export default function ClientView() {
   const handleBackToAdmin = () => {
     localStorage.removeItem('adminViewingProject');
     setLocation('/');
+  };
+
+  const handleFileDownload = async (fileId: string, fileName: string) => {
+    try {
+      const response = await apiRequest("GET", `/api/projects/${projectId}/files/${fileId}/download`);
+      const data = await response.json();
+      
+      if (response.ok) {
+        toast({
+          title: "Download Started",
+          description: `Downloading ${fileName}...`,
+        });
+        // In a real implementation, this would trigger the actual file download
+        console.log('File download:', data);
+      } else {
+        toast({
+          title: "Download Failed",
+          description: data.message || "Could not download file",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error("Error downloading file:", error);
+      toast({
+        title: "Download Error",
+        description: "An error occurred while downloading the file",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const canDownloadFile = (file: ProjectFile) => {
+    // Clients can download files that are:
+    // - Approved (is_approved = true)
+    // - Need changes (is_approved = false) - to see iteration history
+    // - Don't require approval (is_approval_required = false)
+    // They cannot download files pending approval (is_approved = null and is_approval_required = true)
+    if (!file.isApprovalRequired) return true;
+    if (file.isApproved === true || file.isApproved === false) return true;
+    return false; // Pending approval
   };
 
   const getStatusIcon = (status: string) => {
@@ -250,21 +290,57 @@ export default function ClientView() {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {files?.map((file: ProjectFile) => (
-                  <Card key={file.id}>
+                  <Card key={file.id} className="relative">
                     <CardContent className="p-4">
-                      <div className="flex items-center gap-3">
-                        <FileText className="h-8 w-8 text-blue-600" />
+                      <div className="flex items-start gap-3">
+                        <FileText className="h-8 w-8 text-blue-600 mt-1" />
                         <div className="flex-1 min-w-0">
-                          <h4 className="font-medium text-gray-900 truncate">{file.fileName}</h4>
-                          <p className="text-sm text-gray-500">{file.category}</p>
-                          {file.isApprovalRequired && (
-                            <Badge 
-                              variant={file.isApproved === true ? 'default' : file.isApproved === false ? 'destructive' : 'secondary'}
-                              className="mt-1"
-                            >
-                              {file.isApproved === true ? 'Approved' : file.isApproved === false ? 'Needs Changes' : 'Pending Review'}
-                            </Badge>
-                          )}
+                          <h4 className="font-medium text-gray-900 truncate mb-1">{file.fileName}</h4>
+                          <p className="text-sm text-gray-500 mb-2">{file.category}</p>
+                          
+                          <div className="flex flex-col gap-2">
+                            {file.isApprovalRequired && (
+                              <Badge 
+                                variant={file.isApproved === true ? 'default' : file.isApproved === false ? 'destructive' : 'secondary'}
+                                className="w-fit"
+                              >
+                                {file.isApproved === true ? 'Approved' : file.isApproved === false ? 'Needs Changes' : 'Pending Review'}
+                              </Badge>
+                            )}
+                            
+                            {canDownloadFile(file) ? (
+                              <div className="flex gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleFileDownload(file.id, file.fileName)}
+                                  className="flex items-center gap-1 text-xs"
+                                >
+                                  <Download className="h-3 w-3" />
+                                  Download
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => handleFileDownload(file.id, file.fileName)}
+                                  className="flex items-center gap-1 text-xs"
+                                >
+                                  <Eye className="h-3 w-3" />
+                                  View
+                                </Button>
+                              </div>
+                            ) : (
+                              <div className="text-xs text-gray-500 italic">
+                                Pending approval - available soon
+                              </div>
+                            )}
+                            
+                            {file.isApproved === false && (
+                              <p className="text-xs text-orange-600 mt-1">
+                                View previous versions and requested changes
+                              </p>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </CardContent>
