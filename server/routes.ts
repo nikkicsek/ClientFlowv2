@@ -369,6 +369,77 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Admin routes
+  app.get('/api/admin/projects', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const projects = await storage.getAllProjects();
+      res.json(projects);
+    } catch (error) {
+      console.error("Error fetching admin projects:", error);
+      res.status(500).json({ message: "Failed to fetch projects" });
+    }
+  });
+
+  app.post('/api/admin/projects', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const { clientEmail, clientFirstName, clientLastName, clientCompanyName, ...projectData } = req.body;
+
+      // Create or get client user
+      let clientUser = await storage.getUserByEmail(clientEmail);
+      if (!clientUser) {
+        clientUser = await storage.upsertUser({
+          id: clientEmail, // Use email as ID for now
+          email: clientEmail,
+          firstName: clientFirstName,
+          lastName: clientLastName,
+          companyName: clientCompanyName,
+          role: 'client',
+        });
+      }
+
+      const project = await storage.createProject({
+        ...projectData,
+        clientId: clientUser.id,
+      });
+
+      res.status(201).json(project);
+    } catch (error) {
+      console.error("Error creating admin project:", error);
+      res.status(500).json({ message: "Failed to create project" });
+    }
+  });
+
+  app.get('/api/admin/clients', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const clients = await storage.getClientUsers();
+      res.json(clients);
+    } catch (error) {
+      console.error("Error fetching clients:", error);
+      res.status(500).json({ message: "Failed to fetch clients" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
