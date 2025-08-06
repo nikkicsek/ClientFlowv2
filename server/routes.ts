@@ -135,8 +135,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Only admins can create tasks" });
       }
 
+      // Convert date string to Date object if present
+      const bodyData = { ...req.body };
+      if (bodyData.dueDate) {
+        bodyData.dueDate = new Date(bodyData.dueDate);
+      }
+      
       const taskData = insertTaskSchema.parse({
-        ...req.body,
+        ...bodyData,
         projectId: req.params.projectId,
       });
       
@@ -144,7 +150,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(201).json(task);
     } catch (error) {
       console.error("Error creating task:", error);
-      res.status(500).json({ message: "Failed to create task" });
+      if (error instanceof Error) {
+        res.status(400).json({ message: `Failed to create task: ${error.message}` });
+      } else {
+        res.status(500).json({ message: "Failed to create task" });
+      }
     }
   });
 

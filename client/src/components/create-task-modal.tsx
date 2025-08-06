@@ -76,13 +76,16 @@ export default function CreateTaskModal({ isOpen, onClose, onSuccess, projectId,
       return;
     }
 
-    createTaskMutation.mutate({
+    const taskData = {
       title: formData.title,
-      description: formData.description,
+      description: formData.description || null,
       serviceId: formData.serviceId || null,
       status: formData.status,
-      dueDate: formData.dueDate ? new Date(formData.dueDate) : null,
-    });
+      dueDate: formData.dueDate || null, // Send as string, server will convert
+    };
+
+    console.log("Creating task with data:", taskData);
+    createTaskMutation.mutate(taskData);
   };
 
   const handleInputChange = (field: string, value: string) => {
