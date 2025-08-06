@@ -180,27 +180,40 @@ function CreateCategoryForm({ onClose }: { onClose: () => void }) {
   });
 
   const createMutation = useMutation({
-    mutationFn: (data: InsertServiceCategory) =>
-      apiRequest("/api/service-categories", {
-        method: "POST",
-        body: JSON.stringify(data),
-        headers: { "Content-Type": "application/json" },
-      }),
+    mutationFn: async (data: InsertServiceCategory) => {
+      console.log("Creating category with data:", data);
+      try {
+        const response = await apiRequest("/api/service-categories", {
+          method: "POST",
+          body: JSON.stringify(data),
+          headers: { "Content-Type": "application/json" },
+        });
+        console.log("Category created successfully:", response);
+        return response;
+      } catch (error) {
+        console.error("Error creating category:", error);
+        throw error;
+      }
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/service-categories"] });
       toast({ title: "Category created successfully!" });
+      form.reset();
       onClose();
     },
-    onError: () => {
+    onError: (error: any) => {
+      console.error("Mutation error:", error);
       toast({
         title: "Error",
-        description: "Failed to create category. Please try again.",
+        description: `Failed to create category: ${error?.message || "Please try again."}`,
         variant: "destructive",
       });
     },
   });
 
   const handleSubmit = (data: ServiceCategoryFormData) => {
+    console.log("Form submitted with data:", data);
+    console.log("Form errors:", form.formState.errors);
     createMutation.mutate(data);
   };
 
