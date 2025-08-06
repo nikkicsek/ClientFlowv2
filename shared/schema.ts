@@ -103,6 +103,7 @@ export const tasks = pgTable("tasks", {
   dependencies: text("dependencies").array(), // Array of task IDs that must be completed first
   estimatedHours: integer("estimated_hours"),
   actualHours: integer("actual_hours"),
+  assigneeRole: varchar("assignee_role"), // "project_manager", "content_writer", "photographer", "designer", "client"
   clientVisible: boolean("client_visible").default(true), // Whether client can see this task
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),

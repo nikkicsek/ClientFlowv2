@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Users, Briefcase, Settings, Eye, Building2, Edit } from "lucide-react";
+import { Plus, Users, Briefcase, Settings, Eye, Building2, Edit, CheckSquare, Clock, AlertTriangle } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
@@ -21,6 +21,7 @@ import { EditServiceModal } from "@/components/edit-service-modal";
 import { ServiceCategoryModal } from "@/components/service-category-modal";
 import { WelcomeVideoModal } from "@/components/welcome-video-modal";
 import { EditClientModal } from "@/components/edit-client-modal";
+import { AgencyTasksModal } from "@/components/agency-tasks-modal";
 import type { Project, Task, Service, User } from "@shared/schema";
 
 export default function AdminDashboard() {
@@ -33,6 +34,8 @@ export default function AdminDashboard() {
   const [editingService, setEditingService] = useState<Service | null>(null);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [editingClient, setEditingClient] = useState<User | null>(null);
+  const [showAgencyTasks, setShowAgencyTasks] = useState(false);
+  const [selectedProjectForTasks, setSelectedProjectForTasks] = useState<Project | null>(null);
 
   const { data: projects, isLoading: projectsLoading } = useQuery({
     queryKey: ["/api/admin/projects"],
@@ -254,7 +257,7 @@ export default function AdminDashboard() {
                             {project.budget ? `$${Number(project.budget).toLocaleString()}` : 'Not set'}
                           </span>
                         </div>
-                        <div className="flex gap-2 mt-4">
+                        <div className="flex gap-2 mt-4 flex-wrap">
                           <Button 
                             variant="outline" 
                             size="sm"
@@ -273,6 +276,18 @@ export default function AdminDashboard() {
                           >
                             <Plus className="h-3 w-3 mr-1" />
                             Add Task
+                          </Button>
+                          <Button 
+                            variant="default" 
+                            size="sm"
+                            onClick={() => {
+                              setSelectedProjectForTasks(project);
+                              setShowAgencyTasks(true);
+                            }}
+                            className="bg-indigo-600 hover:bg-indigo-700"
+                          >
+                            <CheckSquare className="h-3 w-3 mr-1" />
+                            Agency Tasks
                           </Button>
                           <Button 
                             variant="outline" 
@@ -541,6 +556,15 @@ export default function AdminDashboard() {
         client={editingClient}
         isOpen={!!editingClient}
         onClose={() => setEditingClient(null)}
+      />
+
+      <AgencyTasksModal
+        isOpen={showAgencyTasks}
+        onClose={() => {
+          setShowAgencyTasks(false);
+          setSelectedProjectForTasks(null);
+        }}
+        project={selectedProjectForTasks}
       />
     </div>
   );
