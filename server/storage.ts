@@ -1,5 +1,6 @@
 import {
   users,
+  organizations,
   projects,
   services,
   tasks,
@@ -10,6 +11,8 @@ import {
   teamInvitations,
   type User,
   type UpsertUser,
+  type Organization,
+  type InsertOrganization,
   type Project,
   type InsertProject,
   type Service,
@@ -36,6 +39,13 @@ export interface IStorage {
   getUserByEmail(email: string): Promise<User | undefined>;
   upsertUser(user: UpsertUser): Promise<User>;
   getClientUsers(): Promise<User[]>;
+  
+  // Organization operations
+  getOrganizations(): Promise<Organization[]>;
+  getOrganization(id: string): Promise<Organization | undefined>;
+  createOrganization(organization: InsertOrganization): Promise<Organization>;
+  updateOrganization(id: string, updates: Partial<InsertOrganization>): Promise<Organization>;
+  getOrganizationUsers(organizationId: string): Promise<User[]>;
   
   // Project operations
   getProjectsByClient(clientId: string): Promise<Project[]>;
@@ -294,6 +304,34 @@ export class DatabaseStorage implements IStorage {
       .where(eq(teamInvitations.id, id))
       .returning();
     return updatedInvitation;
+  }
+
+  // Organization operations
+  async getOrganizations(): Promise<Organization[]> {
+    return db.select().from(organizations).orderBy(desc(organizations.createdAt));
+  }
+
+  async getOrganization(id: string): Promise<Organization | undefined> {
+    const [organization] = await db.select().from(organizations).where(eq(organizations.id, id));
+    return organization;
+  }
+
+  async createOrganization(organization: InsertOrganization): Promise<Organization> {
+    const [newOrganization] = await db.insert(organizations).values(organization).returning();
+    return newOrganization;
+  }
+
+  async updateOrganization(id: string, updates: Partial<InsertOrganization>): Promise<Organization> {
+    const [updatedOrganization] = await db
+      .update(organizations)
+      .set(updates)
+      .where(eq(organizations.id, id))
+      .returning();
+    return updatedOrganization;
+  }
+
+  async getOrganizationUsers(organizationId: string): Promise<User[]> {
+    return db.select().from(users).where(eq(users.organizationId, organizationId));
   }
 }
 

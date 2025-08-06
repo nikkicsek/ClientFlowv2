@@ -741,6 +741,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Organization management routes (admin only)
+  app.get('/api/admin/organizations', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Only admins can view organizations" });
+      }
+
+      const organizations = await storage.getOrganizations();
+      res.json(organizations);
+    } catch (error) {
+      console.error("Error fetching organizations:", error);
+      res.status(500).json({ message: "Failed to fetch organizations" });
+    }
+  });
+
+  app.post('/api/admin/organizations', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Only admins can create organizations" });
+      }
+
+      const organization = await storage.createOrganization(req.body);
+      res.status(201).json(organization);
+    } catch (error) {
+      console.error("Error creating organization:", error);
+      res.status(500).json({ message: "Failed to create organization" });
+    }
+  });
+
+  app.get('/api/admin/organizations/:id/users', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Only admins can view organization users" });
+      }
+
+      const users = await storage.getOrganizationUsers(req.params.id);
+      res.json(users);
+    } catch (error) {
+      console.error("Error fetching organization users:", error);
+      res.status(500).json({ message: "Failed to fetch organization users" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

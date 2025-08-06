@@ -31,16 +31,21 @@ Preferred communication style: Simple, everyday language.
 - **Strategy**: Passport.js with openid-client strategy
 - **Session Storage**: PostgreSQL-backed sessions with connect-pg-simple
 - **Authorization**: Role-based access control (admin vs client roles)
+- **Team Management**: Secure invitation system for agency team members with full admin access
+- **Organization Management**: Business entity grouping for multiple client contacts
 
 ### Data Storage
 - **Primary Database**: PostgreSQL with the following core entities:
-  - Users (with role-based permissions)
-  - Projects (with client assignments and progress tracking)
+  - Users (with role-based permissions: admin/client)
+  - Organizations (business entities for grouping multiple client contacts)
+  - Projects (with client assignments, organization links, and progress tracking)
   - Services (categorized offerings like web design, marketing, etc.)
   - Tasks (linked to projects and services with status tracking)
   - Project Files (with approval workflows and categorization)
   - Analytics (metrics and performance data)
   - Messages (project communication and updates)
+  - KPIs (Key Performance Indicators with multi-platform integration)
+  - Team Invitations (secure invitation system for agency staff)
 - **File Storage**: Local filesystem with organized directory structure
 - **Session Storage**: PostgreSQL sessions table for auth persistence
 

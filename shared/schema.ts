@@ -26,6 +26,18 @@ export const sessions = pgTable(
 );
 
 // User storage table (required for Replit Auth)
+// Organizations/Business table for grouping multiple clients
+export const organizations = pgTable("organizations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name").notNull(),
+  description: text("description"),
+  website: varchar("website"),
+  industry: varchar("industry"),
+  primaryContactId: varchar("primary_contact_id").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   email: varchar("email").unique(),
@@ -34,6 +46,8 @@ export const users = pgTable("users", {
   profileImageUrl: varchar("profile_image_url"),
   role: varchar("role").notNull().default("client"), // "client" or "admin"
   companyName: varchar("company_name"),
+  organizationId: varchar("organization_id").references(() => organizations.id),
+  jobTitle: varchar("job_title"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -43,6 +57,7 @@ export const projects = pgTable("projects", {
   name: text("name").notNull(),
   description: text("description"),
   clientId: varchar("client_id").notNull().references(() => users.id),
+  organizationId: varchar("organization_id").references(() => organizations.id),
   status: varchar("status").notNull().default("active"), // "active", "completed", "on_hold"
   startDate: timestamp("start_date"),
   expectedCompletion: timestamp("expected_completion"),
@@ -149,6 +164,10 @@ export const projectsRelations = relations(projects, ({ one, many }) => ({
     fields: [projects.clientId],
     references: [users.id],
   }),
+  organization: one(organizations, {
+    fields: [projects.organizationId],
+    references: [organizations.id],
+  }),
   tasks: many(tasks),
   files: many(projectFiles),
   analytics: many(analytics),
@@ -224,6 +243,12 @@ export const kpisRelations = relations(kpis, ({ one }) => ({
 }));
 
 // Insert schemas
+export const insertOrganizationSchema = createInsertSchema(organizations).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
   createdAt: true,
@@ -271,6 +296,8 @@ export const insertKpiSchema = createInsertSchema(kpis).omit({
 // Types
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
+export type Organization = typeof organizations.$inferSelect;
+export type InsertOrganization = typeof organizations.$inferInsert;
 
 // Team invitation system for agency staff
 export const teamInvitations = pgTable("team_invitations", {
