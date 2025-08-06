@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
-import { ArrowLeft, Calendar, DollarSign, CheckCircle, Clock, AlertCircle, FileText, MessageSquare, Download, Eye } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { ArrowLeft, Calendar, DollarSign, CheckCircle, Clock, AlertCircle, FileText, MessageSquare, Download, Eye, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { apiRequest } from "@/lib/queryClient";
@@ -16,6 +17,7 @@ export default function ClientView() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [projectId, setProjectId] = useState<string>("");
+  const [viewingFile, setViewingFile] = useState<ProjectFile | null>(null);
 
   useEffect(() => {
     // Get the project ID from localStorage (set by admin)
@@ -96,6 +98,63 @@ export default function ClientView() {
     if (!file.isApprovalRequired) return true;
     if (file.isApproved === true || file.isApproved === false) return true;
     return false; // Pending approval
+  };
+
+  const handleFileView = (file: ProjectFile) => {
+    setViewingFile(file);
+  };
+
+  const isViewableFile = (file: ProjectFile) => {
+    const viewableTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'application/pdf', 'text/plain'];
+    return viewableTypes.includes(file.fileType) || file.fileType.startsWith('image/');
+  };
+
+  const renderFilePreview = (file: ProjectFile) => {
+    if (file.fileType.startsWith('image/')) {
+      return (
+        <div className="flex justify-center">
+          <img 
+            src={`/api/projects/${projectId}/files/${file.id}/preview`} 
+            alt={file.fileName}
+            className="max-w-full max-h-96 object-contain rounded"
+            onError={(e) => {
+              (e.target as HTMLImageElement).src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjNmNGY2Ii8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCwgc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzljYTNhZiIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkltYWdlIG5vdCBhdmFpbGFibGU8L3RleHQ+PC9zdmc+';
+            }}
+          />
+        </div>
+      );
+    } else if (file.fileType === 'application/pdf') {
+      return (
+        <div className="text-center p-8">
+          <FileText className="h-16 w-16 mx-auto mb-4 text-red-600" />
+          <p className="text-gray-600 mb-4">PDF Preview</p>
+          <Button
+            onClick={() => handleFileDownload(file.id, file.fileName)}
+            className="flex items-center gap-2"
+          >
+            <Download className="h-4 w-4" />
+            Open PDF
+          </Button>
+        </div>
+      );
+    } else {
+      return (
+        <div className="text-center p-8">
+          <FileText className="h-16 w-16 mx-auto mb-4 text-gray-600" />
+          <p className="text-gray-600 mb-2">File Preview Not Available</p>
+          <p className="text-sm text-gray-500 mb-4">
+            {file.fileType} • {file.category}
+          </p>
+          <Button
+            onClick={() => handleFileDownload(file.id, file.fileName)}
+            className="flex items-center gap-2"
+          >
+            <Download className="h-4 w-4" />
+            Download File
+          </Button>
+        </div>
+      );
+    }
   };
 
   const getStatusIcon = (status: string) => {
@@ -322,8 +381,9 @@ export default function ClientView() {
                                 <Button
                                   size="sm"
                                   variant="ghost"
-                                  onClick={() => handleFileDownload(file.id, file.fileName)}
+                                  onClick={() => handleFileView(file)}
                                   className="flex items-center gap-1 text-xs"
+                                  disabled={!isViewableFile(file)}
                                 >
                                   <Eye className="h-3 w-3" />
                                   View
@@ -420,6 +480,67 @@ export default function ClientView() {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* File Viewer Modal */}
+      {viewingFile && (
+        <Dialog open={!!viewingFile} onOpenChange={() => setViewingFile(null)}>
+          <DialogContent className="max-w-4xl max-h-[80vh] overflow-auto">
+            <DialogHeader>
+              <div className="flex justify-between items-start">
+                <div>
+                  <DialogTitle className="text-lg font-semibold">
+                    {viewingFile.fileName}
+                  </DialogTitle>
+                  <div className="flex items-center gap-2 mt-2">
+                    <Badge variant="outline">{viewingFile.category}</Badge>
+                    {viewingFile.isApprovalRequired && (
+                      <Badge 
+                        variant={viewingFile.isApproved === true ? 'default' : viewingFile.isApproved === false ? 'destructive' : 'secondary'}
+                      >
+                        {viewingFile.isApproved === true ? 'Approved' : viewingFile.isApproved === false ? 'Needs Changes' : 'Pending Review'}
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setViewingFile(null)}
+                  className="flex items-center gap-1"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            </DialogHeader>
+            
+            <div className="mt-4">
+              {renderFilePreview(viewingFile)}
+            </div>
+
+            <div className="flex justify-between items-center mt-4 pt-4 border-t">
+              <div className="text-sm text-gray-500">
+                Uploaded: {viewingFile.uploadedAt && new Date(viewingFile.uploadedAt).toLocaleDateString()}
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => handleFileDownload(viewingFile.id, viewingFile.fileName)}
+                  className="flex items-center gap-2"
+                >
+                  <Download className="h-4 w-4" />
+                  Download
+                </Button>
+                <Button
+                  variant="ghost"
+                  onClick={() => setViewingFile(null)}
+                >
+                  Close
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
