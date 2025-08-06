@@ -22,7 +22,7 @@ export function EditClientModal({ client, isOpen, onClose }: EditClientModalProp
     lastName: "",
     email: "",
     companyName: "",
-    organizationId: "",
+    organizationId: "none",
     jobTitle: "",
     phone: "",
     address: "",
@@ -207,7 +207,7 @@ export function EditClientModal({ client, isOpen, onClose }: EditClientModalProp
 
           <div>
             <Label htmlFor="organization">Organization</Label>
-            <Select value={formData.organizationId} onValueChange={(value) => handleInputChange("organizationId", value)}>
+            <Select value={formData.organizationId || "none"} onValueChange={(value) => handleInputChange("organizationId", value)}>
               <SelectTrigger>
                 <SelectValue placeholder="Select organization (optional)" />
               </SelectTrigger>
