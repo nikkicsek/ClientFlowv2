@@ -103,6 +103,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Task routes
+  app.get('/api/admin/tasks', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Only admins can view all tasks" });
+      }
+
+      const tasks = await storage.getAllTasksWithDetails();
+      res.json(tasks);
+    } catch (error) {
+      console.error("Error fetching all tasks:", error);
+      res.status(500).json({ message: "Failed to fetch tasks" });
+    }
+  });
+
   app.get('/api/projects/:projectId/tasks', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
