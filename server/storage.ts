@@ -27,10 +27,13 @@ import { eq, desc, and, gte, lte } from "drizzle-orm";
 export interface IStorage {
   // User operations (required for Replit Auth)
   getUser(id: string): Promise<User | undefined>;
+  getUserByEmail(email: string): Promise<User | undefined>;
   upsertUser(user: UpsertUser): Promise<User>;
+  getClientUsers(): Promise<User[]>;
   
   // Project operations
   getProjectsByClient(clientId: string): Promise<Project[]>;
+  getAllProjects(): Promise<Project[]>;
   getProject(id: string): Promise<Project | undefined>;
   createProject(project: InsertProject): Promise<Project>;
   updateProject(id: string, updates: Partial<InsertProject>): Promise<Project>;
@@ -66,6 +69,11 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.email, email));
+    return user;
+  }
+
   async upsertUser(userData: UpsertUser): Promise<User> {
     const [user] = await db
       .insert(users)
@@ -81,9 +89,17 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
+  async getClientUsers(): Promise<User[]> {
+    return db.select().from(users).where(eq(users.role, 'client'));
+  }
+
   // Project operations
   async getProjectsByClient(clientId: string): Promise<Project[]> {
     return db.select().from(projects).where(eq(projects.clientId, clientId)).orderBy(desc(projects.createdAt));
+  }
+
+  async getAllProjects(): Promise<Project[]> {
+    return db.select().from(projects).orderBy(desc(projects.createdAt));
   }
 
   async getProject(id: string): Promise<Project | undefined> {
@@ -168,17 +184,15 @@ export class DatabaseStorage implements IStorage {
 
   // Analytics operations
   async getAnalyticsByProject(projectId: string, startDate?: Date, endDate?: Date): Promise<Analytics[]> {
-    let query = db.select().from(analytics).where(eq(analytics.projectId, projectId));
-    
     if (startDate && endDate) {
-      query = query.where(and(
+      return db.select().from(analytics).where(and(
         eq(analytics.projectId, projectId),
         gte(analytics.date, startDate),
         lte(analytics.date, endDate)
-      ));
+      )).orderBy(desc(analytics.date));
     }
     
-    return query.orderBy(desc(analytics.date));
+    return db.select().from(analytics).where(eq(analytics.projectId, projectId)).orderBy(desc(analytics.date));
   }
 
   async createAnalytics(analyticsData: InsertAnalytics): Promise<Analytics> {
