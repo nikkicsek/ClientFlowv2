@@ -36,6 +36,8 @@ export default function AdminDashboard() {
   const [editingClient, setEditingClient] = useState<User | null>(null);
   const [showAgencyTasks, setShowAgencyTasks] = useState(false);
   const [selectedProjectForTasks, setSelectedProjectForTasks] = useState<Project | null>(null);
+  const [showTeamManagement, setShowTeamManagement] = useState(false);
+  const [showOrganizations, setShowOrganizations] = useState(false);
 
   const { data: projects, isLoading: projectsLoading } = useQuery({
     queryKey: ["/api/admin/projects"],
@@ -166,8 +168,22 @@ export default function AdminDashboard() {
               <p className="text-gray-600">Manage clients, projects, and team activities</p>
             </div>
             <div className="flex items-center gap-4">
-              <TeamManagementModal />
-              <OrganizationManagementModal />
+              <Button
+                variant="outline"
+                onClick={() => setShowTeamManagement(true)}
+                className="flex items-center gap-2"
+              >
+                <Users className="h-4 w-4" />
+                Team Members
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setShowOrganizations(true)}
+                className="flex items-center gap-2"
+              >
+                <Building2 className="h-4 w-4" />
+                Organizations
+              </Button>
               <Badge variant="secondary">Admin</Badge>
               <div className="text-right">
                 <p className="text-sm font-medium text-gray-900">
@@ -565,6 +581,16 @@ export default function AdminDashboard() {
           setSelectedProjectForTasks(null);
         }}
         project={selectedProjectForTasks}
+      />
+
+      <TeamManagementModal
+        isOpen={showTeamManagement}
+        onClose={() => setShowTeamManagement(false)}
+      />
+
+      <OrganizationManagementModal
+        isOpen={showOrganizations}
+        onClose={() => setShowOrganizations(false)}
       />
     </div>
   );

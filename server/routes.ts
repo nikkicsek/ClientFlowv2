@@ -2,7 +2,8 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
-import { insertProjectSchema, insertTaskSchema, insertMessageSchema, insertAnalyticsSchema } from "@shared/schema";
+import { insertProjectSchema, insertTaskSchema, insertMessageSchema, insertAnalyticsSchema, insertTeamMemberSchema } from "@shared/schema";
+import { emailService } from "./emailService";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
@@ -174,6 +175,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       
       const task = await storage.createTask(taskData);
+
+      // Send email notification if task is assigned to a team member
+      if (task.assignedToTeamMember) {
+        try {
+          const teamMember = await storage.getTeamMember(task.assignedToTeamMember);
+          const project = await storage.getProject(req.params.projectId);
+          
+          if (teamMember && project) {
+            await emailService.sendTaskAssignmentNotification(
+              teamMember.email,
+              teamMember.name,
+              task.title,
+              project.name,
+              {
+                priority: task.priority,
+                assignedBy: `${user.firstName} ${user.lastName}`,
+                dueDate: task.dueDate ? new Date(task.dueDate).toLocaleDateString() : undefined,
+                notes: task.notes || undefined,
+              }
+            );
+          }
+        } catch (emailError) {
+          console.error("Failed to send task assignment email:", emailError);
+          // Don't fail the task creation if email fails
+        }
+      }
+
       res.status(201).json(task);
     } catch (error) {
       console.error("Error creating task:", error);
@@ -195,7 +223,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const updates = req.body;
+      const originalTask = await storage.getTask(req.params.id);
       const task = await storage.updateTask(req.params.id, updates);
+
+      // Send email notification if team member assignment changed
+      if (updates.assignedToTeamMember && updates.assignedToTeamMember !== originalTask?.assignedToTeamMember) {
+        try {
+          const teamMember = await storage.getTeamMember(updates.assignedToTeamMember);
+          const project = await storage.getProject(task.projectId);
+          
+          if (teamMember && project) {
+            await emailService.sendTaskAssignmentNotification(
+              teamMember.email,
+              teamMember.name,
+              task.title,
+              project.name,
+              {
+                priority: task.priority,
+                assignedBy: `${user.firstName} ${user.lastName}`,
+                dueDate: task.dueDate ? new Date(task.dueDate).toLocaleDateString() : undefined,
+                notes: task.notes || undefined,
+              }
+            );
+          }
+        } catch (emailError) {
+          console.error("Failed to send task assignment email:", emailError);
+        }
+      }
+
       res.json(task);
     } catch (error) {
       console.error("Error updating task:", error);
@@ -1294,6 +1349,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
         </text>
       </svg>
     `);
+  });
+
+  // Team member management routes
+  app.get("/api/team-members", isAuthenticated, async (req, res) => {
+    try {
+      const teamMembers = await storage.getAllTeamMembers();
+      res.json(teamMembers);
+    } catch (error) {
+      console.error("Error fetching team members:", error);
+      res.status(500).json({ error: "Failed to fetch team members" });
+    }
+  });
+
+  app.post("/api/team-members", isAuthenticated, async (req, res) => {
+    try {
+      const validation = insertTeamMemberSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ error: validation.error });
+      }
+      
+      // Check if email already exists
+      const existingMember = await storage.getTeamMemberByEmail(validation.data.email);
+      if (existingMember) {
+        return res.status(400).json({ error: "Team member with this email already exists" });
+      }
+      
+      const teamMember = await storage.createTeamMember(validation.data);
+      res.status(201).json(teamMember);
+    } catch (error) {
+      console.error("Error creating team member:", error);
+      res.status(500).json({ error: "Failed to create team member" });
+    }
+  });
+
+  app.put("/api/team-members/:id", isAuthenticated, async (req, res) => {
+    try {
+      const teamMember = await storage.updateTeamMember(req.params.id, req.body);
+      res.json(teamMember);
+    } catch (error) {
+      console.error("Error updating team member:", error);
+      res.status(500).json({ error: "Failed to update team member" });
+    }
+  });
+
+  app.delete("/api/team-members/:id", isAuthenticated, async (req, res) => {
+    try {
+      await storage.deleteTeamMember(req.params.id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting team member:", error);
+      res.status(500).json({ error: "Failed to delete team member" });
+    }
   });
 
   const httpServer = createServer(app);

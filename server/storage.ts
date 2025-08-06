@@ -11,6 +11,7 @@ import {
   messages,
   kpis,
   teamInvitations,
+  teamMembers,
   type User,
   type UpsertUser,
   type Organization,
@@ -33,6 +34,8 @@ import {
   type InsertKpi,
   type TeamInvitation,
   type InsertTeamInvitation,
+  type TeamMember,
+  type InsertTeamMember,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, gte, lte, inArray } from "drizzle-orm";
@@ -509,6 +512,39 @@ export class DatabaseStorage implements IStorage {
         clientVisible: template.clientVisible,
       });
     }
+  }
+
+  // Team member operations
+  async getAllTeamMembers(): Promise<TeamMember[]> {
+    return await db.select().from(teamMembers).where(eq(teamMembers.isActive, true));
+  }
+
+  async getTeamMember(id: string): Promise<TeamMember | undefined> {
+    const [member] = await db.select().from(teamMembers).where(eq(teamMembers.id, id));
+    return member;
+  }
+
+  async getTeamMemberByEmail(email: string): Promise<TeamMember | undefined> {
+    const [member] = await db.select().from(teamMembers).where(eq(teamMembers.email, email));
+    return member;
+  }
+
+  async createTeamMember(memberData: InsertTeamMember): Promise<TeamMember> {
+    const [member] = await db.insert(teamMembers).values(memberData).returning();
+    return member;
+  }
+
+  async updateTeamMember(id: string, updates: Partial<TeamMember>): Promise<TeamMember> {
+    const [member] = await db
+      .update(teamMembers)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(teamMembers.id, id))
+      .returning();
+    return member;
+  }
+
+  async deleteTeamMember(id: string): Promise<void> {
+    await db.update(teamMembers).set({ isActive: false }).where(eq(teamMembers.id, id));
   }
 }
 
