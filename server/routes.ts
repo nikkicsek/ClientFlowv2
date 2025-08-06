@@ -1105,6 +1105,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Update existing client
+  app.put('/api/admin/clients/:clientId', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Only admins can update clients" });
+      }
+
+      const clientId = req.params.clientId;
+      console.log("Updating client with data:", req.body);
+      
+      // Validate email is provided
+      const { email } = req.body;
+      if (!email || !email.trim()) {
+        return res.status(400).json({ message: "Email is required" });
+      }
+
+      const updatedClient = await storage.updateUser(clientId, req.body);
+      if (!updatedClient) {
+        return res.status(404).json({ message: "Client not found" });
+      }
+
+      console.log("Successfully updated client:", updatedClient);
+      res.json(updatedClient);
+    } catch (error) {
+      console.error("Error updating client:", error);
+      res.status(500).json({ message: `Failed to update client: ${error.message}` });
+    }
+  });
+
+  // Delete client
+  app.delete('/api/admin/clients/:clientId', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Only admins can delete clients" });
+      }
+
+      const clientId = req.params.clientId;
+      console.log("Deleting client:", clientId);
+      
+      await storage.deleteUser(clientId);
+      console.log("Successfully deleted client:", clientId);
+      res.json({ message: "Client deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting client:", error);
+      res.status(500).json({ message: `Failed to delete client: ${error.message}` });
+    }
+  });
+
   // HeyGen Avatar integration routes
   app.post('/api/heygen/generate-video', isAuthenticated, async (req: any, res) => {
     try {

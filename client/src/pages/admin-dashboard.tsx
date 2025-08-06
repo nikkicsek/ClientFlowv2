@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Users, Briefcase, Settings, Eye, Building2 } from "lucide-react";
+import { Plus, Users, Briefcase, Settings, Eye, Building2, Edit } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
@@ -20,7 +20,8 @@ import { CreateServiceModal } from "@/components/create-service-modal";
 import { EditServiceModal } from "@/components/edit-service-modal";
 import { ServiceCategoryModal } from "@/components/service-category-modal";
 import { WelcomeVideoModal } from "@/components/welcome-video-modal";
-import type { Project, Task, Service } from "@shared/schema";
+import { EditClientModal } from "@/components/edit-client-modal";
+import type { Project, Task, Service, User } from "@shared/schema";
 
 export default function AdminDashboard() {
   const { user } = useAuth();
@@ -31,6 +32,7 @@ export default function AdminDashboard() {
   const [selectedProject, setSelectedProject] = useState<string>("");
   const [editingService, setEditingService] = useState<Service | null>(null);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const [editingClient, setEditingClient] = useState<User | null>(null);
 
   const { data: projects, isLoading: projectsLoading } = useQuery({
     queryKey: ["/api/admin/projects"],
@@ -398,6 +400,13 @@ export default function AdminDashboard() {
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setEditingClient(client)}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
                           <WelcomeVideoModal
                             clientName={`${client.firstName} ${client.lastName}`}
                             organizationName={client.companyName}
@@ -522,6 +531,12 @@ export default function AdminDashboard() {
         project={editingProject}
         isOpen={!!editingProject}
         onClose={() => setEditingProject(null)}
+      />
+
+      <EditClientModal
+        client={editingClient}
+        isOpen={!!editingClient}
+        onClose={() => setEditingClient(null)}
       />
     </div>
   );
