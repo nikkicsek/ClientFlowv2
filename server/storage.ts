@@ -5,6 +5,7 @@ import {
   services,
   serviceCategories,
   tasks,
+  taskTemplates,
   projectFiles,
   analytics,
   messages,
@@ -78,6 +79,10 @@ export interface IStorage {
   getAllTasksWithDetails(): Promise<(Task & { service?: Service; project?: Project })[]>;
   createTask(task: InsertTask): Promise<Task>;
   updateTask(id: string, updates: Partial<InsertTask>): Promise<Task>;
+  
+  // Task template operations (for Faces of Kelowna workflow)
+  getTaskTemplatesForService(serviceId: string): Promise<any[]>;
+  createTasksFromTemplates(projectId: string, serviceId: string): Promise<void>;
   
   // File operations
   getFilesByProject(projectId: string): Promise<ProjectFile[]>;
@@ -470,6 +475,40 @@ export class DatabaseStorage implements IStorage {
     
     // Finally delete the user
     await db.delete(users).where(eq(users.id, id));
+  }
+
+  // Task template operations for Faces of Kelowna workflow
+  async getTaskTemplatesForService(serviceId: string): Promise<any[]> {
+    return await db.select().from(taskTemplates).where(eq(taskTemplates.serviceId, serviceId));
+  }
+
+  async createTasksFromTemplates(projectId: string, serviceId: string): Promise<void> {
+    const templates = await this.getTaskTemplatesForService(serviceId);
+    
+    if (templates.length === 0) {
+      return; // No templates found for this service
+    }
+
+    const projectStartDate = new Date();
+    
+    // Create tasks from templates
+    for (const template of templates) {
+      const dueDate = new Date(projectStartDate);
+      dueDate.setDate(dueDate.getDate() + template.dayOffset);
+
+      await db.insert(tasks).values({
+        projectId,
+        serviceId,
+        title: template.title,
+        description: template.description,
+        status: 'in_progress',
+        dueDate,
+        priority: template.priority,
+        taskType: template.taskType,
+        estimatedHours: template.estimatedHours,
+        clientVisible: template.clientVisible,
+      });
+    }
   }
 }
 

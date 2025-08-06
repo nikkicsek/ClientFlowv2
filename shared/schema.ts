@@ -60,6 +60,7 @@ export const projects = pgTable("projects", {
   description: text("description"),
   clientId: varchar("client_id").references(() => users.id),
   organizationId: varchar("organization_id").references(() => organizations.id),
+  serviceId: varchar("service_id").references(() => services.id), // Link to service for workflow automation
   status: varchar("status").notNull().default("active"), // "active", "completed", "on_hold"
   startDate: timestamp("start_date"),
   expectedCompletion: timestamp("expected_completion"),
@@ -97,6 +98,12 @@ export const tasks = pgTable("tasks", {
   dueDate: timestamp("due_date"),
   completedAt: timestamp("completed_at"),
   notes: text("notes"),
+  priority: varchar("priority").default("medium"), // "low", "medium", "high", "urgent"
+  taskType: varchar("task_type").default("standard"), // "standard", "milestone", "review", "approval"
+  dependencies: text("dependencies").array(), // Array of task IDs that must be completed first
+  estimatedHours: integer("estimated_hours"),
+  actualHours: integer("actual_hours"),
+  clientVisible: boolean("client_visible").default(true), // Whether client can see this task
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -158,6 +165,24 @@ export const kpis = pgTable("kpis", {
   createdBy: varchar("created_by").notNull().references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+
+
+// Task templates for service workflows (especially Faces of Kelowna)
+export const taskTemplates = pgTable("task_templates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  serviceId: varchar("service_id").notNull().references(() => services.id),
+  title: text("title").notNull(),
+  description: text("description"),
+  taskType: varchar("task_type").default("standard"), // "standard", "milestone", "review", "approval"
+  priority: varchar("priority").default("medium"), // "low", "medium", "high", "urgent"
+  estimatedHours: integer("estimated_hours"),
+  dayOffset: integer("day_offset").default(0), // Days from project start
+  dependsOnTemplateId: varchar("depends_on_template_id"), // Self-reference for dependencies
+  clientVisible: boolean("client_visible").default(true),
+  assigneeRole: varchar("assignee_role"), // "content_writer", "photographer", "designer", "project_manager"
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 // Relations
