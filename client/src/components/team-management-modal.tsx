@@ -44,7 +44,7 @@ export function TeamManagementModal({ isOpen, onClose }: TeamManagementModalProp
   });
 
   const createMemberMutation = useMutation({
-    mutationFn: (data: any) => apiRequest("/api/team-members", "POST", data),
+    mutationFn: (data: any) => apiRequest("POST", "/api/team-members", data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/team-members"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/tasks"] });
@@ -65,7 +65,7 @@ export function TeamManagementModal({ isOpen, onClose }: TeamManagementModalProp
   });
 
   const updateMemberMutation = useMutation({
-    mutationFn: ({ id, ...data }: any) => apiRequest(`/api/team-members/${id}`, "PUT", data),
+    mutationFn: ({ id, ...data }: any) => apiRequest("PUT", "/api/team-members/" + id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/team-members"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/tasks"] });
@@ -86,7 +86,7 @@ export function TeamManagementModal({ isOpen, onClose }: TeamManagementModalProp
   });
 
   const deleteMemberMutation = useMutation({
-    mutationFn: (id: string) => apiRequest(`/api/team-members/${id}`, "DELETE"),
+    mutationFn: (id: string) => apiRequest("DELETE", "/api/team-members/" + id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/team-members"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/tasks"] });
