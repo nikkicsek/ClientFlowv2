@@ -17,7 +17,6 @@ export function CreateClientModal() {
     firstName: "",
     lastName: "",
     email: "",
-    companyName: "",
     phone: "",
     address: "",
     organizationId: "none",
@@ -37,7 +36,6 @@ export function CreateClientModal() {
         firstName: clientData.firstName.trim(),
         lastName: clientData.lastName.trim(),
         email: clientData.email.trim().toLowerCase(),
-        companyName: clientData.companyName?.trim() || null,
         phone: clientData.phone?.trim() || null,
         address: clientData.address?.trim() || null,
         organizationId: clientData.organizationId === "none" ? null : clientData.organizationId || null,
@@ -63,7 +61,6 @@ export function CreateClientModal() {
         firstName: "",
         lastName: "",
         email: "",
-        companyName: "",
         phone: "",
         address: "",
         organizationId: "none",
@@ -154,10 +151,13 @@ export function CreateClientModal() {
           </div>
 
           <div>
-            <Label htmlFor="organizationId">Business Organization</Label>
+            <Label htmlFor="organizationId">
+              Business Organization 
+              <span className="text-sm text-gray-500 font-normal ml-2">(Optional - Group this client with an existing business)</span>
+            </Label>
             <Select value={formData.organizationId} onValueChange={(value) => handleInputChange("organizationId", value)}>
               <SelectTrigger>
-                <SelectValue placeholder="Select organization (optional)" />
+                <SelectValue placeholder="No Organization (Individual Client)" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">No Organization (Individual Client)</SelectItem>
@@ -176,16 +176,9 @@ export function CreateClientModal() {
                 ))}
               </SelectContent>
             </Select>
-          </div>
-
-          <div>
-            <Label htmlFor="companyName">Company Name</Label>
-            <Input
-              id="companyName"
-              value={formData.companyName}
-              onChange={(e) => handleInputChange("companyName", e.target.value)}
-              placeholder="Company or organization name"
-            />
+            <p className="text-xs text-gray-600 mt-1">
+              Link this client to an existing business organization, or leave as individual client
+            </p>
           </div>
 
           <div>
