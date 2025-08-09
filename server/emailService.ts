@@ -218,6 +218,91 @@ class EmailService {
       },
     });
   }
+
+  async sendTeamMemberWelcomeEmail(
+    recipientEmail: string,
+    recipientName: string,
+    agencyName: string = "the agency",
+    options: {
+      role?: string;
+      loginUrl?: string;
+      addedBy?: string;
+    } = {}
+  ): Promise<boolean> {
+    if (!this.initialized) {
+      console.log("SendGrid not configured - would send team member welcome email to:", recipientEmail);
+      return false;
+    }
+
+    try {
+      const loginUrl = options.loginUrl || (process.env.REPLIT_DOMAINS?.split(',')[0] 
+        ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`
+        : "your agency dashboard");
+
+      const msg = {
+        to: recipientEmail,
+        from: 'noreply@agencypro.app',
+        subject: `Welcome to ${agencyName} Team!`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #333;">Welcome to the Team, ${recipientName}!</h2>
+            
+            <p>You've been added as a team member at ${agencyName}${options.role ? ` with the role of <strong>${options.role.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}</strong>` : ''}.</p>
+            
+            <p>You can now access the agency project management dashboard to:</p>
+            <ul>
+              <li>View assigned tasks and projects</li>
+              <li>Track project progress</li>
+              <li>Collaborate with team members</li>
+              <li>Communicate with clients</li>
+            </ul>
+            
+            <div style="margin: 30px 0; padding: 20px; background-color: #f8f9fa; border-radius: 8px;">
+              <h3 style="margin-top: 0; color: #333;">Getting Started</h3>
+              <p>To access the dashboard, visit: <a href="${loginUrl}" style="color: #007bff;">${loginUrl}</a></p>
+              <p><em>You'll use your existing Replit account to log in.</em></p>
+            </div>
+            
+            ${options.addedBy ? `<p><em>You were added to the team by ${options.addedBy}.</em></p>` : ''}
+            
+            <p>If you have any questions, feel free to reach out to the team.</p>
+            
+            <p>Welcome aboard!<br>
+            ${agencyName} Team</p>
+          </div>
+        `,
+        text: `
+          Welcome to the Team, ${recipientName}!
+          
+          You've been added as a team member at ${agencyName}${options.role ? ` with the role of ${options.role.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}` : ''}.
+          
+          You can now access the agency project management dashboard to:
+          - View assigned tasks and projects
+          - Track project progress
+          - Collaborate with team members
+          - Communicate with clients
+          
+          Getting Started:
+          To access the dashboard, visit: ${loginUrl}
+          You'll use your existing Replit account to log in.
+          
+          ${options.addedBy ? `You were added to the team by ${options.addedBy}.` : ''}
+          
+          If you have any questions, feel free to reach out to the team.
+          
+          Welcome aboard!
+          ${agencyName} Team
+        `
+      };
+
+      await sgMail.send(msg);
+      console.log(`Team member welcome email sent to ${recipientEmail}`);
+      return true;
+    } catch (error) {
+      console.error("Error sending team member welcome email:", error);
+      return false;
+    }
+  }
 }
 
 export const emailService = new EmailService();
