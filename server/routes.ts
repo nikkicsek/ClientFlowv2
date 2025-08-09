@@ -1362,8 +1362,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/team-members", isAuthenticated, async (req, res) => {
+  app.post("/api/team-members", isAuthenticated, async (req: any, res) => {
     try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+
       const validation = insertTeamMemberSchema.safeParse(req.body);
       if (!validation.success) {
         return res.status(400).json({ error: validation.error });
@@ -1376,6 +1379,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const teamMember = await storage.createTeamMember(validation.data);
+
+      // Send welcome email to new team member
+      try {
+        await emailService.sendTeamMemberWelcomeEmail(
+          teamMember.email,
+          teamMember.name,
+          "Your Agency", // You can customize this agency name
+          {
+            role: teamMember.role,
+            addedBy: `${user?.firstName} ${user?.lastName}`,
+          }
+        );
+      } catch (emailError) {
+        console.error("Failed to send welcome email to team member:", emailError);
+        // Don't fail the team member creation if email fails
+      }
+
       res.status(201).json(teamMember);
     } catch (error) {
       console.error("Error creating team member:", error);
