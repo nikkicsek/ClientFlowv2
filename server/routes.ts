@@ -177,9 +177,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const task = await storage.createTask(taskData);
 
       // Send email notification if task is assigned to a team member
-      if (task.assignedToTeamMember) {
+      if (task.assignedToMember) {
         try {
-          const teamMember = await storage.getTeamMember(task.assignedToTeamMember);
+          const teamMember = await storage.getTeamMember(task.assignedToMember);
           const project = await storage.getProject(req.params.projectId);
           
           if (teamMember && project) {
@@ -223,13 +223,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const updates = req.body;
-      const originalTask = await storage.getTask(req.params.id);
       const task = await storage.updateTask(req.params.id, updates);
 
       // Send email notification if team member assignment changed
-      if (updates.assignedToTeamMember && updates.assignedToTeamMember !== originalTask?.assignedToTeamMember) {
+      if (updates.assignedToMember) {
         try {
-          const teamMember = await storage.getTeamMember(updates.assignedToTeamMember);
+          const teamMember = await storage.getTeamMember(updates.assignedToMember);
           const project = await storage.getProject(task.projectId);
           
           if (teamMember && project) {
