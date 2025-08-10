@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Download, TrendingUp, Users, Target, DollarSign } from "lucide-react";
+import { FacebookIntegration } from "./facebook-integration";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
@@ -305,6 +306,11 @@ export default function AnalyticsSection() {
           </CardContent>
         </Card>
       )}
+
+      {/* Facebook Integration Section */}
+      <div className="mt-8">
+        <FacebookIntegration />
+      </div>
     </div>
   );
 }
