@@ -1,0 +1,62 @@
+integrations:
+  facebook:
+    provider: facebook
+    syncs:
+      facebook-ads:
+        runs: every hour
+        description: Sync Facebook Ads data
+        output: FacebookAd
+      facebook-insights:
+        runs: every 6 hours
+        description: Sync Facebook Insights data
+        output: FacebookInsight
+    actions:
+      get-campaigns:
+        description: Get Facebook ad campaigns
+        output: FacebookCampaign
+      get-adsets:
+        description: Get Facebook ad sets
+        output: FacebookAdSet
+
+models:
+  FacebookAd:
+    id: string
+    name: string
+    status: string
+    campaign_id: string
+    adset_id: string
+    created_time: string
+    updated_time: string
+
+  FacebookInsight:
+    id: string
+    impressions: number
+    clicks: number
+    spend: number
+    reach: number
+    frequency: number
+    cpm: number
+    cpc: number
+    ctr: number
+    date_start: string
+    date_stop: string
+
+  FacebookCampaign:
+    id: string
+    name: string
+    status: string
+    objective: string
+    created_time: string
+    updated_time: string
+    daily_budget: number
+    lifetime_budget: number
+
+  FacebookAdSet:
+    id: string
+    name: string
+    status: string
+    campaign_id: string
+    created_time: string
+    updated_time: string
+    daily_budget: number
+    lifetime_budget: number

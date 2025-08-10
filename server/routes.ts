@@ -4,6 +4,7 @@ import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { insertProjectSchema, insertTaskSchema, insertMessageSchema, insertAnalyticsSchema, insertTeamMemberSchema } from "@shared/schema";
 import { emailService } from "./emailService";
+import { nangoService } from "./nangoService";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
@@ -1419,6 +1420,85 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deleting team member:", error);
       res.status(500).json({ error: "Failed to delete team member" });
+    }
+  });
+
+  // Facebook Integration Routes with Nango
+  app.post("/api/facebook/connect", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { connectionId } = req.body;
+      
+      if (!connectionId) {
+        return res.status(400).json({ error: "Connection ID is required" });
+      }
+
+      const result = await nangoService.createFacebookConnection(connectionId, userId);
+      res.json(result);
+    } catch (error) {
+      console.error("Error creating Facebook connection:", error);
+      res.status(500).json({ error: "Failed to create Facebook connection" });
+    }
+  });
+
+  app.get("/api/facebook/connections", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const connections = await nangoService.getUserConnections(userId);
+      
+      // Check connection status for each
+      const connectionsWithStatus = await Promise.all(
+        connections.map(async (conn) => {
+          const isConnected = await nangoService.getConnectionStatus(conn.connectionId);
+          return { ...conn, isConnected };
+        })
+      );
+      
+      res.json(connectionsWithStatus);
+    } catch (error) {
+      console.error("Error fetching Facebook connections:", error);
+      res.status(500).json({ error: "Failed to fetch Facebook connections" });
+    }
+  });
+
+  app.get("/api/facebook/ads-data", isAuthenticated, async (req, res) => {
+    try {
+      const { connectionId } = req.query;
+      if (!connectionId || typeof connectionId !== 'string') {
+        return res.status(400).json({ error: "Connection ID is required" });
+      }
+      const adsData = await nangoService.getFacebookAdsData(connectionId);
+      res.json(adsData);
+    } catch (error) {
+      console.error("Error fetching Facebook ads data:", error);
+      res.status(500).json({ error: "Failed to fetch Facebook ads data" });
+    }
+  });
+
+  app.delete("/api/facebook/connections/:connectionId", isAuthenticated, async (req, res) => {
+    try {
+      const { connectionId } = req.params;
+      await nangoService.deleteFacebookConnection(connectionId);
+      res.json({ message: "Connection deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting Facebook connection:", error);
+      res.status(500).json({ error: "Failed to delete Facebook connection" });
+    }
+  });
+
+  app.post("/api/facebook/sync", isAuthenticated, async (req, res) => {
+    try {
+      const { connectionId, syncName } = req.body;
+      
+      if (!connectionId || !syncName) {
+        return res.status(400).json({ error: "Connection ID and sync name are required" });
+      }
+
+      await nangoService.triggerSync(connectionId, syncName);
+      res.json({ message: "Sync triggered successfully" });
+    } catch (error) {
+      console.error("Error triggering Facebook sync:", error);
+      res.status(500).json({ error: "Failed to trigger sync" });
     }
   });
 
