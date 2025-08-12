@@ -36,6 +36,12 @@ import {
   type InsertTeamInvitation,
   type TeamMember,
   type InsertTeamMember,
+  quotes,
+  quoteLineItems,
+  type Quote,
+  type InsertQuote,
+  type QuoteLineItem,
+  type InsertQuoteLineItem,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, gte, lte, inArray } from "drizzle-orm";
@@ -111,6 +117,15 @@ export interface IStorage {
   getTeamInvitations(): Promise<TeamInvitation[]>;
   updateTeamInvitationStatus(id: string, status: string, acceptedAt?: Date): Promise<TeamInvitation | undefined>;
   deleteKpi(id: string): Promise<void>;
+
+  // Quote operations
+  getQuotes(): Promise<Quote[]>;
+  getQuote(id: string): Promise<Quote | undefined>;
+  createQuote(quote: InsertQuote): Promise<Quote>;
+  updateQuote(id: string, updates: Partial<InsertQuote>): Promise<Quote>;
+  convertQuoteToProject(quoteId: string): Promise<Project>;
+  getQuoteLineItems(quoteId: string): Promise<QuoteLineItem[]>;
+  createQuoteLineItem(lineItem: InsertQuoteLineItem): Promise<QuoteLineItem>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -545,6 +560,83 @@ export class DatabaseStorage implements IStorage {
 
   async deleteTeamMember(id: string): Promise<void> {
     await db.update(teamMembers).set({ isActive: false }).where(eq(teamMembers.id, id));
+  }
+
+  // Quote operations
+  async getQuotes(): Promise<Quote[]> {
+    return db.select().from(quotes).orderBy(desc(quotes.createdAt));
+  }
+
+  async getQuote(id: string): Promise<Quote | undefined> {
+    const [quote] = await db.select().from(quotes).where(eq(quotes.id, id));
+    return quote;
+  }
+
+  async createQuote(quote: InsertQuote): Promise<Quote> {
+    const [newQuote] = await db.insert(quotes).values(quote).returning();
+    return newQuote;
+  }
+
+  async updateQuote(id: string, updates: Partial<InsertQuote>): Promise<Quote> {
+    const [updatedQuote] = await db
+      .update(quotes)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(quotes.id, id))
+      .returning();
+    return updatedQuote;
+  }
+
+  async convertQuoteToProject(quoteId: string): Promise<Project> {
+    const quote = await this.getQuote(quoteId);
+    if (!quote) throw new Error("Quote not found");
+
+    // Create project from quote
+    const projectData: InsertProject = {
+      name: quote.title,
+      description: quote.description,
+      clientId: quote.clientId,
+      organizationId: quote.organizationId,
+      budget: quote.totalAmount,
+      status: "active",
+      startDate: new Date(),
+    };
+
+    const project = await this.createProject(projectData);
+
+    // Update quote status and link to project
+    await this.updateQuote(quoteId, {
+      status: "converted",
+      projectId: project.id,
+      convertedAt: new Date(),
+    });
+
+    // Create tasks from quote line items
+    const lineItems = await this.getQuoteLineItems(quoteId);
+    for (const item of lineItems) {
+      if (item.taskTemplateData) {
+        const taskData: InsertTask = {
+          title: item.description,
+          description: item.description,
+          projectId: project.id,
+          serviceId: item.serviceId,
+          status: "pending",
+          priority: "medium",
+          estimatedHours: item.estimatedHours,
+        };
+        await this.createTask(taskData);
+      }
+    }
+
+    return project;
+  }
+
+  async getQuoteLineItems(quoteId: string): Promise<QuoteLineItem[]> {
+    return db.select().from(quoteLineItems).where(eq(quoteLineItems.quoteId, quoteId));
+  }
+
+  async createQuoteLineItem(lineItem: InsertQuoteLineItem): Promise<QuoteLineItem> {
+    const [newLineItem] = await db.insert(quoteLineItems).values(lineItem).returning();
+    return newLineItem;
   }
 }
 

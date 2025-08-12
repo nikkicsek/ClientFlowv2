@@ -10,6 +10,7 @@ import FilesSection from "@/components/files-section";
 import UpdatesSection from "@/components/updates-section";
 import { Button } from "@/components/ui/button";
 import { Menu } from "lucide-react";
+import { QuoteUpload } from "@/components/quote-upload";
 
 export default function Dashboard() {
   const { user, isAuthenticated, isLoading } = useAuth();
@@ -63,6 +64,8 @@ export default function Dashboard() {
         return <FilesSection />;
       case "updates":
         return <UpdatesSection />;
+      case "quotes":
+        return <QuoteUpload />;
       default:
         return <ProjectOverview />;
     }
@@ -75,6 +78,7 @@ export default function Dashboard() {
       analytics: "Analytics & Reports",
       files: "Project Files",
       updates: "Updates & Messages",
+      quotes: "Quote Upload",
     };
     return titles[activeSection as keyof typeof titles] || "Dashboard";
   };
