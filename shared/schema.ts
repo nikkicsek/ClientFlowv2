@@ -201,6 +201,42 @@ export const teamMembers = pgTable("team_members", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Quotes/Proposals table for automatic project and task generation
+export const quotes = pgTable("quotes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  quoteNumber: varchar("quote_number").notNull().unique(),
+  clientId: varchar("client_id").references(() => users.id),
+  organizationId: varchar("organization_id").references(() => organizations.id),
+  title: text("title").notNull(),
+  description: text("description"),
+  totalAmount: decimal("total_amount", { precision: 10, scale: 2 }).notNull(),
+  status: varchar("status").notNull().default("draft"), // "draft", "sent", "approved", "declined", "converted"
+  filePath: text("file_path"), // Path to uploaded quote file
+  fileName: varchar("file_name"),
+  fileSize: integer("file_size"),
+  parsedData: jsonb("parsed_data"), // Extracted services and tasks from quote
+  projectId: varchar("project_id").references(() => projects.id), // Generated project ID
+  createdBy: varchar("created_by").references(() => users.id).notNull(),
+  approvedAt: timestamp("approved_at"),
+  convertedAt: timestamp("converted_at"), // When quote was converted to project
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Quote line items for detailed breakdown
+export const quoteLineItems = pgTable("quote_line_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  quoteId: varchar("quote_id").references(() => quotes.id, { onDelete: "cascade" }).notNull(),
+  serviceId: varchar("service_id").references(() => services.id),
+  description: text("description").notNull(),
+  quantity: integer("quantity").default(1),
+  unitPrice: decimal("unit_price", { precision: 10, scale: 2 }).notNull(),
+  totalPrice: decimal("total_price", { precision: 10, scale: 2 }).notNull(),
+  estimatedHours: integer("estimated_hours"),
+  taskTemplateData: jsonb("task_template_data"), // Template for auto-generated tasks
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Relations
 export const organizationsRelations = relations(organizations, ({ one, many }) => ({
   primaryContact: one(users, {
@@ -314,6 +350,37 @@ export const kpisRelations = relations(kpis, ({ one }) => ({
   }),
 }));
 
+export const quotesRelations = relations(quotes, ({ one, many }) => ({
+  client: one(users, {
+    fields: [quotes.clientId],
+    references: [users.id],
+  }),
+  organization: one(organizations, {
+    fields: [quotes.organizationId],
+    references: [organizations.id],
+  }),
+  project: one(projects, {
+    fields: [quotes.projectId],
+    references: [projects.id],
+  }),
+  creator: one(users, {
+    fields: [quotes.createdBy],
+    references: [users.id],
+  }),
+  lineItems: many(quoteLineItems),
+}));
+
+export const quoteLineItemsRelations = relations(quoteLineItems, ({ one }) => ({
+  quote: one(quotes, {
+    fields: [quoteLineItems.quoteId],
+    references: [quotes.id],
+  }),
+  service: one(services, {
+    fields: [quoteLineItems.serviceId],
+    references: [services.id],
+  }),
+}));
+
 // Insert schemas
 export const insertOrganizationSchema = createInsertSchema(organizations).omit({
   id: true,
@@ -376,6 +443,17 @@ export const insertTeamMemberSchema = createInsertSchema(teamMembers).omit({
   updatedAt: true,
 });
 
+export const insertQuoteSchema = createInsertSchema(quotes).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertQuoteLineItemSchema = createInsertSchema(quoteLineItems).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Types
 export type Organization = typeof organizations.$inferSelect;
 export type InsertOrganization = z.infer<typeof insertOrganizationSchema>;
@@ -417,3 +495,7 @@ export type InsertMessage = z.infer<typeof insertMessageSchema>;
 export type Message = typeof messages.$inferSelect;
 export type InsertKpi = z.infer<typeof insertKpiSchema>;
 export type Kpi = typeof kpis.$inferSelect;
+export type Quote = typeof quotes.$inferSelect;
+export type InsertQuote = z.infer<typeof insertQuoteSchema>;
+export type QuoteLineItem = typeof quoteLineItems.$inferSelect;
+export type InsertQuoteLineItem = z.infer<typeof insertQuoteLineItemSchema>;

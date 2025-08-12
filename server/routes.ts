@@ -1502,6 +1502,89 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Quote management routes
+  app.get("/api/quotes", isAuthenticated, async (req, res) => {
+    try {
+      const quotes = await storage.getQuotes();
+      res.json(quotes);
+    } catch (error) {
+      console.error("Error fetching quotes:", error);
+      res.status(500).json({ error: "Failed to fetch quotes" });
+    }
+  });
+
+  app.post("/api/quotes/upload", isAuthenticated, upload.single("quote"), async (req: any, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: "No file uploaded" });
+      }
+
+      const userId = req.user.claims.sub;
+      const file = req.file;
+
+      // Generate quote number
+      const quoteNumber = `Q-${Date.now()}`;
+
+      // Extract basic info from filename
+      const title = file.originalname.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " ");
+
+      const quoteData = {
+        quoteNumber,
+        title,
+        description: `Uploaded quote from ${file.originalname}`,
+        totalAmount: "0", // Will be updated later
+        status: "draft",
+        filePath: file.path,
+        fileName: file.originalname,
+        fileSize: file.size,
+        createdBy: userId,
+      };
+
+      const quote = await storage.createQuote(quoteData);
+      res.json(quote);
+    } catch (error) {
+      console.error("Error uploading quote:", error);
+      res.status(500).json({ error: "Failed to upload quote" });
+    }
+  });
+
+  app.post("/api/quotes/:id/convert", isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const project = await storage.convertQuoteToProject(id);
+      res.json(project);
+    } catch (error) {
+      console.error("Error converting quote to project:", error);
+      res.status(500).json({ error: "Failed to convert quote to project" });
+    }
+  });
+
+  app.get("/api/quotes/:id", isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const quote = await storage.getQuote(id);
+      if (!quote) {
+        return res.status(404).json({ error: "Quote not found" });
+      }
+      res.json(quote);
+    } catch (error) {
+      console.error("Error fetching quote:", error);
+      res.status(500).json({ error: "Failed to fetch quote" });
+    }
+  });
+
+  app.put("/api/quotes/:id", isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const updates = req.body;
+      const quote = await storage.updateQuote(id, updates);
+      res.json(quote);
+    } catch (error) {
+      console.error("Error updating quote:", error);
+      res.status(500).json({ error: "Failed to update quote" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
