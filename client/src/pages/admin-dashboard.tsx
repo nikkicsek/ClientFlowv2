@@ -338,7 +338,7 @@ export default function AdminDashboard() {
       <div 
         ref={setNodeRef} 
         style={style} 
-        className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
+        className="bg-white border border-gray-200 rounded-lg p-3 hover:shadow-md transition-shadow"
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3 flex-1">
@@ -351,41 +351,26 @@ export default function AdminDashboard() {
                 <GripVertical className="h-4 w-4 text-gray-400" />
               </div>
             )}
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-3 mb-1">
-                <h3 className="font-medium text-gray-900 truncate">{project.name}</h3>
-                <Select 
-                  value={project.status} 
-                  onValueChange={(status) => updateProjectStatusMutation.mutate({ projectId: project.id, status })}
-                >
-                  <SelectTrigger className="w-28">
-                    <SelectValue>
-                      <Badge variant={statusBadge.variant} className="text-xs">
-                        {statusBadge.label}
-                      </Badge>
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="pending">Pending</SelectItem>
-                    <SelectItem value="on_hold">On Hold</SelectItem>
-                    <SelectItem value="completed">Completed</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              {project.description && (
-                <p className="text-sm text-gray-600 mb-2 line-clamp-1">{project.description}</p>
-              )}
-              <div className="flex items-center gap-4 text-xs text-gray-500 mb-2">
-                <span>Progress: {project.progress || 0}%</span>
-                <span>Budget: {project.budget ? `$${Number(project.budget).toLocaleString()}` : 'Not set'}</span>
-                {project.startDate && (
-                  <span>Started: {new Date(project.startDate).toLocaleDateString()}</span>
-                )}
-              </div>
-              <div className="text-xs">
-                <GoogleDriveLinks project={project} />
-              </div>
+            <div className="flex items-center gap-3 flex-1">
+              <h3 className="font-medium text-gray-900 truncate flex-1">{project.name}</h3>
+              <Select 
+                value={project.status} 
+                onValueChange={(status) => updateProjectStatusMutation.mutate({ projectId: project.id, status })}
+              >
+                <SelectTrigger className="w-28">
+                  <SelectValue>
+                    <Badge variant={statusBadge.variant} className="text-xs">
+                      {statusBadge.label}
+                    </Badge>
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="on_hold">On Hold</SelectItem>
+                  <SelectItem value="completed">Completed</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <div className="flex items-center gap-1 ml-4">
@@ -429,12 +414,6 @@ export default function AdminDashboard() {
               <Eye className="h-4 w-4" />
             </Button>
           </div>
-        </div>
-        <div className="w-full bg-gray-200 rounded-full h-1.5 mt-3">
-          <div 
-            className="bg-blue-600 h-1.5 rounded-full" 
-            style={{ width: `${project.progress || 0}%` }}
-          ></div>
         </div>
       </div>
     );
