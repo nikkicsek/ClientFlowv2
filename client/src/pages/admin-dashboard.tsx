@@ -36,6 +36,8 @@ import { RestoreDeletedItems } from "@/components/restore-deleted-items";
 import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog";
 import type { Project, Task, Service, User, Organization } from "@shared/schema";
 
+type ProjectWithOrganization = Project & { organization?: Organization };
+
 export default function AdminDashboard() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -134,7 +136,7 @@ export default function AdminDashboard() {
     }
   });
 
-  const { data: projects, isLoading: projectsLoading } = useQuery<Project[]>({
+  const { data: projects, isLoading: projectsLoading } = useQuery<ProjectWithOrganization[]>({
     queryKey: ["/api/admin/projects"],
   });
 
@@ -229,7 +231,7 @@ export default function AdminDashboard() {
   };
 
   // Sortable project card component
-  function SortableProjectCard({ project }: { project: Project }) {
+  function SortableProjectCard({ project }: { project: ProjectWithOrganization }) {
     const {
       attributes,
       listeners,
@@ -265,6 +267,12 @@ export default function AdminDashboard() {
               )}
               <div className="flex-1">
                 <CardTitle className="text-lg">{project.name}</CardTitle>
+                {project.organization && (
+                  <p className="text-sm font-medium text-blue-600 mt-1">
+                    <Building2 className="h-3 w-3 inline mr-1" />
+                    {project.organization.name}
+                  </p>
+                )}
                 <p className="text-sm text-gray-600 mt-1">{project.description}</p>
               </div>
             </div>
@@ -370,7 +378,7 @@ export default function AdminDashboard() {
   }
 
   // Sortable project list item component
-  function SortableProjectListItem({ project }: { project: Project }) {
+  function SortableProjectListItem({ project }: { project: ProjectWithOrganization }) {
     const {
       attributes,
       listeners,
@@ -405,7 +413,15 @@ export default function AdminDashboard() {
               </div>
             )}
             <div className="flex items-center gap-3 flex-1">
-              <h3 className="font-medium text-gray-900 truncate flex-1">{project.name}</h3>
+              <div className="flex-1 min-w-0">
+                <h3 className="font-medium text-gray-900 truncate">{project.name}</h3>
+                {project.organization && (
+                  <p className="text-sm text-blue-600 truncate">
+                    <Building2 className="h-3 w-3 inline mr-1" />
+                    {project.organization.name}
+                  </p>
+                )}
+              </div>
               <Select 
                 value={project.status} 
                 onValueChange={(status) => updateProjectStatusMutation.mutate({ projectId: project.id, status })}
