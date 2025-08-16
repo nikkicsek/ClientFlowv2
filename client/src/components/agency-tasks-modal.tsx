@@ -30,10 +30,13 @@ import {
   Palette,
   BarChart3,
   UserPlus,
-  Edit3
+  Edit3,
+  Trash2,
+  ExternalLink
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { TaskAssignmentManager } from "./task-assignment-manager";
+import { DeleteConfirmationDialog } from "./delete-confirmation-dialog";
 import type { Project, Task } from "@shared/schema";
 
 interface AgencyTasksModalProps {
@@ -50,6 +53,24 @@ export function AgencyTasksModal({ isOpen, onClose, project, onCreateTask }: Age
   const [filterRole, setFilterRole] = useState<string>("all");
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [newAssignee, setNewAssignee] = useState("");
+  const [deletingTask, setDeletingTask] = useState<{id: string, title: string} | null>(null);
+
+  // Delete task mutation
+  const deleteTaskMutation = useMutation({
+    mutationFn: async (taskId: string) => {
+      const response = await fetch(`/api/tasks/${taskId}/soft`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) throw new Error('Failed to delete task');
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/projects", project?.id, "tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/deleted-items"] });
+      setDeletingTask(null);
+    },
+  });
 
   // Get task assignments to show team member icons (moved to top level to fix hooks order)
   const { data: taskAssignments } = useQuery({
@@ -349,6 +370,17 @@ export function AgencyTasksModal({ isOpen, onClose, project, onCreateTask }: Age
               </div>
             ) : (
               <div className="mt-2 flex gap-2">
+                {task.googleDriveLink && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => window.open(task.googleDriveLink, '_blank')}
+                    className="h-7 text-xs"
+                  >
+                    <ExternalLink className="h-3 w-3 mr-1" />
+                    Drive
+                  </Button>
+                )}
                 <Button
                   size="sm"
                   variant="outline"
@@ -360,6 +392,15 @@ export function AgencyTasksModal({ isOpen, onClose, project, onCreateTask }: Age
                 >
                   <UserPlus className="h-3 w-3 mr-1" />
                   Assign/Edit
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setDeletingTask({ id: task.id, title: task.title })}
+                  className="h-7 text-xs text-red-600 hover:text-red-700 hover:border-red-300"
+                >
+                  <Trash2 className="h-3 w-3 mr-1" />
+                  Delete
                 </Button>
               </div>
             )}
@@ -393,190 +434,207 @@ export function AgencyTasksModal({ isOpen, onClose, project, onCreateTask }: Age
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <CheckSquare className="h-5 w-5" />
-            Agency Tasks: {project.name}
-          </DialogTitle>
-          <DialogDescription>
-            Manage internal team workflows, assign tasks to specific team members, and track project progress.
-          </DialogDescription>
-        </DialogHeader>
+    <>
+      <Dialog open={isOpen} onOpenChange={onClose}>
+        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CheckSquare className="h-5 w-5" />
+              Agency Tasks: {project.name}
+            </DialogTitle>
+            <DialogDescription>
+              Manage internal team workflows, assign tasks to specific team members, and track project progress.
+            </DialogDescription>
+          </DialogHeader>
 
-        <div className="space-y-6">
-          {/* Project Summary */}
-          <div className="bg-blue-50 p-4 rounded-lg">
-            <div className="flex justify-between items-center">
-              <div>
-                <h3 className="font-medium text-blue-900">Project Overview</h3>
-                <p className="text-blue-700 text-sm mt-1">{project.description}</p>
-              </div>
-              <div className="text-right">
-                <div className="text-2xl font-bold text-blue-900">
-                  {project.budget ? `$${Number(project.budget).toLocaleString()}` : 'Budget TBD'}
+          <div className="space-y-6">
+            {/* Project Summary */}
+            <div className="bg-blue-50 p-4 rounded-lg">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h3 className="font-medium text-blue-900">Project Overview</h3>
+                  <p className="text-blue-700 text-sm mt-1">{project.description}</p>
                 </div>
-                <div className="text-blue-700 text-sm">{project.progress || 0}% Complete</div>
+                <div className="text-right">
+                  <div className="text-2xl font-bold text-blue-900">
+                    {project.budget ? `$${Number(project.budget).toLocaleString()}` : 'Budget TBD'}
+                  </div>
+                  <div className="text-blue-700 text-sm">{project.progress || 0}% Complete</div>
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Quick Actions */}
-          <div className="bg-blue-50 p-4 rounded-lg">
-            <h4 className="font-medium text-blue-900 mb-3 flex items-center gap-2">
-              <Target className="h-4 w-4" />
-              Quick Actions
-            </h4>
-            <div className="flex gap-3 flex-wrap">
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => {
-                  if (project && onCreateTask) {
-                    onCreateTask(project.id);
+            {/* Quick Actions */}
+            <div className="bg-blue-50 p-4 rounded-lg">
+              <h4 className="font-medium text-blue-900 mb-3 flex items-center gap-2">
+                <Target className="h-4 w-4" />
+                Quick Actions
+              </h4>
+              <div className="flex gap-3 flex-wrap">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => {
+                    if (project && onCreateTask) {
+                      onCreateTask(project.id);
+                      onClose();
+                    }
+                  }}
+                  className="bg-white hover:bg-blue-100 border-blue-200"
+                >
+                  <CheckSquare className="h-4 w-4 mr-2" />
+                  Add Task
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => {
+                    // Navigate to team management
                     onClose();
-                  }
-                }}
-                className="bg-white hover:bg-blue-100 border-blue-200"
-              >
-                <CheckSquare className="h-4 w-4 mr-2" />
-                Add Task
-              </Button>
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => {
-                  // Navigate to team management
-                  onClose();
-                  // Could trigger team management modal
-                }}
-                className="bg-white hover:bg-blue-100 border-blue-200"
-              >
-                <UserPlus className="h-4 w-4 mr-2" />
-                Manage Team
-              </Button>
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => {
-                  // View project details
-                  onClose();
-                }}
-                className="bg-white hover:bg-blue-100 border-blue-200"
-              >
-                <Edit3 className="h-4 w-4 mr-2" />
-                Edit Project
-              </Button>
+                    // Could trigger team management modal
+                  }}
+                  className="bg-white hover:bg-blue-100 border-blue-200"
+                >
+                  <UserPlus className="h-4 w-4 mr-2" />
+                  Manage Team
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => {
+                    // View project details
+                    onClose();
+                  }}
+                  className="bg-white hover:bg-blue-100 border-blue-200"
+                >
+                  <Edit3 className="h-4 w-4 mr-2" />
+                  Edit Project
+                </Button>
+              </div>
             </div>
-          </div>
 
-          {/* Filters */}
-          <div className="flex gap-4 items-center flex-wrap">
-            <div className="flex items-center gap-2">
-              <label className="text-sm font-medium">Status:</label>
-              <Select value={filterStatus} onValueChange={setFilterStatus}>
-                <SelectTrigger className="w-32">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="in_progress">In Progress</SelectItem>
-                  <SelectItem value="completed">Completed</SelectItem>
-                  <SelectItem value="needs_approval">Needs Approval</SelectItem>
-                  <SelectItem value="outstanding">Outstanding</SelectItem>
-                </SelectContent>
-              </Select>
+            {/* Filters */}
+            <div className="flex gap-4 items-center flex-wrap">
+              <div className="flex items-center gap-2">
+                <label className="text-sm font-medium">Status:</label>
+                <Select value={filterStatus} onValueChange={setFilterStatus}>
+                  <SelectTrigger className="w-32">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Status</SelectItem>
+                    <SelectItem value="in_progress">In Progress</SelectItem>
+                    <SelectItem value="completed">Completed</SelectItem>
+                    <SelectItem value="needs_approval">Needs Approval</SelectItem>
+                    <SelectItem value="outstanding">Outstanding</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="text-sm font-medium">Priority:</label>
+                <Select value={filterPriority} onValueChange={setFilterPriority}>
+                  <SelectTrigger className="w-32">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Priority</SelectItem>
+                    <SelectItem value="urgent">Urgent</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="low">Low</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="text-sm font-medium">Role:</label>
+                <Select value={filterRole} onValueChange={setFilterRole}>
+                  <SelectTrigger className="w-40">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Roles</SelectItem>
+                    <SelectItem value="project_manager">Project Manager</SelectItem>
+                    <SelectItem value="content_writer">Content Writer</SelectItem>
+                    <SelectItem value="photographer">Photographer</SelectItem>
+                    <SelectItem value="designer">Designer</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <label className="text-sm font-medium">Priority:</label>
-              <Select value={filterPriority} onValueChange={setFilterPriority}>
-                <SelectTrigger className="w-32">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Priority</SelectItem>
-                  <SelectItem value="urgent">Urgent</SelectItem>
-                  <SelectItem value="high">High</SelectItem>
-                  <SelectItem value="medium">Medium</SelectItem>
-                  <SelectItem value="low">Low</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex items-center gap-2">
-              <label className="text-sm font-medium">Role:</label>
-              <Select value={filterRole} onValueChange={setFilterRole}>
-                <SelectTrigger className="w-40">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Roles</SelectItem>
-                  <SelectItem value="project_manager">Project Manager</SelectItem>
-                  <SelectItem value="content_writer">Content Writer</SelectItem>
-                  <SelectItem value="photographer">Photographer</SelectItem>
-                  <SelectItem value="designer">Designer</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
 
-          {isLoading ? (
-            <div className="text-center py-8">Loading tasks...</div>
-          ) : isFacesProject ? (
-            /* Faces of Kelowna Workflow View */
-            <Tabs defaultValue="workflow" className="w-full">
-              <TabsList>
-                <TabsTrigger value="workflow">Workflow Phases</TabsTrigger>
-                <TabsTrigger value="all">All Tasks</TabsTrigger>
-              </TabsList>
-              
-              <TabsContent value="workflow" className="space-y-6">
-                {Object.entries(groupedTasks).map(([phase, phaseTasks]) => (
-                  phaseTasks.length > 0 && (
-                    <Card key={phase}>
-                      <CardHeader>
-                        <CardTitle className="capitalize flex items-center gap-2">
-                          {phase === "contract" && <BarChart3 className="h-5 w-5" />}
-                          {phase === "content" && <PenTool className="h-5 w-5" />}
-                          {phase === "photography" && <Camera className="h-5 w-5" />}
-                          {phase === "production" && <Palette className="h-5 w-5" />}
-                          {phase === "distribution" && <Target className="h-5 w-5" />}
-                          {phase === "ongoing" && <Clock className="h-5 w-5" />}
-                          {phase.replace("_", " ")} Phase ({phaseTasks.length} tasks)
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        {phaseTasks.map((task: any) => (
-                          <TaskCard key={task.id} task={task} />
-                        ))}
-                      </CardContent>
-                    </Card>
-                  )
-                ))}
-              </TabsContent>
-              
-              <TabsContent value="all">
+            {isLoading ? (
+              <div className="text-center py-8">Loading tasks...</div>
+            ) : isFacesProject ? (
+              /* Faces of Kelowna Workflow View */
+              <Tabs defaultValue="workflow" className="w-full">
+                <TabsList>
+                  <TabsTrigger value="workflow">Workflow Phases</TabsTrigger>
+                  <TabsTrigger value="all">All Tasks</TabsTrigger>
+                </TabsList>
+                
+                <TabsContent value="workflow" className="space-y-6">
+                  {Object.entries(groupedTasks).map(([phase, phaseTasks]) => (
+                    phaseTasks.length > 0 && (
+                      <Card key={phase}>
+                        <CardHeader>
+                          <CardTitle className="capitalize flex items-center gap-2">
+                            {phase === "contract" && <BarChart3 className="h-5 w-5" />}
+                            {phase === "content" && <PenTool className="h-5 w-5" />}
+                            {phase === "photography" && <Camera className="h-5 w-5" />}
+                            {phase === "production" && <Palette className="h-5 w-5" />}
+                            {phase === "distribution" && <Target className="h-5 w-5" />}
+                            {phase === "ongoing" && <Clock className="h-5 w-5" />}
+                            {phase.replace("_", " ")} Phase ({phaseTasks.length} tasks)
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          {phaseTasks.map((task: any) => (
+                            <TaskCard key={task.id} task={task} />
+                          ))}
+                        </CardContent>
+                      </Card>
+                    )
+                  ))}
+                </TabsContent>
+                
+                <TabsContent value="all">
+                  {filteredTasks.map((task: any) => (
+                    <TaskCard key={task.id} task={task} />
+                  ))}
+                </TabsContent>
+              </Tabs>
+            ) : (
+              /* Standard Task View for Other Projects */
+              <div className="space-y-3">
                 {filteredTasks.map((task: any) => (
                   <TaskCard key={task.id} task={task} />
                 ))}
-              </TabsContent>
-            </Tabs>
-          ) : (
-            /* Standard Task View for Other Projects */
-            <div className="space-y-3">
-              {filteredTasks.map((task: any) => (
-                <TaskCard key={task.id} task={task} />
-              ))}
-            </div>
-          )}
+              </div>
+            )}
 
-          {filteredTasks.length === 0 && !isLoading && (
-            <div className="text-center py-8 text-gray-500">
-              No tasks found with the selected filters.
-            </div>
-          )}
-        </div>
-      </DialogContent>
-    </Dialog>
+            {filteredTasks.length === 0 && !isLoading && (
+              <div className="text-center py-8 text-gray-500">
+                No tasks found with the selected filters.
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <DeleteConfirmationDialog
+        isOpen={!!deletingTask}
+        onClose={() => setDeletingTask(null)}
+        onConfirm={() => {
+          if (deletingTask) {
+            deleteTaskMutation.mutate(deletingTask.id);
+          }
+        }}
+        title="Delete Task"
+        description="This task will be moved to deleted items and can be restored later."
+        itemName={deletingTask?.title || ''}
+        itemType="task"
+        isLoading={deleteTaskMutation.isPending}
+      />
+    </>
   );
 }
