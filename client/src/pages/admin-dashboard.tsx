@@ -1285,6 +1285,10 @@ export default function AdminDashboard() {
           setSelectedProjectForTasks(null);
         }}
         project={selectedProjectForTasks}
+        onCreateTask={(projectId: string) => {
+          setSelectedProject(projectId);
+          setShowCreateTask(true);
+        }}
       />
 
       <TeamManagementModal

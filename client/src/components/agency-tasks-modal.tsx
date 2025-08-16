@@ -40,9 +40,10 @@ interface AgencyTasksModalProps {
   isOpen: boolean;
   onClose: () => void;
   project: Project | null;
+  onCreateTask?: (projectId: string) => void;
 }
 
-export function AgencyTasksModal({ isOpen, onClose, project }: AgencyTasksModalProps) {
+export function AgencyTasksModal({ isOpen, onClose, project, onCreateTask }: AgencyTasksModalProps) {
   const queryClient = useQueryClient();
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterPriority, setFilterPriority] = useState<string>("all");
@@ -432,9 +433,10 @@ export function AgencyTasksModal({ isOpen, onClose, project }: AgencyTasksModalP
                 variant="outline" 
                 size="sm"
                 onClick={() => {
-                  // Navigate to create task for this project
-                  onClose();
-                  // Could trigger a create task modal here
+                  if (project && onCreateTask) {
+                    onCreateTask(project.id);
+                    onClose();
+                  }
                 }}
                 className="bg-white hover:bg-blue-100 border-blue-200"
               >
