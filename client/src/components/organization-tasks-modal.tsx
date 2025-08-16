@@ -304,14 +304,20 @@ export function OrganizationTasksModal({ isOpen, onClose, organization, services
 
       {/* Task Assignment Modal */}
       {selectedTaskForAssignment && (
-        <TaskAssignmentManager
-          isOpen={!!selectedTaskForAssignment}
-          onClose={() => setSelectedTaskForAssignment(null)}
-          taskId={selectedTaskForAssignment}
-          onAssignmentChange={() => {
-            queryClient.invalidateQueries({ queryKey: ["/api/admin/task-assignments"] });
-          }}
-        />
+        <Dialog open={!!selectedTaskForAssignment} onOpenChange={() => setSelectedTaskForAssignment(null)}>
+          <DialogContent className="sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Assign Team Members</DialogTitle>
+            </DialogHeader>
+            <TaskAssignmentManager
+              task={tasks.find((t: any) => t.id === selectedTaskForAssignment)}
+              onUpdate={() => {
+                queryClient.invalidateQueries({ queryKey: ["/api/admin/task-assignments"] });
+                queryClient.invalidateQueries({ queryKey: ["/api/organizations", organization.id, "tasks"] });
+              }}
+            />
+          </DialogContent>
+        </Dialog>
       )}
     </>
   );
