@@ -53,7 +53,7 @@ export function EditOrganizationModal({ organization, isOpen, onClose }: EditOrg
         description: orgData.description.trim() || undefined,
         website: orgData.website.trim() || undefined,
         industry: orgData.industry.trim() || undefined,
-        primaryContactId: orgData.primaryContactId || undefined,
+        primaryContactId: orgData.primaryContactId === "none" ? undefined : orgData.primaryContactId || undefined,
       };
       
       const response = await apiRequest("PUT", `/api/admin/organizations/${organization.id}`, cleanData);
@@ -157,7 +157,7 @@ export function EditOrganizationModal({ organization, isOpen, onClose }: EditOrg
                 <SelectValue placeholder="Select primary contact" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">No primary contact</SelectItem>
+                <SelectItem value="none">No primary contact</SelectItem>
                 {clients?.map((client) => (
                   <SelectItem key={client.id} value={client.id}>
                     {client.firstName} {client.lastName} ({client.email})
