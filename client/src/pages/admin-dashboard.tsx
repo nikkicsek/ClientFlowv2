@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Users, Briefcase, Settings, Eye, Building2, Edit, CheckSquare, Clock, AlertTriangle, Grid3X3, List } from "lucide-react";
+import { Plus, Users, Briefcase, Settings, Eye, Building2, Edit, CheckSquare, Clock, AlertTriangle, Grid3X3, List, UserPlus } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
@@ -23,6 +23,7 @@ import { WelcomeVideoModal } from "@/components/welcome-video-modal";
 import { EditClientModal } from "@/components/edit-client-modal";
 import { AgencyTasksModal } from "@/components/agency-tasks-modal";
 import { EditOrganizationModal } from "@/components/edit-organization-modal";
+import { OrganizationContactsModal } from "@/components/organization-contacts-modal";
 import type { Project, Task, Service, User, Organization } from "@shared/schema";
 
 export default function AdminDashboard() {
@@ -41,6 +42,7 @@ export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState("projects");
   const [organizationViewMode, setOrganizationViewMode] = useState<"grid" | "list">("grid");
   const [editingOrganization, setEditingOrganization] = useState<Organization | null>(null);
+  const [viewingOrgContacts, setViewingOrgContacts] = useState<Organization | null>(null);
 
   const { data: projects, isLoading: projectsLoading } = useQuery({
     queryKey: ["/api/admin/projects"],
@@ -538,14 +540,24 @@ export default function AdminDashboard() {
                             )}
                           </div>
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setEditingOrganization(org)}
-                          className="opacity-0 group-hover:opacity-100 transition-opacity"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
+                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setViewingOrgContacts(org)}
+                            title="Manage Contacts"
+                          >
+                            <Users className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setEditingOrganization(org)}
+                            title="Edit Organization"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
                       
                       {org.description && (
@@ -611,14 +623,24 @@ export default function AdminDashboard() {
                             </div>
                           </div>
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setEditingOrganization(org)}
-                          className="opacity-0 group-hover:opacity-100 transition-opacity"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
+                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setViewingOrgContacts(org)}
+                            title="Manage Contacts"
+                          >
+                            <Users className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setEditingOrganization(org)}
+                            title="Edit Organization"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
                     </CardContent>
                   </Card>
@@ -731,6 +753,12 @@ export default function AdminDashboard() {
         organization={editingOrganization}
         isOpen={!!editingOrganization}
         onClose={() => setEditingOrganization(null)}
+      />
+
+      <OrganizationContactsModal
+        organization={viewingOrgContacts}
+        isOpen={!!viewingOrgContacts}
+        onClose={() => setViewingOrgContacts(null)}
       />
 
     </div>
