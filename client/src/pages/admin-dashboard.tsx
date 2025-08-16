@@ -554,40 +554,52 @@ export default function AdminDashboard() {
                   </Button>
                 </CardContent>
               </Card>
-            ) : (
+            ) : selectedOrgForProjects ? (
               <DndContext 
                 sensors={sensors}
                 collisionDetection={closestCenter}
                 onDragEnd={handleDragEnd}
               >
                 <SortableContext 
-                  items={(selectedOrgForProjects 
-                    ? projects.filter(p => p.organizationId === selectedOrgForProjects).sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0))
-                    : projects
-                  ).map(p => p.id)}
+                  items={projects.filter(p => p.organizationId === selectedOrgForProjects)
+                    .sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0))
+                    .map(p => p.id)}
                   strategy={verticalListSortingStrategy}
                 >
                   {projectViewMode === "grid" ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                      {(selectedOrgForProjects 
-                        ? projects.filter(p => p.organizationId === selectedOrgForProjects).sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0))
-                        : projects
-                      ).map((project: Project) => (
-                        <SortableProjectCard key={project.id} project={project} />
-                      ))}
+                      {projects.filter(p => p.organizationId === selectedOrgForProjects)
+                        .sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0))
+                        .map((project: Project) => (
+                          <SortableProjectCard key={project.id} project={project} />
+                        ))}
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      {(selectedOrgForProjects 
-                        ? projects.filter(p => p.organizationId === selectedOrgForProjects).sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0))
-                        : projects
-                      ).map((project: Project) => (
-                        <SortableProjectListItem key={project.id} project={project} />
-                      ))}
+                      {projects.filter(p => p.organizationId === selectedOrgForProjects)
+                        .sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0))
+                        .map((project: Project) => (
+                          <SortableProjectListItem key={project.id} project={project} />
+                        ))}
                     </div>
                   )}
                 </SortableContext>
               </DndContext>
+            ) : (
+              // All Projects view - no drag and drop
+              projectViewMode === "grid" ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {projects.map((project: Project) => (
+                    <SortableProjectCard key={project.id} project={project} />
+                  ))}
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {projects.map((project: Project) => (
+                    <SortableProjectListItem key={project.id} project={project} />
+                  ))}
+                </div>
+              )
             )}
           </TabsContent>
 
