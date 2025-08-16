@@ -706,11 +706,17 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateTaskAssignment(id: string, updates: Partial<InsertTaskAssignment>): Promise<TaskAssignment> {
-    const updateData = { ...updates };
-    // Ensure updatedAt is a proper Date object
-    if (!updateData.updatedAt) {
-      updateData.updatedAt = new Date();
+    const updateData: any = { ...updates };
+    
+    // Handle null values for timestamp fields
+    if (updateData.completedAt === null) {
+      updateData.completedAt = null;
+    } else if (updateData.completedAt && typeof updateData.completedAt === 'string') {
+      updateData.completedAt = new Date(updateData.completedAt);
     }
+    
+    // Always set updatedAt to current timestamp
+    updateData.updatedAt = new Date();
     
     const [updatedAssignment] = await db
       .update(taskAssignments)
