@@ -1101,6 +1101,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.put('/api/admin/organizations/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Only admins can update organizations" });
+      }
+
+      const { name, description, website, industry, primaryContactId } = req.body;
+      
+      if (!name || typeof name !== 'string' || name.trim().length === 0) {
+        return res.status(400).json({ message: "Organization name is required" });
+      }
+
+      const organizationData = {
+        name: name.trim(),
+        description: description || null,
+        website: website || null,
+        industry: industry || null,
+        primaryContactId: primaryContactId || null,
+      };
+
+      const organization = await storage.updateOrganization(req.params.id, organizationData);
+      res.json(organization);
+    } catch (error) {
+      console.error("Error updating organization:", error);
+      res.status(500).json({ 
+        message: "Failed to update organization",
+        details: error.message || "Unknown error"
+      });
+    }
+  });
+
   app.get('/api/admin/organizations/:id/users', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;

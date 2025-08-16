@@ -22,7 +22,8 @@ import { ServiceCategoryModal } from "@/components/service-category-modal";
 import { WelcomeVideoModal } from "@/components/welcome-video-modal";
 import { EditClientModal } from "@/components/edit-client-modal";
 import { AgencyTasksModal } from "@/components/agency-tasks-modal";
-import type { Project, Task, Service, User } from "@shared/schema";
+import { EditOrganizationModal } from "@/components/edit-organization-modal";
+import type { Project, Task, Service, User, Organization } from "@shared/schema";
 
 export default function AdminDashboard() {
   const { user } = useAuth();
@@ -39,6 +40,7 @@ export default function AdminDashboard() {
   const [showTeamManagement, setShowTeamManagement] = useState(false);
   const [activeTab, setActiveTab] = useState("projects");
   const [organizationViewMode, setOrganizationViewMode] = useState<"grid" | "list">("grid");
+  const [editingOrganization, setEditingOrganization] = useState<Organization | null>(null);
 
   const { data: projects, isLoading: projectsLoading } = useQuery({
     queryKey: ["/api/admin/projects"],
@@ -522,7 +524,7 @@ export default function AdminDashboard() {
                 {organizations
                   .sort((a, b) => a.name.localeCompare(b.name))
                   .map((org) => (
-                  <Card key={org.id} className="hover:shadow-md transition-shadow">
+                  <Card key={org.id} className="group hover:shadow-md transition-shadow">
                     <CardContent className="p-6">
                       <div className="flex items-start justify-between mb-4">
                         <div className="flex items-center gap-3">
@@ -536,6 +538,14 @@ export default function AdminDashboard() {
                             )}
                           </div>
                         </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setEditingOrganization(org)}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
                       </div>
                       
                       {org.description && (
@@ -569,7 +579,7 @@ export default function AdminDashboard() {
                 {organizations
                   .sort((a, b) => a.name.localeCompare(b.name))
                   .map((org) => (
-                  <Card key={org.id} className="hover:shadow-sm transition-shadow">
+                  <Card key={org.id} className="group hover:shadow-sm transition-shadow">
                     <CardContent className="p-4">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-4 flex-1">
@@ -601,6 +611,14 @@ export default function AdminDashboard() {
                             </div>
                           </div>
                         </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setEditingOrganization(org)}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
                       </div>
                     </CardContent>
                   </Card>
@@ -709,6 +727,11 @@ export default function AdminDashboard() {
         onClose={() => setShowTeamManagement(false)}
       />
 
+      <EditOrganizationModal
+        organization={editingOrganization}
+        isOpen={!!editingOrganization}
+        onClose={() => setEditingOrganization(null)}
+      />
 
     </div>
   );
