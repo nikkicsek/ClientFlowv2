@@ -29,7 +29,10 @@ function Router() {
         <>
           <Route path="/client-view" component={ClientView} />
           {(user as any)?.role === 'admin' ? (
-            <Route path="/" component={AdminDashboard} />
+            <>
+              <Route path="/" component={AdminDashboard} />
+              <Route path="/admin" component={AdminDashboard} />
+            </>
           ) : (
             <Route path="/" component={Dashboard} />
           )}
