@@ -305,6 +305,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Task assignment routes
+  app.get('/api/admin/task-assignments', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Only admins can view all task assignments" });
+      }
+
+      // Get all task assignments with team member and task details
+      const allAssignments = await storage.getAllTaskAssignments();
+      res.json(allAssignments);
+    } catch (error) {
+      console.error("Error fetching all task assignments:", error);
+      res.status(500).json({ message: "Failed to fetch task assignments" });
+    }
+  });
+
   app.get('/api/tasks/:taskId/assignments', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
