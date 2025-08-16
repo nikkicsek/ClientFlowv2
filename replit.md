@@ -93,11 +93,14 @@ UI preferences: Clean, functional interfaces without promotional or instructiona
 - **Team Management**: Added "GHL Lead" (orange) and "Strategist" (indigo) roles with proper styling
 - **Organization Management**: Streamlined UI removing instructional content, added alphabetical sorting
 - **Navigation Enhancement**: Fixed Organizations button to navigate directly to Business Organizations tab
-- **View Options**: Added tile/grid and list view toggle for business organizations display
+- **View Options**: Added tile/grid and list view toggle for business organizations and projects display with list view as default
 - **Direct Organization Editing**: Added hover-to-edit functionality on organization cards in both tile and list views
 - **Organization Contact Management**: Added direct contact assignment/removal from organization cards with dedicated modal
 - **Organization Project Navigation**: Added project count display and direct navigation to projects from organization cards
 - **Organization Update API**: Implemented PUT endpoint for updating organization details without extra navigation steps
+- **Project Status Management**: Added dropdown status selector directly on project tiles/list items with pending status option
+- **Drag-and-Drop Reordering**: Implemented project reordering within organizations using @dnd-kit with display_order field
+- **Enhanced Project Views**: Added both grid and list view options for projects with comprehensive list view including Google Drive links
 
 ### Potential Integrations
 - **Analytics Platforms**: Designed to integrate with marketing tools and analytics services

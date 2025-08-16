@@ -48,7 +48,8 @@ export default function AdminDashboard() {
   const [selectedProjectForTasks, setSelectedProjectForTasks] = useState<Project | null>(null);
   const [showTeamManagement, setShowTeamManagement] = useState(false);
   const [activeTab, setActiveTab] = useState("projects");
-  const [organizationViewMode, setOrganizationViewMode] = useState<"grid" | "list">("grid");
+  const [organizationViewMode, setOrganizationViewMode] = useState<"grid" | "list">("list");
+  const [projectViewMode, setProjectViewMode] = useState<"grid" | "list">("list");
   const [editingOrganization, setEditingOrganization] = useState<Organization | null>(null);
   const [viewingOrgContacts, setViewingOrgContacts] = useState<Organization | null>(null);
   const [selectedOrgForProjects, setSelectedOrgForProjects] = useState<string | null>(null);
@@ -316,6 +317,129 @@ export default function AdminDashboard() {
     );
   }
 
+  // Sortable project list item component
+  function SortableProjectListItem({ project }: { project: Project }) {
+    const {
+      attributes,
+      listeners,
+      setNodeRef,
+      transform,
+      transition,
+    } = useSortable({ id: project.id });
+
+    const style = {
+      transform: CSS.Transform.toString(transform),
+      transition,
+    };
+
+    const statusBadge = getStatusBadge(project.status);
+
+    return (
+      <div 
+        ref={setNodeRef} 
+        style={style} 
+        className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3 flex-1">
+            {selectedOrgForProjects && (
+              <div 
+                {...attributes} 
+                {...listeners}
+                className="cursor-grab active:cursor-grabbing"
+              >
+                <GripVertical className="h-4 w-4 text-gray-400" />
+              </div>
+            )}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-3 mb-1">
+                <h3 className="font-medium text-gray-900 truncate">{project.name}</h3>
+                <Select 
+                  value={project.status} 
+                  onValueChange={(status) => updateProjectStatusMutation.mutate({ projectId: project.id, status })}
+                >
+                  <SelectTrigger className="w-28">
+                    <SelectValue>
+                      <Badge variant={statusBadge.variant} className="text-xs">
+                        {statusBadge.label}
+                      </Badge>
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="pending">Pending</SelectItem>
+                    <SelectItem value="on_hold">On Hold</SelectItem>
+                    <SelectItem value="completed">Completed</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {project.description && (
+                <p className="text-sm text-gray-600 mb-2 line-clamp-1">{project.description}</p>
+              )}
+              <div className="flex items-center gap-4 text-xs text-gray-500 mb-2">
+                <span>Progress: {project.progress || 0}%</span>
+                <span>Budget: {project.budget ? `$${Number(project.budget).toLocaleString()}` : 'Not set'}</span>
+                {project.startDate && (
+                  <span>Started: {new Date(project.startDate).toLocaleDateString()}</span>
+                )}
+              </div>
+              <div className="text-xs">
+                <GoogleDriveLinks project={project} />
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-1 ml-4">
+            <Button 
+              variant="ghost" 
+              size="sm"
+              onClick={() => setEditingProject(project)}
+              title="Edit Project"
+            >
+              <Settings className="h-4 w-4" />
+            </Button>
+            <Button 
+              variant="ghost" 
+              size="sm"
+              onClick={() => {
+                setSelectedProject(project.id);
+                setShowCreateTask(true);
+              }}
+              title="Add Task"
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
+            <Button 
+              variant="ghost" 
+              size="sm"
+              onClick={() => {
+                setSelectedProjectForTasks(project);
+                setShowAgencyTasks(true);
+              }}
+              title="Agency Tasks"
+              className="text-indigo-600 hover:text-indigo-700"
+            >
+              <CheckSquare className="h-4 w-4" />
+            </Button>
+            <Button 
+              variant="ghost" 
+              size="sm"
+              onClick={() => handleViewAsClient(project.id)}
+              title="View as Client"
+            >
+              <Eye className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+        <div className="w-full bg-gray-200 rounded-full h-1.5 mt-3">
+          <div 
+            className="bg-blue-600 h-1.5 rounded-full" 
+            style={{ width: `${project.progress || 0}%` }}
+          ></div>
+        </div>
+      </div>
+    );
+  }
+
   if (projectsLoading) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -406,13 +530,33 @@ export default function AdminDashboard() {
                   </Button>
                 )}
               </div>
-              <Button 
-                onClick={() => setShowCreateProject(true)}
-                className="bg-blue-600 hover:bg-blue-700"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                New Project
-              </Button>
+              <div className="flex items-center gap-3">
+                <div className="flex rounded-md border border-gray-300">
+                  <Button
+                    variant={projectViewMode === "list" ? "default" : "ghost"}
+                    size="sm"
+                    onClick={() => setProjectViewMode("list")}
+                    className="rounded-r-none"
+                  >
+                    <List className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant={projectViewMode === "grid" ? "default" : "ghost"}
+                    size="sm"
+                    onClick={() => setProjectViewMode("grid")}
+                    className="rounded-l-none"
+                  >
+                    <Grid3X3 className="h-4 w-4" />
+                  </Button>
+                </div>
+                <Button 
+                  onClick={() => setShowCreateProject(true)}
+                  className="bg-blue-600 hover:bg-blue-700"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  New Project
+                </Button>
+              </div>
             </div>
 
             {!projects || projects.length === 0 || (selectedOrgForProjects && projects.filter(p => p.organizationId === selectedOrgForProjects).length === 0) ? (
@@ -443,14 +587,25 @@ export default function AdminDashboard() {
                   ).map(p => p.id)}
                   strategy={verticalListSortingStrategy}
                 >
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {(selectedOrgForProjects 
-                      ? projects.filter(p => p.organizationId === selectedOrgForProjects).sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0))
-                      : projects
-                    ).map((project: Project) => (
-                      <SortableProjectCard key={project.id} project={project} />
-                    ))}
-                  </div>
+                  {projectViewMode === "grid" ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {(selectedOrgForProjects 
+                        ? projects.filter(p => p.organizationId === selectedOrgForProjects).sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0))
+                        : projects
+                      ).map((project: Project) => (
+                        <SortableProjectCard key={project.id} project={project} />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {(selectedOrgForProjects 
+                        ? projects.filter(p => p.organizationId === selectedOrgForProjects).sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0))
+                        : projects
+                      ).map((project: Project) => (
+                        <SortableProjectListItem key={project.id} project={project} />
+                      ))}
+                    </div>
+                  )}
                 </SortableContext>
               </DndContext>
             )}
