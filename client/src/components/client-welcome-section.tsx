@@ -28,6 +28,7 @@ export function ClientWelcomeSection({
   onStartTour 
 }: ClientWelcomeSectionProps) {
   const [showWelcomeVideo, setShowWelcomeVideo] = useState(false);
+  const [hasWelcomeVideo, setHasWelcomeVideo] = useState(false);
 
   const welcomeMessage = `Hello ${clientName}! Welcome to your dedicated project dashboard. ${
     organizationName ? `We're excited to work with ${organizationName}.` : ''
@@ -67,7 +68,7 @@ export function ClientWelcomeSection({
                   </Badge>
                 </div>
                 <h1 className="text-3xl font-bold text-gray-900 mb-4">
-                  Welcome, {clientName}!
+                  Welcome
                 </h1>
                 {organizationName && (
                   <div className="flex items-center gap-2 mb-4">
@@ -100,13 +101,15 @@ export function ClientWelcomeSection({
 
               {/* Action Buttons */}
               <div className="flex flex-wrap gap-3">
-                <Button
-                  onClick={() => setShowWelcomeVideo(true)}
-                  className="bg-purple-600 hover:bg-purple-700"
-                >
-                  <Video className="h-4 w-4 mr-2" />
-                  Watch Welcome Message
-                </Button>
+                {hasWelcomeVideo && (
+                  <Button
+                    onClick={() => setShowWelcomeVideo(true)}
+                    className="bg-purple-600 hover:bg-purple-700"
+                  >
+                    <Video className="h-4 w-4 mr-2" />
+                    Watch Welcome Message
+                  </Button>
+                )}
                 <Button variant="outline" onClick={onStartTour}>
                   <Play className="h-4 w-4 mr-2" />
                   Take Dashboard Tour
@@ -114,23 +117,25 @@ export function ClientWelcomeSection({
               </div>
             </div>
 
-            {/* Video Thumbnail */}
-            <div className="lg:w-80">
-              <div 
-                className="bg-white rounded-xl border-2 border-gray-200 overflow-hidden cursor-pointer hover:shadow-lg transition-shadow"
-                onClick={() => setShowWelcomeVideo(true)}
-              >
-                <div className="aspect-video bg-gradient-to-br from-blue-100 to-purple-100 flex items-center justify-center">
-                  <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-lg">
-                    <Play className="h-8 w-8 text-purple-600" />
+            {/* Video Thumbnail - Only show if video is available */}
+            {hasWelcomeVideo && (
+              <div className="lg:w-80">
+                <div 
+                  className="bg-white rounded-xl border-2 border-gray-200 overflow-hidden cursor-pointer hover:shadow-lg transition-shadow"
+                  onClick={() => setShowWelcomeVideo(true)}
+                >
+                  <div className="aspect-video bg-gradient-to-br from-blue-100 to-purple-100 flex items-center justify-center">
+                    <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-lg">
+                      <Play className="h-8 w-8 text-purple-600" />
+                    </div>
+                  </div>
+                  <div className="p-4">
+                    <h3 className="font-medium text-gray-900 mb-1">Personal Welcome Message</h3>
+                    <p className="text-sm text-gray-600">A special message from our team just for you</p>
                   </div>
                 </div>
-                <div className="p-4">
-                  <h3 className="font-medium text-gray-900 mb-1">Personal Welcome Message</h3>
-                  <p className="text-sm text-gray-600">A special message from our team just for you</p>
-                </div>
               </div>
-            </div>
+            )}
           </div>
         </CardContent>
       </Card>
