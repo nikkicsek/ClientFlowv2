@@ -60,7 +60,7 @@ export function DeleteConfirmationDialog({
                 {title}
               </DialogTitle>
               <DialogDescription className="text-sm text-gray-600 mt-1">
-                This action cannot be undone
+                Item will be moved to deleted items and can be restored
               </DialogDescription>
             </div>
           </div>
