@@ -360,6 +360,28 @@ export class DatabaseStorage implements IStorage {
     return newTask;
   }
 
+  async createOrganizationTask(task: InsertTask): Promise<Task> {
+    const taskData = {
+      ...task,
+      taskScope: 'organization',
+      projectId: null, // Organization tasks don't belong to projects
+    };
+    const [newTask] = await db.insert(tasks).values(taskData).returning();
+    return newTask;
+  }
+
+  async getOrganizationTasks(organizationId: string): Promise<Task[]> {
+    return await db
+      .select()
+      .from(tasks)
+      .where(and(
+        eq(tasks.organizationId, organizationId),
+        eq(tasks.taskScope, 'organization'),
+        isNull(tasks.deletedAt)
+      ))
+      .orderBy(desc(tasks.createdAt));
+  }
+
   async updateTask(id: string, updates: Partial<InsertTask>): Promise<Task> {
     const [updatedTask] = await db
       .update(tasks)

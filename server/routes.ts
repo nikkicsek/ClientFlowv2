@@ -1368,6 +1368,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Organization tasks routes
+  app.get('/api/organizations/:organizationId/tasks', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Only admins can view organization tasks" });
+      }
+
+      const tasks = await storage.getOrganizationTasks(req.params.organizationId);
+      res.json(tasks);
+    } catch (error) {
+      console.error("Error fetching organization tasks:", error);
+      res.status(500).json({ message: "Failed to fetch organization tasks" });
+    }
+  });
+
+  app.post('/api/organizations/:organizationId/tasks', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Only admins can create organization tasks" });
+      }
+
+      const validation = insertTaskSchema.safeParse({
+        ...req.body,
+        organizationId: req.params.organizationId,
+        taskScope: 'organization',
+        projectId: null,
+      });
+
+      if (!validation.success) {
+        return res.status(400).json({ error: validation.error });
+      }
+
+      const task = await storage.createOrganizationTask(validation.data);
+      res.status(201).json(task);
+    } catch (error) {
+      console.error("Error creating organization task:", error);
+      res.status(500).json({ message: "Failed to create organization task" });
+    }
+  });
+
   // Organization management routes (admin only)
   app.get('/api/admin/organizations', isAuthenticated, async (req: any, res) => {
     try {
