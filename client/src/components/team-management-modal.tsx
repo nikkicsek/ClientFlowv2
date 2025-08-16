@@ -24,6 +24,7 @@ const ROLE_OPTIONS = [
   { value: "designer", label: "Designer", color: "bg-pink-100 text-pink-800" },
   { value: "ghl_lead", label: "GHL Lead", color: "bg-orange-100 text-orange-800" },
   { value: "strategist", label: "Strategist", color: "bg-indigo-100 text-indigo-800" },
+  { value: "finance", label: "Finance", color: "bg-emerald-100 text-emerald-800" },
 ];
 
 export function TeamManagementModal({ isOpen, onClose }: TeamManagementModalProps) {

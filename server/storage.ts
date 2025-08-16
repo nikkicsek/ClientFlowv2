@@ -53,7 +53,7 @@ import {
   type InsertProposalItem,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and, gte, lte, inArray, isNull, isNotNull } from "drizzle-orm";
+import { eq, desc, and, gte, lte, inArray, isNull, isNotNull, or } from "drizzle-orm";
 
 export interface IStorage {
   // User operations (required for Replit Auth)
@@ -315,7 +315,11 @@ export class DatabaseStorage implements IStorage {
 
   // Task operations
   async getTasksByProject(projectId: string): Promise<Task[]> {
-    return db.select().from(tasks).where(and(eq(tasks.projectId, projectId), isNull(tasks.deletedAt))).orderBy(desc(tasks.createdAt));
+    return db.select().from(tasks).where(and(
+      eq(tasks.projectId, projectId), 
+      or(eq(tasks.taskScope, 'project'), isNull(tasks.taskScope)), // Include both explicit project tasks and legacy tasks
+      isNull(tasks.deletedAt)
+    )).orderBy(desc(tasks.createdAt));
   }
 
   async getTasksByProjectWithDetails(projectId: string): Promise<(Task & { service?: Service })[]> {
@@ -326,7 +330,11 @@ export class DatabaseStorage implements IStorage {
       })
       .from(tasks)
       .leftJoin(services, eq(tasks.serviceId, services.id))
-      .where(and(eq(tasks.projectId, projectId), isNull(tasks.deletedAt)))
+      .where(and(
+        eq(tasks.projectId, projectId), 
+        or(eq(tasks.taskScope, 'project'), isNull(tasks.taskScope)), // Include both explicit project tasks and legacy tasks
+        isNull(tasks.deletedAt)
+      ))
       .orderBy(desc(tasks.createdAt));
 
     return result.map(({ task, service }) => ({
@@ -356,7 +364,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createTask(task: InsertTask): Promise<Task> {
-    const [newTask] = await db.insert(tasks).values(task).returning();
+    const taskData = {
+      ...task,
+      taskScope: task.taskScope || 'project', // Default to project scope if not specified
+    };
+    const [newTask] = await db.insert(tasks).values(taskData).returning();
     return newTask;
   }
 
