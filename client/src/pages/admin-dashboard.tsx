@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Users, Briefcase, Settings, Eye, Building2, Edit, CheckSquare, Clock, AlertTriangle, Grid3X3, List, UserPlus, FolderOpen, GripVertical } from "lucide-react";
+import { Plus, Users, Briefcase, Settings, Eye, Building2, Edit, CheckSquare, Clock, AlertTriangle, Grid3X3, List, UserPlus, FolderOpen, GripVertical, Trash2 } from "lucide-react";
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { useSortable } from '@dnd-kit/sortable';
@@ -32,6 +32,7 @@ import { OrganizationContactsModal } from "@/components/organization-contacts-mo
 import { GoogleDriveLinks } from "@/components/google-drive-links";
 import { ProposalManagement } from "@/components/proposal-management";
 import { LiveDiseaseFreeProposal } from "@/components/live-disease-free-proposal";
+import { RestoreDeletedItems } from "@/components/restore-deleted-items";
 import type { Project, Task, Service, User, Organization } from "@shared/schema";
 
 export default function AdminDashboard() {
@@ -460,6 +461,14 @@ export default function AdminDashboard() {
                 <Building2 className="h-4 w-4" />
                 Organizations
               </Button>
+              <Button
+                variant="outline"
+                onClick={() => setActiveTab("deleted")}
+                className="flex items-center gap-2"
+              >
+                <Settings className="h-4 w-4" />
+                Restore Items
+              </Button>
               <Badge variant="secondary">Admin</Badge>
               <div className="text-right">
                 <p className="text-sm font-medium text-gray-900">
@@ -481,13 +490,14 @@ export default function AdminDashboard() {
       {/* Main Content */}
       <div className="p-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-6">
+          <TabsList className="grid w-full grid-cols-7">
             <TabsTrigger value="projects">Projects</TabsTrigger>
             <TabsTrigger value="proposals">Proposals</TabsTrigger>
             <TabsTrigger value="tasks">Tasks</TabsTrigger>
             <TabsTrigger value="clients">Clients</TabsTrigger>
             <TabsTrigger value="organizations">Organizations</TabsTrigger>
             <TabsTrigger value="services">Services</TabsTrigger>
+            <TabsTrigger value="deleted">Deleted Items</TabsTrigger>
           </TabsList>
 
           <TabsContent value="projects" className="space-y-6">
@@ -980,6 +990,15 @@ export default function AdminDashboard() {
                 ))}
               </div>
             )}
+          </TabsContent>
+
+          <TabsContent value="deleted" className="space-y-6">
+            <div className="flex justify-between items-center">
+              <h2 className="text-xl font-semibold text-gray-900">Deleted Items</h2>
+              <p className="text-gray-600">Restore accidentally deleted items</p>
+            </div>
+            
+            <RestoreDeletedItems />
           </TabsContent>
         </Tabs>
       </div>
