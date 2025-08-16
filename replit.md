@@ -95,6 +95,8 @@ UI preferences: Clean, functional interfaces without promotional or instructiona
 - **Navigation Enhancement**: Fixed Organizations button to navigate directly to Business Organizations tab
 - **View Options**: Added tile/grid and list view toggle for business organizations display
 - **Direct Organization Editing**: Added hover-to-edit functionality on organization cards in both tile and list views
+- **Organization Contact Management**: Added direct contact assignment/removal from organization cards with dedicated modal
+- **Organization Project Navigation**: Added project count display and direct navigation to projects from organization cards
 - **Organization Update API**: Implemented PUT endpoint for updating organization details without extra navigation steps
 
 ### Potential Integrations

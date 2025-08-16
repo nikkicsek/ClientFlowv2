@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Users, Briefcase, Settings, Eye, Building2, Edit, CheckSquare, Clock, AlertTriangle, Grid3X3, List, UserPlus } from "lucide-react";
+import { Plus, Users, Briefcase, Settings, Eye, Building2, Edit, CheckSquare, Clock, AlertTriangle, Grid3X3, List, UserPlus, FolderOpen } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
@@ -544,6 +544,17 @@ export default function AdminDashboard() {
                           <Button
                             variant="ghost"
                             size="sm"
+                            onClick={() => {
+                              setActiveTab("projects");
+                              // Optional: filter projects by organization in the future
+                            }}
+                            title={`View Projects (${projects?.filter(p => p.organizationId === org.id).length || 0})`}
+                          >
+                            <FolderOpen className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             onClick={() => setViewingOrgContacts(org)}
                             title="Manage Contacts"
                           >
@@ -624,6 +635,17 @@ export default function AdminDashboard() {
                           </div>
                         </div>
                         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setActiveTab("projects");
+                              // Optional: filter projects by organization in the future
+                            }}
+                            title={`View Projects (${projects?.filter(p => p.organizationId === org.id).length || 0})`}
+                          >
+                            <FolderOpen className="h-4 w-4" />
+                          </Button>
                           <Button
                             variant="ghost"
                             size="sm"
