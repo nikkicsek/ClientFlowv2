@@ -49,16 +49,19 @@ export function AgencyTasksModal({ isOpen, onClose, project }: AgencyTasksModalP
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [newAssignee, setNewAssignee] = useState("");
 
-  // Common team member names for quick assignment
-  const teamMembers = [
-    "Sarah (Content Writer)",
-    "Mike (Photographer)", 
-    "Alex (Designer)",
-    "Jamie (Project Manager)",
-    "Taylor (Content Writer)",
-    "Chris (Photographer)",
-    "Sam (Designer)"
-  ];
+  // Get actual team members from the API or provide custom input
+  const { data: teamMembers } = useQuery({
+    queryKey: ["/api/admin/team-members"],
+    queryFn: async () => {
+      try {
+        const response = await apiRequest("GET", "/api/admin/team-members");
+        return response.json();
+      } catch (error) {
+        // If no team members endpoint, return empty array
+        return [];
+      }
+    }
+  });
 
   const { data: tasks, isLoading } = useQuery({
     queryKey: ["/api/projects", project?.id, "tasks"],
@@ -192,9 +195,22 @@ export function AgencyTasksModal({ isOpen, onClose, project }: AgencyTasksModalP
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="unassigned">Unassigned</SelectItem>
-                        {teamMembers.map((member) => (
-                          <SelectItem key={member} value={member}>{member}</SelectItem>
-                        ))}
+                        {teamMembers && teamMembers.length > 0 ? (
+                          teamMembers.map((member: any) => (
+                            <SelectItem key={member.id} value={member.name}>
+                              {member.name} ({member.role})
+                            </SelectItem>
+                          ))
+                        ) : (
+                          <>
+                            <SelectItem value="Custom Team Member">Custom Team Member</SelectItem>
+                            <SelectItem value="Project Manager">Project Manager</SelectItem>
+                            <SelectItem value="Designer">Designer</SelectItem>
+                            <SelectItem value="Developer">Developer</SelectItem>
+                            <SelectItem value="Content Writer">Content Writer</SelectItem>
+                            <SelectItem value="Photographer">Photographer</SelectItem>
+                          </>
+                        )}
                       </SelectContent>
                     </Select>
                   </div>
@@ -324,24 +340,51 @@ export function AgencyTasksModal({ isOpen, onClose, project }: AgencyTasksModalP
             </div>
           </div>
 
-          {/* Team Workload Summary */}
+          {/* Quick Actions */}
           <div className="bg-blue-50 p-4 rounded-lg">
-            <h4 className="font-medium text-blue-900 mb-2 flex items-center gap-2">
-              <BarChart3 className="h-4 w-4" />
-              Team Workload Summary
+            <h4 className="font-medium text-blue-900 mb-3 flex items-center gap-2">
+              <Target className="h-4 w-4" />
+              Quick Actions
             </h4>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-              {teamMembers.map((member) => {
-                const memberTasks = filteredTasks.filter((t: any) => t.assignedToMember === member);
-                const activeTasks = memberTasks.filter((t: any) => t.status === 'in_progress').length;
-                const completedTasks = memberTasks.filter((t: any) => t.status === 'completed').length;
-                return (
-                  <div key={member} className="text-center bg-white p-2 rounded">
-                    <div className="font-medium text-blue-800">{member.split(' (')[0]}</div>
-                    <div className="text-blue-600 text-xs">{activeTasks} active • {completedTasks} done</div>
-                  </div>
-                );
-              })}
+            <div className="flex gap-3 flex-wrap">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => {
+                  // Navigate to create task for this project
+                  onClose();
+                  // Could trigger a create task modal here
+                }}
+                className="bg-white hover:bg-blue-100 border-blue-200"
+              >
+                <CheckSquare className="h-4 w-4 mr-2" />
+                Add Task
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => {
+                  // Navigate to team management
+                  onClose();
+                  // Could trigger team management modal
+                }}
+                className="bg-white hover:bg-blue-100 border-blue-200"
+              >
+                <UserPlus className="h-4 w-4 mr-2" />
+                Manage Team
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => {
+                  // View project details
+                  onClose();
+                }}
+                className="bg-white hover:bg-blue-100 border-blue-200"
+              >
+                <Edit3 className="h-4 w-4 mr-2" />
+                Edit Project
+              </Button>
             </div>
           </div>
 
