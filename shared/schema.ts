@@ -52,10 +52,6 @@ export const users = pgTable("users", {
   jobTitle: varchar("job_title"),
   phone: varchar("phone"),
   address: text("address"),
-  googleAccessToken: text("google_access_token"), // Google OAuth access token
-  googleRefreshToken: text("google_refresh_token"), // Google OAuth refresh token
-  googleTokenExpiry: timestamp("google_token_expiry"), // Token expiration
-  calendarSyncEnabled: boolean("calendar_sync_enabled").default(false), // User preference for calendar sync
   deletedAt: timestamp("deleted_at"),
   deletedBy: varchar("deleted_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
@@ -124,7 +120,6 @@ export const tasks = pgTable("tasks", {
   assigneeRole: varchar("assignee_role"), // "project_manager", "content_writer", "photographer", "designer", "client"
   assignedToMember: varchar("assigned_to_member"), // Specific team member name assignment
   clientVisible: boolean("client_visible").default(true), // Whether client can see this task
-  googleCalendarEventId: varchar("google_calendar_event_id"), // Google Calendar event ID for synced tasks
   deletedAt: timestamp("deleted_at"),
   deletedBy: varchar("deleted_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
