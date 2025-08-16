@@ -101,6 +101,8 @@ UI preferences: Clean, functional interfaces without promotional or instructiona
 - **Project Status Management**: Added dropdown status selector directly on project tiles/list items with pending status option
 - **Drag-and-Drop Reordering**: Implemented project reordering within organizations using @dnd-kit with display_order field
 - **Enhanced Project Views**: Added both grid and list view options for projects with comprehensive list view including Google Drive links
+- **Navigation Streamlined**: Removed "All Projects" tab for organization-based project management approach to handle hundreds of concurrent projects efficiently
+- **Agency Tasks Modal**: Replaced fake team workload data with practical Quick Actions (Add Task, Manage Team, Edit Project)
 
 ### Potential Integrations
 - **Analytics Platforms**: Designed to integrate with marketing tools and analytics services

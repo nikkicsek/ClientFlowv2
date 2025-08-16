@@ -51,7 +51,7 @@ export default function AdminDashboard() {
   const [showAgencyTasks, setShowAgencyTasks] = useState(false);
   const [selectedProjectForTasks, setSelectedProjectForTasks] = useState<Project | null>(null);
   const [showTeamManagement, setShowTeamManagement] = useState(false);
-  const [activeTab, setActiveTab] = useState("projects");
+  const [activeTab, setActiveTab] = useState("organizations");
   const [organizationViewMode, setOrganizationViewMode] = useState<"grid" | "list">("list");
   const [projectViewMode, setProjectViewMode] = useState<"grid" | "list">("list");
   const [editingOrganization, setEditingOrganization] = useState<Organization | null>(null);
@@ -566,128 +566,14 @@ export default function AdminDashboard() {
       {/* Main Content */}
       <div className="p-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-7">
-            <TabsTrigger value="projects">Projects</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-6">
+            <TabsTrigger value="organizations">Organizations</TabsTrigger>
             <TabsTrigger value="proposals">Proposals</TabsTrigger>
             <TabsTrigger value="tasks">Tasks</TabsTrigger>
             <TabsTrigger value="clients">Clients</TabsTrigger>
-            <TabsTrigger value="organizations">Organizations</TabsTrigger>
             <TabsTrigger value="services">Services</TabsTrigger>
             <TabsTrigger value="deleted">Deleted Items</TabsTrigger>
           </TabsList>
-
-          <TabsContent value="projects" className="space-y-6">
-            <div className="flex justify-between items-center">
-              <div>
-                <h2 className="text-xl font-semibold text-gray-900">
-                  {selectedOrgForProjects 
-                    ? `${organizations?.find(org => org.id === selectedOrgForProjects)?.name} Projects` 
-                    : 'All Projects'
-                  }
-                </h2>
-                {selectedOrgForProjects && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setSelectedOrgForProjects(null)}
-                    className="mt-1 text-blue-600 hover:text-blue-700"
-                  >
-                    ← Back to All Projects
-                  </Button>
-                )}
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="flex rounded-md border border-gray-300">
-                  <Button
-                    variant={projectViewMode === "list" ? "default" : "ghost"}
-                    size="sm"
-                    onClick={() => setProjectViewMode("list")}
-                    className="rounded-r-none"
-                  >
-                    <List className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant={projectViewMode === "grid" ? "default" : "ghost"}
-                    size="sm"
-                    onClick={() => setProjectViewMode("grid")}
-                    className="rounded-l-none"
-                  >
-                    <Grid3X3 className="h-4 w-4" />
-                  </Button>
-                </div>
-                <Button 
-                  onClick={() => setShowCreateProject(true)}
-                  className="bg-blue-600 hover:bg-blue-700"
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  New Project
-                </Button>
-              </div>
-            </div>
-
-            {!projects || projects.length === 0 || (selectedOrgForProjects && projects.filter(p => p.organizationId === selectedOrgForProjects).length === 0) ? (
-              <Card>
-                <CardContent className="p-8 text-center">
-                  <Briefcase className="h-16 w-16 mx-auto mb-4 text-gray-400" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">No Projects Yet</h3>
-                  <p className="text-gray-600 mb-4">Create your first client project to get started.</p>
-                  <Button 
-                    onClick={() => setShowCreateProject(true)}
-                    className="bg-blue-600 hover:bg-blue-700"
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Create Project
-                  </Button>
-                </CardContent>
-              </Card>
-            ) : selectedOrgForProjects ? (
-              <DndContext 
-                sensors={sensors}
-                collisionDetection={closestCenter}
-                onDragEnd={handleDragEnd}
-              >
-                <SortableContext 
-                  items={projects.filter(p => p.organizationId === selectedOrgForProjects)
-                    .sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0))
-                    .map(p => p.id)}
-                  strategy={verticalListSortingStrategy}
-                >
-                  {projectViewMode === "grid" ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                      {projects.filter(p => p.organizationId === selectedOrgForProjects)
-                        .sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0))
-                        .map((project: Project) => (
-                          <SortableProjectCard key={project.id} project={project} />
-                        ))}
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {projects.filter(p => p.organizationId === selectedOrgForProjects)
-                        .sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0))
-                        .map((project: Project) => (
-                          <SortableProjectListItem key={project.id} project={project} />
-                        ))}
-                    </div>
-                  )}
-                </SortableContext>
-              </DndContext>
-            ) : (
-              // All Projects view - no drag and drop
-              projectViewMode === "grid" ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {projects.map((project: Project) => (
-                    <SortableProjectCard key={project.id} project={project} />
-                  ))}
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {projects.map((project: Project) => (
-                    <SortableProjectListItem key={project.id} project={project} />
-                  ))}
-                </div>
-              )
-            )}
-          </TabsContent>
 
           <TabsContent value="proposals" className="space-y-6">
             <ProposalManagement />
@@ -703,9 +589,9 @@ export default function AdminDashboard() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setActiveTab("projects")}
+                  onClick={() => setActiveTab("organizations")}
                 >
-                  Create Task
+                  Manage Projects
                 </Button>
               </div>
             </div>
@@ -1024,7 +910,7 @@ export default function AdminDashboard() {
                             size="sm"
                             onClick={() => {
                               setSelectedOrgForProjects(org.id);
-                              setActiveTab("projects");
+                              // Navigate to organization projects;
                             }}
                             title={`View Projects (${projects?.filter(p => p.organizationId === org.id).length || 0})`}
                           >
@@ -1130,7 +1016,7 @@ export default function AdminDashboard() {
                             size="sm"
                             onClick={() => {
                               setSelectedOrgForProjects(org.id);
-                              setActiveTab("projects");
+                              // Navigate to organization projects;
                             }}
                             title={`View Projects (${projects?.filter(p => p.organizationId === org.id).length || 0})`}
                           >
