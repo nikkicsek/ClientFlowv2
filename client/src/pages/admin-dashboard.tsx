@@ -113,6 +113,7 @@ export default function AdminDashboard() {
       return response.json();
     },
     onSuccess: (_, { type }) => {
+      // Invalidate the specific type query
       if (type === 'organizations') {
         queryClient.invalidateQueries({ queryKey: ['/api/admin/organizations'] });
       } else if (type === 'projects') {
@@ -120,6 +121,10 @@ export default function AdminDashboard() {
       } else if (type === 'tasks') {
         queryClient.invalidateQueries({ queryKey: ['/api/admin/tasks'] });
       }
+      
+      // Always invalidate deleted items to refresh the restore tab
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/deleted-items'] });
+      
       setDeletingItem(null);
       toast({ title: "Success", description: "Item moved to deleted items" });
     },
