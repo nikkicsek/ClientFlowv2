@@ -126,7 +126,7 @@ export default function CreateOrganizationTaskModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Add Organization Task - {organizationName}</DialogTitle>
         </DialogHeader>
@@ -150,7 +150,7 @@ export default function CreateOrganizationTaskModal({
               value={formData.description}
               onChange={(e) => handleInputChange('description', e.target.value)}
               placeholder="Detailed description of the administrative task"
-              rows={3}
+              rows={2}
             />
           </div>
 
