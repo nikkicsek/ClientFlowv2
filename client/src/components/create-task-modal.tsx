@@ -9,22 +9,20 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { apiRequest } from "@/lib/queryClient";
-import type { Service } from "@shared/schema";
+
 
 interface CreateTaskModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
   projectId: string;
-  services: Service[];
 }
 
-export default function CreateTaskModal({ isOpen, onClose, onSuccess, projectId, services }: CreateTaskModalProps) {
+export default function CreateTaskModal({ isOpen, onClose, onSuccess, projectId }: CreateTaskModalProps) {
   const { toast } = useToast();
   const [formData, setFormData] = useState({
     title: "",
     description: "",
-    serviceId: "",
     status: "in_progress",
     dueDate: "",
     googleDriveLink: "",
@@ -40,7 +38,6 @@ export default function CreateTaskModal({ isOpen, onClose, onSuccess, projectId,
       setFormData({
         title: "",
         description: "",
-        serviceId: "",
         status: "in_progress",
         dueDate: "",
         googleDriveLink: "",
@@ -81,7 +78,6 @@ export default function CreateTaskModal({ isOpen, onClose, onSuccess, projectId,
     const taskData = {
       title: formData.title,
       description: formData.description || null,
-      serviceId: formData.serviceId || null,
       status: formData.status,
       dueDate: formData.dueDate || null, // Send as string, server will convert
       googleDriveLink: formData.googleDriveLink || null,
@@ -125,23 +121,7 @@ export default function CreateTaskModal({ isOpen, onClose, onSuccess, projectId,
             />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="serviceId">Service Category</Label>
-            <Select value={formData.serviceId} onValueChange={(value) => handleInputChange('serviceId', value)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select a service (optional)" />
-              </SelectTrigger>
-              <SelectContent>
-                {services
-                  .sort((a, b) => a.name.localeCompare(b.name))
-                  .map((service) => (
-                    <SelectItem key={service.id} value={service.id}>
-                      {service.name}
-                    </SelectItem>
-                  ))}
-              </SelectContent>
-            </Select>
-          </div>
+
 
           <div className="space-y-2">
             <Label htmlFor="status">Status</Label>
