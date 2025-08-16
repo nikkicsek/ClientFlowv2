@@ -214,6 +214,21 @@ export const teamMembers = pgTable("team_members", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Individual task assignments - allows multiple team members per task with individual completion status
+export const taskAssignments = pgTable("task_assignments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  taskId: varchar("task_id").notNull().references(() => tasks.id),
+  teamMemberId: varchar("team_member_id").notNull().references(() => teamMembers.id),
+  assignedBy: varchar("assigned_by").notNull().references(() => users.id),
+  isCompleted: boolean("is_completed").default(false), // Individual completion status for this team member
+  completedAt: timestamp("completed_at"),
+  notes: text("notes"), // Individual notes for this assignment
+  estimatedHours: integer("estimated_hours"), // Can be different per team member
+  actualHours: integer("actual_hours"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Proposals table for slide deck and complex proposal management
 export const proposals = pgTable("proposals", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -340,7 +355,7 @@ export const servicesRelations = relations(services, ({ one, many }) => ({
   tasks: many(tasks),
 }));
 
-export const tasksRelations = relations(tasks, ({ one }) => ({
+export const tasksRelations = relations(tasks, ({ one, many }) => ({
   project: one(projects, {
     fields: [tasks.projectId],
     references: [projects.id],
@@ -351,6 +366,26 @@ export const tasksRelations = relations(tasks, ({ one }) => ({
   }),
   assignee: one(users, {
     fields: [tasks.assignedTo],
+    references: [users.id],
+  }),
+  assignments: many(taskAssignments),
+}));
+
+export const teamMembersRelations = relations(teamMembers, ({ many }) => ({
+  assignments: many(taskAssignments),
+}));
+
+export const taskAssignmentsRelations = relations(taskAssignments, ({ one }) => ({
+  task: one(tasks, {
+    fields: [taskAssignments.taskId],
+    references: [tasks.id],
+  }),
+  teamMember: one(teamMembers, {
+    fields: [taskAssignments.teamMemberId],
+    references: [teamMembers.id],
+  }),
+  assignedBy: one(users, {
+    fields: [taskAssignments.assignedBy],
     references: [users.id],
   }),
 }));
@@ -469,6 +504,18 @@ export const insertTaskSchema = createInsertSchema(tasks).omit({
   updatedAt: true,
 });
 
+export const insertTeamMemberSchema = createInsertSchema(teamMembers).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertTaskAssignmentSchema = createInsertSchema(taskAssignments).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export const insertProjectFileSchema = createInsertSchema(projectFiles).omit({
   id: true,
   createdAt: true,
@@ -485,12 +532,6 @@ export const insertMessageSchema = createInsertSchema(messages).omit({
 });
 
 export const insertKpiSchema = createInsertSchema(kpis).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
-
-export const insertTeamMemberSchema = createInsertSchema(teamMembers).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
@@ -552,6 +593,8 @@ export type InsertService = z.infer<typeof insertServiceSchema>;
 export type Service = typeof services.$inferSelect;
 export type InsertTask = z.infer<typeof insertTaskSchema>;
 export type Task = typeof tasks.$inferSelect;
+export type InsertTaskAssignment = z.infer<typeof insertTaskAssignmentSchema>;
+export type TaskAssignment = typeof taskAssignments.$inferSelect;
 export type InsertProjectFile = z.infer<typeof insertProjectFileSchema>;
 export type ProjectFile = typeof projectFiles.$inferSelect;
 export type InsertAnalytics = z.infer<typeof insertAnalyticsSchema>;
