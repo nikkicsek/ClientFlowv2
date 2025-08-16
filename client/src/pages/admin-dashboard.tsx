@@ -25,6 +25,8 @@ import { AgencyTasksModal } from "@/components/agency-tasks-modal";
 import { EditOrganizationModal } from "@/components/edit-organization-modal";
 import { OrganizationContactsModal } from "@/components/organization-contacts-modal";
 import { GoogleDriveLinks } from "@/components/google-drive-links";
+import { ProposalManagement } from "@/components/proposal-management";
+import { LiveDiseaseFreeProposal } from "@/components/live-disease-free-proposal";
 import type { Project, Task, Service, User, Organization } from "@shared/schema";
 
 export default function AdminDashboard() {
@@ -45,6 +47,8 @@ export default function AdminDashboard() {
   const [editingOrganization, setEditingOrganization] = useState<Organization | null>(null);
   const [viewingOrgContacts, setViewingOrgContacts] = useState<Organization | null>(null);
   const [selectedOrgForProjects, setSelectedOrgForProjects] = useState<string | null>(null);
+  const [showLDFProposal, setShowLDFProposal] = useState(false);
+  const [selectedClientForProposal, setSelectedClientForProposal] = useState<{clientId: string, organizationId?: string} | null>(null);
 
   const { data: projects, isLoading: projectsLoading } = useQuery<Project[]>({
     queryKey: ["/api/admin/projects"],
@@ -152,8 +156,9 @@ export default function AdminDashboard() {
       {/* Main Content */}
       <div className="p-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-6">
             <TabsTrigger value="projects">Projects</TabsTrigger>
+            <TabsTrigger value="proposals">Proposals</TabsTrigger>
             <TabsTrigger value="tasks">Tasks</TabsTrigger>
             <TabsTrigger value="clients">Clients</TabsTrigger>
             <TabsTrigger value="organizations">Organizations</TabsTrigger>
@@ -292,6 +297,10 @@ export default function AdminDashboard() {
                 ))}
               </div>
             )}
+          </TabsContent>
+
+          <TabsContent value="proposals" className="space-y-6">
+            <ProposalManagement />
           </TabsContent>
 
           <TabsContent value="tasks" className="space-y-6">

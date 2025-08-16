@@ -38,10 +38,16 @@ import {
   type InsertTeamMember,
   quotes,
   quoteLineItems,
+  proposals,
+  proposalItems,
   type Quote,
   type InsertQuote,
   type QuoteLineItem,
   type InsertQuoteLineItem,
+  type Proposal,
+  type InsertProposal,
+  type ProposalItem,
+  type InsertProposalItem,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, gte, lte, inArray } from "drizzle-orm";
@@ -126,6 +132,15 @@ export interface IStorage {
   convertQuoteToProject(quoteId: string): Promise<Project>;
   getQuoteLineItems(quoteId: string): Promise<QuoteLineItem[]>;
   createQuoteLineItem(lineItem: InsertQuoteLineItem): Promise<QuoteLineItem>;
+  
+  // Proposal operations
+  createProposal(proposal: InsertProposal): Promise<Proposal>;
+  getProposals(): Promise<Proposal[]>;
+  getProposal(id: string): Promise<Proposal | undefined>;
+  updateProposal(id: string, updates: Partial<InsertProposal>): Promise<Proposal>;
+  createProposalItem(item: InsertProposalItem): Promise<ProposalItem>;
+  getProposalItems(proposalId: string): Promise<ProposalItem[]>;
+  updateProposalItem(id: string, updates: Partial<InsertProposalItem>): Promise<ProposalItem>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -637,6 +652,48 @@ export class DatabaseStorage implements IStorage {
   async createQuoteLineItem(lineItem: InsertQuoteLineItem): Promise<QuoteLineItem> {
     const [newLineItem] = await db.insert(quoteLineItems).values(lineItem).returning();
     return newLineItem;
+  }
+
+  // Proposal operations
+  async createProposal(proposalData: InsertProposal): Promise<Proposal> {
+    const [proposal] = await db.insert(proposals).values(proposalData).returning();
+    return proposal;
+  }
+
+  async getProposals(): Promise<Proposal[]> {
+    return db.select().from(proposals).orderBy(desc(proposals.createdAt));
+  }
+
+  async getProposal(id: string): Promise<Proposal | undefined> {
+    const [proposal] = await db.select().from(proposals).where(eq(proposals.id, id));
+    return proposal;
+  }
+
+  async updateProposal(id: string, updates: Partial<InsertProposal>): Promise<Proposal> {
+    const [proposal] = await db
+      .update(proposals)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(proposals.id, id))
+      .returning();
+    return proposal;
+  }
+
+  async createProposalItem(itemData: InsertProposalItem): Promise<ProposalItem> {
+    const [item] = await db.insert(proposalItems).values(itemData).returning();
+    return item;
+  }
+
+  async getProposalItems(proposalId: string): Promise<ProposalItem[]> {
+    return db.select().from(proposalItems).where(eq(proposalItems.proposalId, proposalId));
+  }
+
+  async updateProposalItem(id: string, updates: Partial<InsertProposalItem>): Promise<ProposalItem> {
+    const [item] = await db
+      .update(proposalItems)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(proposalItems.id, id))
+      .returning();
+    return item;
   }
 }
 
