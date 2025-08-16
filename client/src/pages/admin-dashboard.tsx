@@ -4,7 +4,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Users, Briefcase, Settings, Eye, Building2, Edit, CheckSquare, Clock, AlertTriangle, Grid3X3, List, UserPlus, FolderOpen } from "lucide-react";
+import { Plus, Users, Briefcase, Settings, Eye, Building2, Edit, CheckSquare, Clock, AlertTriangle, Grid3X3, List, UserPlus, FolderOpen, GripVertical } from "lucide-react";
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
@@ -50,6 +55,50 @@ export default function AdminDashboard() {
   const [showLDFProposal, setShowLDFProposal] = useState(false);
   const [selectedClientForProposal, setSelectedClientForProposal] = useState<{clientId: string, organizationId?: string} | null>(null);
 
+  // Drag and drop sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  // Update project status mutation
+  const updateProjectStatusMutation = useMutation({
+    mutationFn: async ({ projectId, status }: { projectId: string; status: string }) => {
+      const response = await fetch(`/api/admin/projects/${projectId}/status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+      if (!response.ok) throw new Error('Failed to update project status');
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/projects'] });
+      toast({
+        title: "Project status updated",
+        description: "The project status has been updated successfully.",
+      });
+    },
+  });
+
+  // Reorder projects mutation
+  const reorderProjectsMutation = useMutation({
+    mutationFn: async ({ orgId, projectOrders }: { orgId: string; projectOrders: { id: string; displayOrder: number }[] }) => {
+      const response = await fetch(`/api/admin/organizations/${orgId}/projects/reorder`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectOrders }),
+      });
+      if (!response.ok) throw new Error('Failed to reorder projects');
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/projects'] });
+    },
+  });
+
   const { data: projects, isLoading: projectsLoading } = useQuery<Project[]>({
     queryKey: ["/api/admin/projects"],
   });
@@ -89,11 +138,183 @@ export default function AdminDashboard() {
     });
   };
 
+  // Handle drag end for project reordering
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (active.id !== over?.id && selectedOrgForProjects) {
+      const orgProjects = projects?.filter(p => p.organizationId === selectedOrgForProjects) || [];
+      const sortedProjects = orgProjects.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+      
+      const oldIndex = sortedProjects.findIndex(p => p.id === active.id);
+      const newIndex = sortedProjects.findIndex(p => p.id === over?.id);
+
+      const newOrder = arrayMove(sortedProjects, oldIndex, newIndex);
+      const projectOrders = newOrder.map((project, index) => ({
+        id: project.id,
+        displayOrder: index,
+      }));
+
+      reorderProjectsMutation.mutate({
+        orgId: selectedOrgForProjects,
+        projectOrders,
+      });
+    }
+  };
+
+  // Get status badge variant and color
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'active':
+        return { variant: 'default' as const, label: 'Active' };
+      case 'completed':
+        return { variant: 'default' as const, label: 'Completed' };
+      case 'on_hold':
+        return { variant: 'secondary' as const, label: 'On Hold' };
+      case 'pending':
+        return { variant: 'outline' as const, label: 'Pending' };
+      default:
+        return { variant: 'secondary' as const, label: status };
+    }
+  };
+
   const handleViewAsClient = (projectId: string) => {
     // Store the selected project ID and switch to client view
     localStorage.setItem('adminViewingProject', projectId);
     window.location.href = '/client-view';
   };
+
+  // Sortable project card component
+  function SortableProjectCard({ project }: { project: Project }) {
+    const {
+      attributes,
+      listeners,
+      setNodeRef,
+      transform,
+      transition,
+    } = useSortable({ id: project.id });
+
+    const style = {
+      transform: CSS.Transform.toString(transform),
+      transition,
+    };
+
+    const statusBadge = getStatusBadge(project.status);
+
+    return (
+      <Card 
+        ref={setNodeRef} 
+        style={style} 
+        className="hover:shadow-md transition-shadow"
+      >
+        <CardHeader>
+          <div className="flex justify-between items-start">
+            <div className="flex items-start gap-2 flex-1">
+              {selectedOrgForProjects && (
+                <div 
+                  {...attributes} 
+                  {...listeners}
+                  className="cursor-grab active:cursor-grabbing mt-1"
+                >
+                  <GripVertical className="h-4 w-4 text-gray-400" />
+                </div>
+              )}
+              <div className="flex-1">
+                <CardTitle className="text-lg">{project.name}</CardTitle>
+                <p className="text-sm text-gray-600 mt-1">{project.description}</p>
+              </div>
+            </div>
+            <div className="flex flex-col gap-2">
+              <Select 
+                value={project.status} 
+                onValueChange={(status) => updateProjectStatusMutation.mutate({ projectId: project.id, status })}
+              >
+                <SelectTrigger className="w-32">
+                  <SelectValue>
+                    <Badge variant={statusBadge.variant}>
+                      {statusBadge.label}
+                    </Badge>
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="on_hold">On Hold</SelectItem>
+                  <SelectItem value="completed">Completed</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-600">Progress:</span>
+              <span className="font-medium">{project.progress || 0}%</span>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-2">
+              <div 
+                className="bg-blue-600 h-2 rounded-full" 
+                style={{ width: `${project.progress || 0}%` }}
+              ></div>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-600">Budget:</span>
+              <span className="font-medium">
+                {project.budget ? `$${Number(project.budget).toLocaleString()}` : 'Not set'}
+              </span>
+            </div>
+            
+            <div className="mt-4 pt-4 border-t">
+              <GoogleDriveLinks project={project} />
+            </div>
+            
+            <div className="flex gap-2 mt-4 flex-wrap">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => setEditingProject(project)}
+              >
+                <Settings className="h-3 w-3 mr-1" />
+                Edit
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => {
+                  setSelectedProject(project.id);
+                  setShowCreateTask(true);
+                }}
+              >
+                <Plus className="h-3 w-3 mr-1" />
+                Add Task
+              </Button>
+              <Button 
+                variant="default" 
+                size="sm"
+                onClick={() => {
+                  setSelectedProjectForTasks(project);
+                  setShowAgencyTasks(true);
+                }}
+                className="bg-indigo-600 hover:bg-indigo-700"
+              >
+                <CheckSquare className="h-3 w-3 mr-1" />
+                Agency Tasks
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => handleViewAsClient(project.id)}
+              >
+                <Eye className="h-3 w-3 mr-1" />
+                View as Client
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   if (projectsLoading) {
     return (
@@ -210,92 +431,28 @@ export default function AdminDashboard() {
                 </CardContent>
               </Card>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {(selectedOrgForProjects 
-                  ? projects.filter(p => p.organizationId === selectedOrgForProjects)
-                  : projects
-                ).map((project: Project) => (
-                  <Card key={project.id} className="hover:shadow-md transition-shadow">
-                    <CardHeader>
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <CardTitle className="text-lg">{project.name}</CardTitle>
-                          <p className="text-sm text-gray-600 mt-1">{project.description}</p>
-                        </div>
-                        <Badge variant={project.status === 'active' ? 'default' : 'secondary'}>
-                          {project.status}
-                        </Badge>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-3">
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-600">Progress:</span>
-                          <span className="font-medium">{project.progress || 0}%</span>
-                        </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2">
-                          <div 
-                            className="bg-blue-600 h-2 rounded-full" 
-                            style={{ width: `${project.progress || 0}%` }}
-                          ></div>
-                        </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-600">Budget:</span>
-                          <span className="font-medium">
-                            {project.budget ? `$${Number(project.budget).toLocaleString()}` : 'Not set'}
-                          </span>
-                        </div>
-                        
-                        <div className="mt-4 pt-4 border-t">
-                          <GoogleDriveLinks project={project} />
-                        </div>
-                        
-                        <div className="flex gap-2 mt-4 flex-wrap">
-                          <Button 
-                            variant="outline" 
-                            size="sm"
-                            onClick={() => setEditingProject(project)}
-                          >
-                            <Settings className="h-3 w-3 mr-1" />
-                            Edit
-                          </Button>
-                          <Button 
-                            variant="outline" 
-                            size="sm"
-                            onClick={() => {
-                              setSelectedProject(project.id);
-                              setShowCreateTask(true);
-                            }}
-                          >
-                            <Plus className="h-3 w-3 mr-1" />
-                            Add Task
-                          </Button>
-                          <Button 
-                            variant="default" 
-                            size="sm"
-                            onClick={() => {
-                              setSelectedProjectForTasks(project);
-                              setShowAgencyTasks(true);
-                            }}
-                            className="bg-indigo-600 hover:bg-indigo-700"
-                          >
-                            <CheckSquare className="h-3 w-3 mr-1" />
-                            Agency Tasks
-                          </Button>
-                          <Button 
-                            variant="outline" 
-                            size="sm"
-                            onClick={() => handleViewAsClient(project.id)}
-                          >
-                            <Eye className="h-3 w-3 mr-1" />
-                            View as Client
-                          </Button>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
+              <DndContext 
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
+              >
+                <SortableContext 
+                  items={(selectedOrgForProjects 
+                    ? projects.filter(p => p.organizationId === selectedOrgForProjects).sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0))
+                    : projects
+                  ).map(p => p.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {(selectedOrgForProjects 
+                      ? projects.filter(p => p.organizationId === selectedOrgForProjects).sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0))
+                      : projects
+                    ).map((project: Project) => (
+                      <SortableProjectCard key={project.id} project={project} />
+                    ))}
+                  </div>
+                </SortableContext>
+              </DndContext>
             )}
           </TabsContent>
 

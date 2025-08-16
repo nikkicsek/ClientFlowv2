@@ -75,6 +75,7 @@ export interface IStorage {
   getProject(id: string): Promise<Project | undefined>;
   createProject(project: InsertProject): Promise<Project>;
   updateProject(id: string, updates: Partial<InsertProject>): Promise<Project>;
+  updateProjectOrder(organizationId: string, projectOrders: { id: string; displayOrder: number }[]): Promise<void>;
   
   // Service category operations
   getServiceCategories(): Promise<ServiceCategory[]>;
@@ -205,6 +206,16 @@ export class DatabaseStorage implements IStorage {
       .where(eq(projects.id, id))
       .returning();
     return updatedProject;
+  }
+
+  async updateProjectOrder(organizationId: string, projectOrders: { id: string; displayOrder: number }[]): Promise<void> {
+    // Update display order for each project
+    for (const { id, displayOrder } of projectOrders) {
+      await db
+        .update(projects)
+        .set({ displayOrder, updatedAt: new Date() })
+        .where(and(eq(projects.id, id), eq(projects.organizationId, organizationId)));
+    }
   }
 
   // Service category operations
