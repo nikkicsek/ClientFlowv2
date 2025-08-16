@@ -33,6 +33,7 @@ import { GoogleDriveLinks } from "@/components/google-drive-links";
 import { ProposalManagement } from "@/components/proposal-management";
 import { LiveDiseaseFreeProposal } from "@/components/live-disease-free-proposal";
 import { RestoreDeletedItems } from "@/components/restore-deleted-items";
+import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog";
 import type { Project, Task, Service, User, Organization } from "@shared/schema";
 
 export default function AdminDashboard() {
@@ -56,6 +57,7 @@ export default function AdminDashboard() {
   const [selectedOrgForProjects, setSelectedOrgForProjects] = useState<string | null>(null);
   const [showLDFProposal, setShowLDFProposal] = useState(false);
   const [selectedClientForProposal, setSelectedClientForProposal] = useState<{clientId: string, organizationId?: string} | null>(null);
+  const [deletingItem, setDeletingItem] = useState<{type: string, id: string, name: string} | null>(null);
 
   // Drag and drop sensors
   const sensors = useSensors(
@@ -101,6 +103,32 @@ export default function AdminDashboard() {
     },
   });
 
+  // Delete item mutation
+  const deleteItemMutation = useMutation({
+    mutationFn: async ({ type, id }: { type: string; id: string }) => {
+      const response = await fetch(`/api/${type}/${id}/soft`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) throw new Error(`Failed to delete ${type}`);
+      return response.json();
+    },
+    onSuccess: (_, { type }) => {
+      if (type === 'organizations') {
+        queryClient.invalidateQueries({ queryKey: ['/api/admin/organizations'] });
+      } else if (type === 'projects') {
+        queryClient.invalidateQueries({ queryKey: ['/api/admin/projects'] });
+      } else if (type === 'tasks') {
+        queryClient.invalidateQueries({ queryKey: ['/api/admin/tasks'] });
+      }
+      setDeletingItem(null);
+      toast({ title: "Success", description: "Item moved to deleted items" });
+    },
+    onError: (error) => {
+      console.error('Delete error:', error);
+      toast({ title: "Error", description: "Failed to delete item", variant: "destructive" });
+    }
+  });
+
   const { data: projects, isLoading: projectsLoading } = useQuery<Project[]>({
     queryKey: ["/api/admin/projects"],
   });
@@ -138,6 +166,15 @@ export default function AdminDashboard() {
       title: "Task Created",
       description: "New task has been added to the project.",
     });
+  };
+
+  const handleDeleteConfirm = () => {
+    if (deletingItem) {
+      deleteItemMutation.mutate({
+        type: deletingItem.type,
+        id: deletingItem.id
+      });
+    }
   };
 
   // Handle drag end for project reordering
@@ -311,6 +348,15 @@ export default function AdminDashboard() {
                 <Eye className="h-3 w-3 mr-1" />
                 View as Client
               </Button>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => setDeletingItem({ type: 'projects', id: project.id, name: project.name })}
+                className="text-red-600 hover:text-red-700 border-red-300 hover:border-red-400"
+              >
+                <Trash2 className="h-3 w-3 mr-1" />
+                Delete
+              </Button>
             </div>
           </div>
         </CardContent>
@@ -414,6 +460,15 @@ export default function AdminDashboard() {
               title="View as Client"
             >
               <Eye className="h-4 w-4" />
+            </Button>
+            <Button 
+              variant="ghost" 
+              size="sm"
+              onClick={() => setDeletingItem({ type: 'projects', id: project.id, name: project.name })}
+              title="Delete Project"
+              className="text-red-600 hover:text-red-700"
+            >
+              <Trash2 className="h-4 w-4" />
             </Button>
           </div>
         </div>
@@ -672,10 +727,21 @@ export default function AdminDashboard() {
                             )}
                           </div>
                         </div>
-                        <div className="text-right text-sm text-gray-500">
-                          {task.createdAt && (
-                            <p>Created: {new Date(task.createdAt).toLocaleDateString()}</p>
-                          )}
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setDeletingItem({ type: 'tasks', id: task.id, name: task.title })}
+                            title="Delete Task"
+                            className="text-red-600 hover:text-red-700"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                          <div className="text-right text-sm text-gray-500">
+                            {task.createdAt && (
+                              <p>Created: {new Date(task.createdAt).toLocaleDateString()}</p>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </CardContent>
@@ -834,6 +900,15 @@ export default function AdminDashboard() {
                           >
                             <Edit className="h-4 w-4" />
                           </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setDeletingItem({ type: 'organizations', id: org.id, name: org.name })}
+                            title="Delete Organization"
+                            className="text-red-600 hover:text-red-700"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         </div>
                       </div>
                       
@@ -930,6 +1005,15 @@ export default function AdminDashboard() {
                             title="Edit Organization"
                           >
                             <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setDeletingItem({ type: 'organizations', id: org.id, name: org.name })}
+                            title="Delete Organization"
+                            className="text-red-600 hover:text-red-700"
+                          >
+                            <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
                       </div>
@@ -1059,6 +1143,17 @@ export default function AdminDashboard() {
         organization={viewingOrgContacts}
         isOpen={!!viewingOrgContacts}
         onClose={() => setViewingOrgContacts(null)}
+      />
+
+      <DeleteConfirmationDialog
+        isOpen={!!deletingItem}
+        onClose={() => setDeletingItem(null)}
+        onConfirm={handleDeleteConfirm}
+        title={`Delete ${deletingItem?.type?.slice(0, -1) || 'Item'}`}
+        description={`This ${deletingItem?.type?.slice(0, -1) || 'item'} will be moved to deleted items and can be restored.`}
+        itemName={deletingItem?.name || ''}
+        itemType={deletingItem?.type?.slice(0, -1) || 'item'}
+        isLoading={deleteItemMutation.isPending}
       />
 
     </div>
