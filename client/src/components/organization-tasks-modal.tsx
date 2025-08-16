@@ -16,7 +16,8 @@ import {
   Target,
   Plus,
   Users,
-  Building2
+  Building2,
+  ExternalLink
 } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
@@ -241,6 +242,17 @@ export function OrganizationTasksModal({ isOpen, onClose, organization, services
                               <Calendar className="h-4 w-4" />
                               Due: {new Date(task.dueDate).toLocaleDateString()}
                             </div>
+                          )}
+                          {task.googleDriveLink && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-6 text-xs"
+                              onClick={() => window.open(task.googleDriveLink, '_blank')}
+                            >
+                              <ExternalLink className="h-3 w-3 mr-1" />
+                              Google Drive
+                            </Button>
                           )}
                         </div>
 

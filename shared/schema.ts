@@ -113,6 +113,7 @@ export const tasks = pgTable("tasks", {
   priority: varchar("priority").default("medium"), // "low", "medium", "high", "urgent"
   taskType: varchar("task_type").default("standard"), // "standard", "milestone", "review", "approval"
   taskScope: varchar("task_scope").default("project"), // "project", "organization"
+  googleDriveLink: text("google_drive_link"), // Optional link to Google Drive files
   dependencies: text("dependencies").array(), // Array of task IDs that must be completed first
   estimatedHours: integer("estimated_hours"),
   actualHours: integer("actual_hours"),
