@@ -1403,6 +1403,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         taskScope: 'organization',
         projectId: null,
         serviceId: null, // Organization tasks don't require service
+        dueDate: req.body.dueDate ? new Date(req.body.dueDate) : null,
       };
 
       console.log("Task data for validation:", taskData);
