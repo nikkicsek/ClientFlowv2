@@ -473,19 +473,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Only admins can update task assignments" });
       }
 
-      const updates = { ...req.body };
+      const updates: any = {};
       
-      // If marking as completed, set completed timestamp
-      if (updates.isCompleted && !updates.completedAt) {
-        updates.completedAt = new Date();
+      // Only copy non-undefined values from request body
+      Object.keys(req.body).forEach(key => {
+        if (req.body[key] !== undefined) {
+          updates[key] = req.body[key];
+        }
+      });
+      
+      // Handle completion status logic
+      if ('isCompleted' in updates) {
+        if (updates.isCompleted === true && !updates.completedAt) {
+          updates.completedAt = new Date();
+        } else if (updates.isCompleted === false) {
+          updates.completedAt = null;
+        }
       }
       
-      // If marking as not completed, clear completed timestamp
-      if (updates.isCompleted === false) {
-        updates.completedAt = null;
-      }
-      
-      // Ensure updatedAt is set to current timestamp
+      // Always set updatedAt to current timestamp
       updates.updatedAt = new Date();
 
       const assignment = await storage.updateTaskAssignment(req.params.id, updates);
