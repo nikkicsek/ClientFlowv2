@@ -198,7 +198,7 @@ export const taskTemplates = pgTable("task_templates", {
   dayOffset: integer("day_offset").default(0), // Days from project start
   dependsOnTemplateId: varchar("depends_on_template_id"), // Self-reference for dependencies
   clientVisible: boolean("client_visible").default(true),
-  assigneeRole: varchar("assignee_role"), // "content_writer", "photographer", "designer", "project_manager", "ghl_lead", "strategist"
+  assigneeRole: varchar("assignee_role"), // "content_writer", "photographer", "designer", "project_manager", "ghl_lead", "strategist", "finance"
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -207,7 +207,7 @@ export const teamMembers = pgTable("team_members", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
   email: text("email").notNull().unique(),
-  role: varchar("role").notNull(), // "project_manager", "content_writer", "photographer", "designer", "ghl_lead", "strategist"
+  role: varchar("role").notNull(), // "project_manager", "content_writer", "photographer", "designer", "ghl_lead", "strategist", "finance"
   isActive: boolean("is_active").default(true),
   profileImageUrl: text("profile_image_url"),
   phoneNumber: text("phone_number"),
