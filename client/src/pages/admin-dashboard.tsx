@@ -346,7 +346,8 @@ export default function AdminDashboard() {
               <div 
                 {...attributes} 
                 {...listeners}
-                className="cursor-grab active:cursor-grabbing"
+                className="cursor-grab active:cursor-grabbing p-1 hover:bg-gray-100 rounded"
+                title="Drag to reorder"
               >
                 <GripVertical className="h-4 w-4 text-gray-400" />
               </div>
