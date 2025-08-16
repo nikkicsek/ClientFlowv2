@@ -1,14 +1,16 @@
 import { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
-import type { Service } from '@shared/schema';
+import { Users, X } from 'lucide-react';
+import type { Service, TeamMember } from '@shared/schema';
 
 interface CreateOrganizationTaskModalProps {
   isOpen: boolean;
@@ -33,10 +35,17 @@ export default function CreateOrganizationTaskModal({
   const [formData, setFormData] = useState({
     title: "",
     description: "",
-    serviceId: "",
     status: "in_progress",
     priority: "medium",
     dueDate: "",
+  });
+  
+  const [selectedTeamMembers, setSelectedTeamMembers] = useState<string[]>([]);
+
+  // Fetch team members for assignment
+  const { data: teamMembers = [] } = useQuery<TeamMember[]>({
+    queryKey: ["/api/team-members"],
+    enabled: isOpen,
   });
 
   const createTaskMutation = useMutation({
@@ -44,16 +53,33 @@ export default function CreateOrganizationTaskModal({
       const response = await apiRequest("POST", `/api/organizations/${organizationId}/tasks`, data);
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: async (newTask) => {
+      // Assign selected team members to the task
+      if (selectedTeamMembers.length > 0) {
+        for (const memberId of selectedTeamMembers) {
+          try {
+            await apiRequest("POST", "/api/task-assignments", {
+              taskId: newTask.id,
+              teamMemberId: memberId,
+            });
+          } catch (error) {
+            console.error("Error assigning team member:", error);
+          }
+        }
+      }
+      
+      queryClient.invalidateQueries({ queryKey: ["/api/organizations", organizationId, "tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/task-assignments"] });
+      
       onSuccess();
       setFormData({
         title: "",
         description: "",
-        serviceId: "",
         status: "in_progress",
         priority: "medium",
         dueDate: "",
       });
+      setSelectedTeamMembers([]);
       toast({
         title: "Organization Task Created",
         description: `Task created for ${organizationName}`,
@@ -83,7 +109,6 @@ export default function CreateOrganizationTaskModal({
     const taskData = {
       title: formData.title,
       description: formData.description || null,
-      serviceId: formData.serviceId || null,
       status: formData.status,
       priority: formData.priority,
       dueDate: formData.dueDate || null,
@@ -126,20 +151,53 @@ export default function CreateOrganizationTaskModal({
             />
           </div>
 
+          {/* Team Member Assignment */}
           <div className="space-y-2">
-            <Label htmlFor="serviceId">Service Category</Label>
-            <Select value={formData.serviceId} onValueChange={(value) => handleInputChange('serviceId', value)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select a service (optional)" />
-              </SelectTrigger>
-              <SelectContent>
-                {services.map((service) => (
-                  <SelectItem key={service.id} value={service.id}>
-                    {service.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label className="flex items-center gap-2">
+              <Users className="w-4 h-4" />
+              Assign Team Members
+            </Label>
+            <div className="space-y-2">
+              <Select
+                value=""
+                onValueChange={(memberId) => {
+                  if (memberId && !selectedTeamMembers.includes(memberId)) {
+                    setSelectedTeamMembers([...selectedTeamMembers, memberId]);
+                  }
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Add team member" />
+                </SelectTrigger>
+                <SelectContent>
+                  {teamMembers
+                    .filter((member) => !selectedTeamMembers.includes(member.id))
+                    .map((member) => (
+                      <SelectItem key={member.id} value={member.id}>
+                        {member.name} ({member.role})
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+              
+              {selectedTeamMembers.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {selectedTeamMembers.map((memberId) => {
+                    const member = teamMembers.find((m) => m.id === memberId);
+                    if (!member) return null;
+                    return (
+                      <Badge key={member.id} variant="secondary" className="flex items-center gap-1">
+                        {member.name}
+                        <X
+                          className="w-3 h-3 cursor-pointer hover:text-red-500"
+                          onClick={() => setSelectedTeamMembers(prev => prev.filter(id => id !== memberId))}
+                        />
+                      </Badge>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
