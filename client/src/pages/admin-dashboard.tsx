@@ -850,33 +850,134 @@ export default function AdminDashboard() {
           <TabsContent value="organizations" className="space-y-6">
             <div className="flex justify-between items-center">
               <div>
-                <h2 className="text-xl font-semibold text-gray-900">Business Organizations</h2>
-                <p className="text-gray-600">Manage client business entities</p>
+                <h2 className="text-xl font-semibold text-gray-900">
+                  {selectedOrgForProjects 
+                    ? `${organizations?.find(org => org.id === selectedOrgForProjects)?.name} Projects` 
+                    : 'Business Organizations'
+                  }
+                </h2>
+                <p className="text-gray-600">
+                  {selectedOrgForProjects 
+                    ? 'Manage projects for this organization'
+                    : 'Manage client business entities'
+                  }
+                </p>
+                {selectedOrgForProjects && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSelectedOrgForProjects(null)}
+                    className="mt-1 text-blue-600 hover:text-blue-700"
+                  >
+                    ← Back to Organizations
+                  </Button>
+                )}
               </div>
               <div className="flex items-center gap-2">
-                <div className="flex items-center border rounded-lg">
-                  <Button
-                    variant={organizationViewMode === "grid" ? "default" : "ghost"}
-                    size="sm"
-                    onClick={() => setOrganizationViewMode("grid")}
-                    className="rounded-r-none"
-                  >
-                    <Grid3X3 className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant={organizationViewMode === "list" ? "default" : "ghost"}
-                    size="sm"
-                    onClick={() => setOrganizationViewMode("list")}
-                    className="rounded-l-none"
-                  >
-                    <List className="h-4 w-4" />
-                  </Button>
-                </div>
-                <OrganizationManagementModal />
+                {selectedOrgForProjects ? (
+                  <>
+                    <div className="flex items-center border rounded-lg">
+                      <Button
+                        variant={projectViewMode === "list" ? "default" : "ghost"}
+                        size="sm"
+                        onClick={() => setProjectViewMode("list")}
+                        className="rounded-r-none"
+                      >
+                        <List className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant={projectViewMode === "grid" ? "default" : "ghost"}
+                        size="sm"
+                        onClick={() => setProjectViewMode("grid")}
+                        className="rounded-l-none"
+                      >
+                        <Grid3X3 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <Button 
+                      onClick={() => setShowCreateProject(true)}
+                      className="bg-blue-600 hover:bg-blue-700"
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      New Project
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex items-center border rounded-lg">
+                      <Button
+                        variant={organizationViewMode === "grid" ? "default" : "ghost"}
+                        size="sm"
+                        onClick={() => setOrganizationViewMode("grid")}
+                        className="rounded-r-none"
+                      >
+                        <Grid3X3 className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant={organizationViewMode === "list" ? "default" : "ghost"}
+                        size="sm"
+                        onClick={() => setOrganizationViewMode("list")}
+                        className="rounded-l-none"
+                      >
+                        <List className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <OrganizationManagementModal />
+                  </>
+                )}
               </div>
             </div>
 
-            {!organizations || organizations.length === 0 ? (
+            {selectedOrgForProjects ? (
+              // Show projects for selected organization
+              !projects || projects.filter(p => p.organizationId === selectedOrgForProjects).length === 0 ? (
+                <Card>
+                  <CardContent className="p-8 text-center">
+                    <Briefcase className="h-16 w-16 mx-auto mb-4 text-gray-400" />
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">No Projects Yet</h3>
+                    <p className="text-gray-600 mb-4">Create your first project for this organization.</p>
+                    <Button 
+                      onClick={() => setShowCreateProject(true)}
+                      className="bg-blue-600 hover:bg-blue-700"
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Create Project
+                    </Button>
+                  </CardContent>
+                </Card>
+              ) : (
+                <DndContext 
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleDragEnd}
+                >
+                  <SortableContext 
+                    items={projects.filter(p => p.organizationId === selectedOrgForProjects)
+                      .sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0))
+                      .map(p => p.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    {projectViewMode === "grid" ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {projects.filter(p => p.organizationId === selectedOrgForProjects)
+                          .sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0))
+                          .map((project: Project) => (
+                            <SortableProjectCard key={project.id} project={project} />
+                          ))}
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {projects.filter(p => p.organizationId === selectedOrgForProjects)
+                          .sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0))
+                          .map((project: Project) => (
+                            <SortableProjectListItem key={project.id} project={project} />
+                          ))}
+                      </div>
+                    )}
+                  </SortableContext>
+                </DndContext>
+              )
+            ) : !organizations || organizations.length === 0 ? (
               <Card>
                 <CardContent className="p-8 text-center">
                   <Building2 className="h-16 w-16 mx-auto mb-4 text-gray-400" />
