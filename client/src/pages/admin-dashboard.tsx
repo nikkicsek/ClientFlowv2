@@ -523,6 +523,14 @@ export default function AdminDashboard() {
             <div className="flex items-center gap-4">
               <Button
                 variant="outline"
+                onClick={() => window.location.href = '/my-tasks'}
+                className="flex items-center gap-2"
+              >
+                <CheckSquare className="h-4 w-4" />
+                My Tasks
+              </Button>
+              <Button
+                variant="outline"
                 onClick={() => setShowTeamManagement(true)}
                 className="flex items-center gap-2"
               >

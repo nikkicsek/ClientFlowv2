@@ -10,6 +10,7 @@ import AdminDashboard from "@/pages/admin-dashboard";
 import ClientView from "@/pages/client-view";
 import NotFound from "@/pages/not-found";
 import InvitationPage from "@/pages/invitation-page";
+import { MyTasksPage } from "@/pages/my-tasks";
 
 function Router() {
   const { user, isAuthenticated, isLoading } = useAuth();
@@ -28,6 +29,7 @@ function Router() {
       ) : (
         <>
           <Route path="/client-view" component={ClientView} />
+          <Route path="/my-tasks" component={MyTasksPage} />
           {(user as any)?.role === 'admin' ? (
             <>
               <Route path="/" component={AdminDashboard} />

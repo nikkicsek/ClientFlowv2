@@ -305,6 +305,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Task assignment routes
+  // Get assignments for a specific team member (team members can view their own)
+  app.get('/api/team-members/:teamMemberId/assignments', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      const { teamMemberId } = req.params;
+      
+      // Check if user is admin or the team member themselves
+      const teamMember = await storage.getTeamMember(teamMemberId);
+      if (!teamMember) {
+        return res.status(404).json({ message: "Team member not found" });
+      }
+      
+      // Allow access if user is admin or if the team member's email matches the user's email
+      if (user?.role !== 'admin' && user?.email !== teamMember.email) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const assignments = await storage.getTaskAssignmentsByTeamMember(teamMemberId);
+      res.json(assignments);
+    } catch (error) {
+      console.error("Error fetching team member assignments:", error);
+      res.status(500).json({ message: "Failed to fetch assignments" });
+    }
+  });
+
+  // Update task assignment (team members can update their own)
+  app.put('/api/task-assignments/:assignmentId', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      const { assignmentId } = req.params;
+      const updates = req.body;
+      
+      // Get the assignment to check ownership
+      const assignments = await storage.getAllTaskAssignments();
+      const assignment = assignments.find((a: any) => a.id === assignmentId);
+      
+      if (!assignment) {
+        return res.status(404).json({ message: "Assignment not found" });
+      }
+      
+      // Allow access if user is admin or if the assignment belongs to a team member with matching email
+      if (user?.role !== 'admin' && user?.email !== assignment.teamMember.email) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const updatedAssignment = await storage.updateTaskAssignment(assignmentId, updates);
+      res.json(updatedAssignment);
+    } catch (error) {
+      console.error("Error updating task assignment:", error);
+      res.status(500).json({ message: "Failed to update assignment" });
+    }
+  });
+
   app.get('/api/admin/task-assignments', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
