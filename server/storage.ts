@@ -71,7 +71,7 @@ export interface IStorage {
   
   // Project operations
   getProjectsByClient(clientId: string): Promise<Project[]>;
-  getAllProjects(): Promise<Project[]>;
+  getAllProjects(): Promise<(Project & { organization?: Organization })[]>;
   getProject(id: string): Promise<Project | undefined>;
   createProject(project: InsertProject): Promise<Project>;
   updateProject(id: string, updates: Partial<InsertProject>): Promise<Project>;
@@ -204,8 +204,21 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(projects).where(and(eq(projects.clientId, clientId), isNull(projects.deletedAt))).orderBy(desc(projects.createdAt));
   }
 
-  async getAllProjects(): Promise<Project[]> {
-    return db.select().from(projects).where(isNull(projects.deletedAt)).orderBy(desc(projects.createdAt));
+  async getAllProjects(): Promise<(Project & { organization?: Organization })[]> {
+    const result = await db
+      .select({
+        project: projects,
+        organization: organizations,
+      })
+      .from(projects)
+      .leftJoin(organizations, eq(projects.organizationId, organizations.id))
+      .where(isNull(projects.deletedAt))
+      .orderBy(desc(projects.createdAt));
+
+    return result.map(({ project, organization }) => ({
+      ...project,
+      organization: organization || undefined,
+    }));
   }
 
   async getProject(id: string): Promise<Project | undefined> {
