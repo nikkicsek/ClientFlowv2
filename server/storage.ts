@@ -50,7 +50,7 @@ import {
   type InsertProposalItem,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and, gte, lte, inArray } from "drizzle-orm";
+import { eq, desc, and, gte, lte, inArray, isNull, isNotNull } from "drizzle-orm";
 
 export interface IStorage {
   // User operations (required for Replit Auth)
@@ -142,6 +142,25 @@ export interface IStorage {
   createProposalItem(item: InsertProposalItem): Promise<ProposalItem>;
   getProposalItems(proposalId: string): Promise<ProposalItem[]>;
   updateProposalItem(id: string, updates: Partial<InsertProposalItem>): Promise<ProposalItem>;
+
+  // Soft delete operations
+  softDeleteOrganization(id: string, deletedBy: string): Promise<void>;
+  softDeleteUser(id: string, deletedBy: string): Promise<void>;
+  softDeleteProject(id: string, deletedBy: string): Promise<void>;
+  softDeleteService(id: string, deletedBy: string): Promise<void>;
+  softDeleteTask(id: string, deletedBy: string): Promise<void>;
+  softDeleteProposal(id: string, deletedBy: string): Promise<void>;
+
+  // Restore operations
+  restoreOrganization(id: string): Promise<void>;
+  restoreUser(id: string): Promise<void>;
+  restoreProject(id: string): Promise<void>;
+  restoreService(id: string): Promise<void>;
+  restoreTask(id: string): Promise<void>;
+  restoreProposal(id: string): Promise<void>;
+
+  // Get deleted items
+  getDeletedItems(): Promise<any[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -177,16 +196,16 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getClientUsers(): Promise<User[]> {
-    return db.select().from(users).where(eq(users.role, 'client'));
+    return db.select().from(users).where(and(eq(users.role, 'client'), isNull(users.deletedAt)));
   }
 
   // Project operations
   async getProjectsByClient(clientId: string): Promise<Project[]> {
-    return db.select().from(projects).where(eq(projects.clientId, clientId)).orderBy(desc(projects.createdAt));
+    return db.select().from(projects).where(and(eq(projects.clientId, clientId), isNull(projects.deletedAt))).orderBy(desc(projects.createdAt));
   }
 
   async getAllProjects(): Promise<Project[]> {
-    return db.select().from(projects).orderBy(desc(projects.createdAt));
+    return db.select().from(projects).where(isNull(projects.deletedAt)).orderBy(desc(projects.createdAt));
   }
 
   async getProject(id: string): Promise<Project | undefined> {
@@ -245,7 +264,7 @@ export class DatabaseStorage implements IStorage {
 
   // Service operations
   async getServices(): Promise<Service[]> {
-    return db.select().from(services).where(eq(services.isActive, true));
+    return db.select().from(services).where(and(eq(services.isActive, true), isNull(services.deletedAt)));
   }
 
   async createService(service: InsertService): Promise<Service> {
@@ -270,7 +289,7 @@ export class DatabaseStorage implements IStorage {
 
   // Task operations
   async getTasksByProject(projectId: string): Promise<Task[]> {
-    return db.select().from(tasks).where(eq(tasks.projectId, projectId)).orderBy(desc(tasks.createdAt));
+    return db.select().from(tasks).where(and(eq(tasks.projectId, projectId), isNull(tasks.deletedAt))).orderBy(desc(tasks.createdAt));
   }
 
   async getTasksByProjectWithDetails(projectId: string): Promise<(Task & { service?: Service })[]> {
@@ -281,7 +300,7 @@ export class DatabaseStorage implements IStorage {
       })
       .from(tasks)
       .leftJoin(services, eq(tasks.serviceId, services.id))
-      .where(eq(tasks.projectId, projectId))
+      .where(and(eq(tasks.projectId, projectId), isNull(tasks.deletedAt)))
       .orderBy(desc(tasks.createdAt));
 
     return result.map(({ task, service }) => ({
@@ -300,6 +319,7 @@ export class DatabaseStorage implements IStorage {
       .from(tasks)
       .leftJoin(services, eq(tasks.serviceId, services.id))
       .leftJoin(projects, eq(tasks.projectId, projects.id))
+      .where(isNull(tasks.deletedAt))
       .orderBy(desc(tasks.createdAt));
 
     return result.map(({ task, service, project }) => ({
@@ -431,7 +451,7 @@ export class DatabaseStorage implements IStorage {
 
   // Organization operations
   async getOrganizations(): Promise<Organization[]> {
-    return db.select().from(organizations).orderBy(desc(organizations.createdAt));
+    return db.select().from(organizations).where(isNull(organizations.deletedAt)).orderBy(desc(organizations.createdAt));
   }
 
   async getOrganization(id: string): Promise<Organization | undefined> {
@@ -454,7 +474,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getOrganizationUsers(organizationId: string): Promise<User[]> {
-    return db.select().from(users).where(eq(users.organizationId, organizationId));
+    return db.select().from(users).where(and(eq(users.organizationId, organizationId), isNull(users.deletedAt)));
   }
 
   async assignUserToOrganization(userId: string, organizationId: string): Promise<User> {
@@ -672,7 +692,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getProposals(): Promise<Proposal[]> {
-    return db.select().from(proposals).orderBy(desc(proposals.createdAt));
+    return db.select().from(proposals).where(isNull(proposals.deletedAt)).orderBy(desc(proposals.createdAt));
   }
 
   async getProposal(id: string): Promise<Proposal | undefined> {
@@ -705,6 +725,217 @@ export class DatabaseStorage implements IStorage {
       .where(eq(proposalItems.id, id))
       .returning();
     return item;
+  }
+
+  // Soft delete operations
+  async softDeleteOrganization(id: string, deletedBy: string): Promise<void> {
+    await db
+      .update(organizations)
+      .set({ deletedAt: new Date(), deletedBy })
+      .where(eq(organizations.id, id));
+  }
+
+  async softDeleteUser(id: string, deletedBy: string): Promise<void> {
+    await db
+      .update(users)
+      .set({ deletedAt: new Date(), deletedBy })
+      .where(eq(users.id, id));
+  }
+
+  async softDeleteProject(id: string, deletedBy: string): Promise<void> {
+    await db
+      .update(projects)
+      .set({ deletedAt: new Date(), deletedBy })
+      .where(eq(projects.id, id));
+  }
+
+  async softDeleteService(id: string, deletedBy: string): Promise<void> {
+    await db
+      .update(services)
+      .set({ deletedAt: new Date(), deletedBy })
+      .where(eq(services.id, id));
+  }
+
+  async softDeleteTask(id: string, deletedBy: string): Promise<void> {
+    await db
+      .update(tasks)
+      .set({ deletedAt: new Date(), deletedBy })
+      .where(eq(tasks.id, id));
+  }
+
+  async softDeleteProposal(id: string, deletedBy: string): Promise<void> {
+    await db
+      .update(proposals)
+      .set({ deletedAt: new Date(), deletedBy })
+      .where(eq(proposals.id, id));
+  }
+
+  // Restore operations
+  async restoreOrganization(id: string): Promise<void> {
+    await db
+      .update(organizations)
+      .set({ deletedAt: null, deletedBy: null })
+      .where(eq(organizations.id, id));
+  }
+
+  async restoreUser(id: string): Promise<void> {
+    await db
+      .update(users)
+      .set({ deletedAt: null, deletedBy: null })
+      .where(eq(users.id, id));
+  }
+
+  async restoreProject(id: string): Promise<void> {
+    await db
+      .update(projects)
+      .set({ deletedAt: null, deletedBy: null })
+      .where(eq(projects.id, id));
+  }
+
+  async restoreService(id: string): Promise<void> {
+    await db
+      .update(services)
+      .set({ deletedAt: null, deletedBy: null })
+      .where(eq(services.id, id));
+  }
+
+  async restoreTask(id: string): Promise<void> {
+    await db
+      .update(tasks)
+      .set({ deletedAt: null, deletedBy: null })
+      .where(eq(tasks.id, id));
+  }
+
+  async restoreProposal(id: string): Promise<void> {
+    await db
+      .update(proposals)
+      .set({ deletedAt: null, deletedBy: null })
+      .where(eq(proposals.id, id));
+  }
+
+  // Get deleted items
+  async getDeletedItems(): Promise<any[]> {
+    const deletedItems: any[] = [];
+
+    // Get deleted organizations
+    const deletedOrganizations = await db
+      .select({
+        id: organizations.id,
+        name: organizations.name,
+        deletedAt: organizations.deletedAt,
+        deletedBy: organizations.deletedBy,
+      })
+      .from(organizations)
+      .where(isNotNull(organizations.deletedAt))
+      .orderBy(desc(organizations.deletedAt));
+
+    deletedItems.push(
+      ...deletedOrganizations.map(item => ({
+        ...item,
+        type: 'organization',
+      }))
+    );
+
+    // Get deleted users (clients)
+    const deletedUsers = await db
+      .select({
+        id: users.id,
+        name: users.firstName,
+        deletedAt: users.deletedAt,
+        deletedBy: users.deletedBy,
+      })
+      .from(users)
+      .where(isNotNull(users.deletedAt))
+      .orderBy(desc(users.deletedAt));
+
+    deletedItems.push(
+      ...deletedUsers.map(item => ({
+        ...item,
+        name: `${item.name} (Client)`,
+        type: 'user',
+      }))
+    );
+
+    // Get deleted projects
+    const deletedProjects = await db
+      .select({
+        id: projects.id,
+        name: projects.name,
+        deletedAt: projects.deletedAt,
+        deletedBy: projects.deletedBy,
+      })
+      .from(projects)
+      .where(isNotNull(projects.deletedAt))
+      .orderBy(desc(projects.deletedAt));
+
+    deletedItems.push(
+      ...deletedProjects.map(item => ({
+        ...item,
+        type: 'project',
+      }))
+    );
+
+    // Get deleted services
+    const deletedServices = await db
+      .select({
+        id: services.id,
+        name: services.name,
+        deletedAt: services.deletedAt,
+        deletedBy: services.deletedBy,
+      })
+      .from(services)
+      .where(isNotNull(services.deletedAt))
+      .orderBy(desc(services.deletedAt));
+
+    deletedItems.push(
+      ...deletedServices.map(item => ({
+        ...item,
+        type: 'service',
+      }))
+    );
+
+    // Get deleted tasks
+    const deletedTasks = await db
+      .select({
+        id: tasks.id,
+        name: tasks.title,
+        deletedAt: tasks.deletedAt,
+        deletedBy: tasks.deletedBy,
+      })
+      .from(tasks)
+      .where(isNotNull(tasks.deletedAt))
+      .orderBy(desc(tasks.deletedAt));
+
+    deletedItems.push(
+      ...deletedTasks.map(item => ({
+        ...item,
+        type: 'task',
+      }))
+    );
+
+    // Get deleted proposals
+    const deletedProposals = await db
+      .select({
+        id: proposals.id,
+        name: proposals.title,
+        deletedAt: proposals.deletedAt,
+        deletedBy: proposals.deletedBy,
+      })
+      .from(proposals)
+      .where(isNotNull(proposals.deletedAt))
+      .orderBy(desc(proposals.deletedAt));
+
+    deletedItems.push(
+      ...deletedProposals.map(item => ({
+        ...item,
+        type: 'proposal',
+      }))
+    );
+
+    // Sort all items by deletion date
+    return deletedItems.sort((a, b) => 
+      new Date(b.deletedAt).getTime() - new Date(a.deletedAt).getTime()
+    );
   }
 }
 
