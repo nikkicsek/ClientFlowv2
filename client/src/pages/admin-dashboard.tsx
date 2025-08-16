@@ -43,106 +43,26 @@ export default function AdminDashboard() {
   const [organizationViewMode, setOrganizationViewMode] = useState<"grid" | "list">("grid");
   const [editingOrganization, setEditingOrganization] = useState<Organization | null>(null);
   const [viewingOrgContacts, setViewingOrgContacts] = useState<Organization | null>(null);
+  const [selectedOrgForProjects, setSelectedOrgForProjects] = useState<string | null>(null);
 
-  const { data: projects, isLoading: projectsLoading } = useQuery({
+  const { data: projects, isLoading: projectsLoading } = useQuery<Project[]>({
     queryKey: ["/api/admin/projects"],
-    queryFn: async () => {
-      const response = await apiRequest("GET", "/api/admin/projects");
-      return response.json();
-    },
-    onError: (error: Error) => {
-      if (isUnauthorizedError(error)) {
-        toast({
-          title: "Unauthorized",
-          description: "You are logged out. Logging in again...",
-          variant: "destructive",
-        });
-        setTimeout(() => {
-          window.location.href = "/api/login";
-        }, 500);
-        return;
-      }
-    },
   });
 
-  const { data: services } = useQuery({
+  const { data: services } = useQuery<Service[]>({
     queryKey: ["/api/services"],
-    onError: (error: Error) => {
-      if (isUnauthorizedError(error)) {
-        toast({
-          title: "Unauthorized",
-          description: "You are logged out. Logging in again...",
-          variant: "destructive",
-        });
-        setTimeout(() => {
-          window.location.href = "/api/login";
-        }, 500);
-        return;
-      }
-    },
   });
 
-  const { data: clients } = useQuery({
+  const { data: clients } = useQuery<User[]>({
     queryKey: ["/api/admin/clients"],
-    queryFn: async () => {
-      const response = await apiRequest("GET", "/api/admin/clients");
-      return response.json();
-    },
-    onError: (error: Error) => {
-      if (isUnauthorizedError(error)) {
-        toast({
-          title: "Unauthorized",
-          description: "You are logged out. Logging in again...",
-          variant: "destructive",
-        });
-        setTimeout(() => {
-          window.location.href = "/api/login";
-        }, 500);
-        return;
-      }
-    },
   });
 
-  const { data: organizations } = useQuery({
+  const { data: organizations } = useQuery<Organization[]>({
     queryKey: ["/api/admin/organizations"],
-    queryFn: async () => {
-      const response = await apiRequest("GET", "/api/admin/organizations");
-      return response.json();
-    },
-    onError: (error: Error) => {
-      if (isUnauthorizedError(error)) {
-        toast({
-          title: "Unauthorized",
-          description: "You are logged out. Logging in again...",
-          variant: "destructive",
-        });
-        setTimeout(() => {
-          window.location.href = "/api/login";
-        }, 500);
-        return;
-      }
-    },
   });
 
-  const { data: allTasks, isLoading: tasksLoading } = useQuery({
+  const { data: allTasks, isLoading: tasksLoading } = useQuery<Task[]>({
     queryKey: ["/api/admin/tasks"],
-    queryFn: async () => {
-      const response = await apiRequest("GET", "/api/admin/tasks");
-      return response.json();
-    },
-    onError: (error: Error) => {
-      if (isUnauthorizedError(error)) {
-        toast({
-          title: "Unauthorized",
-          description: "You are logged out. Logging in again...",
-          variant: "destructive",
-        });
-        setTimeout(() => {
-          window.location.href = "/api/login";
-        }, 500);
-        return;
-      }
-    },
   });
 
   const handleProjectCreated = () => {
@@ -213,7 +133,7 @@ export default function AdminDashboard() {
               <Badge variant="secondary">Admin</Badge>
               <div className="text-right">
                 <p className="text-sm font-medium text-gray-900">
-                  {user?.firstName} {user?.lastName}
+                  {user?.firstName || user?.email} {user?.lastName || ''}
                 </p>
                 <p className="text-xs text-gray-500">{user?.email}</p>
               </div>
@@ -241,7 +161,24 @@ export default function AdminDashboard() {
 
           <TabsContent value="projects" className="space-y-6">
             <div className="flex justify-between items-center">
-              <h2 className="text-xl font-semibold text-gray-900">All Projects</h2>
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900">
+                  {selectedOrgForProjects 
+                    ? `${organizations?.find(org => org.id === selectedOrgForProjects)?.name} Projects` 
+                    : 'All Projects'
+                  }
+                </h2>
+                {selectedOrgForProjects && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSelectedOrgForProjects(null)}
+                    className="mt-1 text-blue-600 hover:text-blue-700"
+                  >
+                    ← Back to All Projects
+                  </Button>
+                )}
+              </div>
               <Button 
                 onClick={() => setShowCreateProject(true)}
                 className="bg-blue-600 hover:bg-blue-700"
@@ -251,7 +188,7 @@ export default function AdminDashboard() {
               </Button>
             </div>
 
-            {!projects || projects.length === 0 ? (
+            {!projects || projects.length === 0 || (selectedOrgForProjects && projects.filter(p => p.organizationId === selectedOrgForProjects).length === 0) ? (
               <Card>
                 <CardContent className="p-8 text-center">
                   <Briefcase className="h-16 w-16 mx-auto mb-4 text-gray-400" />
@@ -268,7 +205,10 @@ export default function AdminDashboard() {
               </Card>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {projects.map((project: Project) => (
+                {(selectedOrgForProjects 
+                  ? projects.filter(p => p.organizationId === selectedOrgForProjects)
+                  : projects
+                ).map((project: Project) => (
                   <Card key={project.id} className="hover:shadow-md transition-shadow">
                     <CardHeader>
                       <div className="flex justify-between items-start">
@@ -545,8 +485,8 @@ export default function AdminDashboard() {
                             variant="ghost"
                             size="sm"
                             onClick={() => {
+                              setSelectedOrgForProjects(org.id);
                               setActiveTab("projects");
-                              // Optional: filter projects by organization in the future
                             }}
                             title={`View Projects (${projects?.filter(p => p.organizationId === org.id).length || 0})`}
                           >
@@ -591,6 +531,9 @@ export default function AdminDashboard() {
                         )}
                         <div>
                           Created: {new Date(org.createdAt).toLocaleDateString()}
+                        </div>
+                        <div className="text-xs text-blue-600">
+                          {projects?.filter(p => p.organizationId === org.id).length || 0} projects
                         </div>
                       </div>
                     </CardContent>
@@ -639,8 +582,8 @@ export default function AdminDashboard() {
                             variant="ghost"
                             size="sm"
                             onClick={() => {
+                              setSelectedOrgForProjects(org.id);
                               setActiveTab("projects");
-                              // Optional: filter projects by organization in the future
                             }}
                             title={`View Projects (${projects?.filter(p => p.organizationId === org.id).length || 0})`}
                           >
