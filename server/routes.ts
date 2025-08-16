@@ -114,6 +114,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Project status update route
+  app.put('/api/admin/projects/:projectId/status', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Only admins can update project status" });
+      }
+
+      const { status } = req.body;
+      if (!status || !['active', 'pending', 'on_hold', 'completed'].includes(status)) {
+        return res.status(400).json({ message: "Invalid status value" });
+      }
+
+      const project = await storage.updateProject(req.params.projectId, { status });
+      res.json(project);
+    } catch (error) {
+      console.error("Error updating project status:", error);
+      res.status(500).json({ message: "Failed to update project status" });
+    }
+  });
+
+  // Project reordering route
+  app.put('/api/admin/organizations/:orgId/projects/reorder', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Only admins can reorder projects" });
+      }
+
+      const { projectOrders } = req.body;
+      if (!Array.isArray(projectOrders)) {
+        return res.status(400).json({ message: "Invalid project orders data" });
+      }
+
+      await storage.updateProjectOrder(req.params.orgId, projectOrders);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error reordering projects:", error);
+      res.status(500).json({ message: "Failed to reorder projects" });
+    }
+  });
+
   // Task routes
   app.get('/api/admin/tasks', isAuthenticated, async (req: any, res) => {
     try {
@@ -748,6 +794,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error updating project Google Drive links:", error);
       res.status(500).json({ message: `Failed to update Google Drive links: ${error.message}` });
+    }
+  });
+
+  // Update project status
+  app.put('/api/admin/projects/:id/status', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Only admins can update project status" });
+      }
+
+      const { status } = req.body;
+      const project = await storage.updateProject(req.params.id, { status, updatedAt: new Date() });
+      res.json(project);
+    } catch (error) {
+      console.error("Error updating project status:", error);
+      res.status(500).json({ message: "Failed to update project status" });
+    }
+  });
+
+  // Reorder projects within an organization
+  app.put('/api/admin/organizations/:orgId/projects/reorder', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Only admins can reorder projects" });
+      }
+
+      const { projectOrders } = req.body; // Array of { id, displayOrder }
+      await storage.updateProjectOrder(req.params.orgId, projectOrders);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error reordering projects:", error);
+      res.status(500).json({ message: "Failed to reorder projects" });
     }
   });
 

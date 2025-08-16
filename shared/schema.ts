@@ -61,11 +61,12 @@ export const projects = pgTable("projects", {
   clientId: varchar("client_id").references(() => users.id),
   organizationId: varchar("organization_id").references(() => organizations.id),
   serviceId: varchar("service_id").references(() => services.id), // Link to service for workflow automation
-  status: varchar("status").notNull().default("active"), // "active", "completed", "on_hold"
+  status: varchar("status").notNull().default("active"), // "active", "completed", "on_hold", "pending"
   startDate: timestamp("start_date"),
   expectedCompletion: timestamp("expected_completion"),
   budget: decimal("budget", { precision: 10, scale: 2 }),
   progress: integer("progress").default(0), // percentage 0-100
+  displayOrder: integer("display_order").default(0), // For drag-and-drop ordering within organizations
   googleDriveFolderId: text("google_drive_folder_id"),
   googleDriveFolderUrl: text("google_drive_folder_url"),
   createdAt: timestamp("created_at").defaultNow(),
