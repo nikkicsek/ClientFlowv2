@@ -635,6 +635,24 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Task assignment operations
+  async getAllTaskAssignments(): Promise<(TaskAssignment & { teamMember: TeamMember; task: Task })[]> {
+    const results = await db
+      .select({
+        assignment: taskAssignments,
+        teamMember: teamMembers,
+        task: tasks,
+      })
+      .from(taskAssignments)
+      .innerJoin(teamMembers, eq(taskAssignments.teamMemberId, teamMembers.id))
+      .innerJoin(tasks, eq(taskAssignments.taskId, tasks.id));
+    
+    return results.map(row => ({
+      ...row.assignment,
+      teamMember: row.teamMember,
+      task: row.task,
+    }));
+  }
+
   async getTaskAssignments(taskId: string): Promise<(TaskAssignment & { teamMember: TeamMember })[]> {
     const results = await db
       .select({

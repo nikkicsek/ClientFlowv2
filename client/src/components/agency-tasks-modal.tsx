@@ -125,31 +125,107 @@ export function AgencyTasksModal({ isOpen, onClose, project }: AgencyTasksModalP
     }
   };
 
-  const TaskCard = ({ task }: { task: any }) => (
-    <Card className="mb-3 hover:shadow-md transition-shadow">
-      <CardContent className="p-4">
-        <div className="flex justify-between items-start mb-3">
-          <div className="flex-1">
-            <div className="flex items-center gap-2 mb-2">
-              {getStatusIcon(task.status)}
-              <h4 className="font-medium text-gray-900">{task.title}</h4>
-              {task.taskType === "milestone" && (
-                <Badge variant="outline" className="text-xs">
-                  <Target className="h-3 w-3 mr-1" />
-                  Milestone
-                </Badge>
-              )}
-              {task.priority === "high" && (
-                <Badge variant="destructive" className="text-xs">High Priority</Badge>
-              )}
-              {task.priority === "urgent" && (
-                <Badge variant="destructive" className="text-xs bg-red-600">URGENT</Badge>
-              )}
-            </div>
+  // Get task assignments to show team member icons
+  const { data: taskAssignments } = useQuery({
+    queryKey: ["/api/admin/task-assignments"],
+    queryFn: async () => {
+      const response = await apiRequest("GET", "/api/admin/task-assignments");
+      return response.json();
+    }
+  });
+
+  const getTaskAssignments = (taskId: string) => {
+    if (!taskAssignments) return [];
+    return taskAssignments.filter((assignment: any) => assignment.taskId === taskId);
+  };
+
+  const getTeamMemberInitials = (name: string) => {
+    return name.split(' ').map(word => word[0]).join('').toUpperCase().slice(0, 2);
+  };
+
+  const getTeamMemberColor = (role: string) => {
+    switch (role) {
+      case "photographer": return "bg-purple-500";
+      case "content_writer": return "bg-blue-500";
+      case "designer": return "bg-pink-500";
+      case "project_manager": return "bg-green-500";
+      case "ghl_lead": return "bg-orange-500";
+      case "strategist": return "bg-indigo-500";
+      default: return "bg-gray-500";
+    }
+  };
+
+  const TaskCard = ({ task }: { task: any }) => {
+    const assignments = getTaskAssignments(task.id);
+    
+    return (
+      <Card className="mb-3 hover:shadow-md transition-shadow">
+        <CardContent className="p-4">
+          <div className="flex justify-between items-start mb-3">
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-2">
+                {getStatusIcon(task.status)}
+                <h4 className="font-medium text-gray-900">{task.title}</h4>
+                {task.taskType === "milestone" && (
+                  <Badge variant="outline" className="text-xs">
+                    <Target className="h-3 w-3 mr-1" />
+                    Milestone
+                  </Badge>
+                )}
+                {task.priority === "high" && (
+                  <Badge variant="destructive" className="text-xs">High Priority</Badge>
+                )}
+                {task.priority === "urgent" && (
+                  <Badge variant="destructive" className="text-xs bg-red-600">URGENT</Badge>
+                )}
+                
+                {/* Team Member Assignment Icons */}
+                {assignments.length > 0 && (
+                  <div className="flex items-center gap-1 ml-2">
+                    {assignments.slice(0, 3).map((assignment: any, index: number) => (
+                      <div
+                        key={assignment.id}
+                        className={`relative w-6 h-6 rounded-full ${getTeamMemberColor(assignment.teamMember.role)} text-white text-xs flex items-center justify-center font-medium`}
+                        title={`${assignment.teamMember.name} (${assignment.teamMember.role.replace('_', ' ')})${assignment.isCompleted ? ' - Completed' : ''}`}
+                        style={{ zIndex: 10 - index }}
+                      >
+                        {getTeamMemberInitials(assignment.teamMember.name)}
+                        {assignment.isCompleted && (
+                          <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full flex items-center justify-center">
+                            <CheckCircle className="w-2 h-2 text-white" />
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                    {assignments.length > 3 && (
+                      <div className="w-6 h-6 rounded-full bg-gray-400 text-white text-xs flex items-center justify-center font-medium">
+                        +{assignments.length - 3}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             {task.description && (
               <p className="text-sm text-gray-600 mb-2">{task.description}</p>
             )}
             
+            {/* Assignment Summary */}
+            {assignments.length > 0 && (
+              <div className="mb-2 p-2 bg-blue-50 rounded text-sm">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1 text-blue-700">
+                    <User className="h-3 w-3" />
+                    <span className="font-medium">
+                      {assignments.length} team member{assignments.length !== 1 ? 's' : ''} assigned
+                    </span>
+                  </div>
+                  <div className="text-xs text-blue-600">
+                    {assignments.filter((a: any) => a.isCompleted).length} completed
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Task Assignment Manager */}
             <div className="mb-3 p-3 bg-gray-50 rounded-lg">
               <TaskAssignmentManager 
@@ -157,6 +233,7 @@ export function AgencyTasksModal({ isOpen, onClose, project }: AgencyTasksModalP
                 onUpdate={() => {
                   queryClient.invalidateQueries({ queryKey: ["/api/projects", project?.id, "tasks"] });
                   queryClient.invalidateQueries({ queryKey: ["/api/admin/tasks"] });
+                  queryClient.invalidateQueries({ queryKey: ["/api/admin/task-assignments"] });
                 }}
               />
             </div>
@@ -310,7 +387,8 @@ export function AgencyTasksModal({ isOpen, onClose, project }: AgencyTasksModalP
         </div>
       </CardContent>
     </Card>
-  );
+    );
+  };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
