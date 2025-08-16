@@ -1395,14 +1395,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Only admins can create organization tasks" });
       }
 
-      const validation = insertTaskSchema.safeParse({
+      console.log("Request body:", req.body);
+      
+      const taskData = {
         ...req.body,
         organizationId: req.params.organizationId,
         taskScope: 'organization',
         projectId: null,
-      });
+        serviceId: null, // Organization tasks don't require service
+      };
+
+      console.log("Task data for validation:", taskData);
+
+      const validation = insertTaskSchema.safeParse(taskData);
 
       if (!validation.success) {
+        console.error("Validation error:", JSON.stringify(validation.error, null, 2));
         return res.status(400).json({ error: validation.error });
       }
 
