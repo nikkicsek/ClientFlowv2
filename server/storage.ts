@@ -179,6 +179,15 @@ export interface IStorage {
 
   // Get deleted items
   getDeletedItems(): Promise<any[]>;
+  
+  // Google Calendar integration
+  updateUserGoogleTokens(userId: string, tokens: {
+    accessToken: string | null;
+    refreshToken?: string | null;
+    expiryDate: Date | null;
+  }): Promise<User>;
+  updateUserCalendarSync(userId: string, enabled: boolean): Promise<User>;
+  updateTaskCalendarEvent(taskId: string, eventId: string | null): Promise<Task>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -573,6 +582,49 @@ export class DatabaseStorage implements IStorage {
       .where(eq(users.id, id))
       .returning();
     return updatedUser;
+  }
+
+  // Google Calendar integration methods
+  async updateUserGoogleTokens(userId: string, tokens: {
+    accessToken: string | null;
+    refreshToken?: string | null;
+    expiryDate: Date | null;
+  }): Promise<User> {
+    const [updatedUser] = await db
+      .update(users)
+      .set({
+        googleAccessToken: tokens.accessToken,
+        googleRefreshToken: tokens.refreshToken || undefined,
+        googleTokenExpiry: tokens.expiryDate,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId))
+      .returning();
+    return updatedUser;
+  }
+
+  async updateUserCalendarSync(userId: string, enabled: boolean): Promise<User> {
+    const [updatedUser] = await db
+      .update(users)
+      .set({
+        calendarSyncEnabled: enabled,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId))
+      .returning();
+    return updatedUser;
+  }
+
+  async updateTaskCalendarEvent(taskId: string, eventId: string | null): Promise<Task> {
+    const [updatedTask] = await db
+      .update(tasks)
+      .set({
+        googleCalendarEventId: eventId,
+        updatedAt: new Date(),
+      })
+      .where(eq(tasks.id, taskId))
+      .returning();
+    return updatedTask;
   }
 
   async deleteUser(id: string): Promise<void> {
