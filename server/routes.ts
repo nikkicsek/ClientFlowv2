@@ -1991,6 +1991,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Additional soft delete endpoints for frontend compatibility
+  app.delete('/api/organizations/:id/soft', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const result = await storage.softDeleteOrganization(req.params.id, userId);
+      res.json({ message: "Organization deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting organization:", error);
+      res.status(500).json({ message: "Failed to delete organization" });
+    }
+  });
+
+  app.delete('/api/projects/:id/soft', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const result = await storage.softDeleteProject(req.params.id, userId);
+      res.json({ message: "Project deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting project:", error);
+      res.status(500).json({ message: "Failed to delete project" });
+    }
+  });
+
+  app.delete('/api/tasks/:id/soft', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const result = await storage.softDeleteTask(req.params.id, userId);
+      res.json({ message: "Task deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting task:", error);
+      res.status(500).json({ message: "Failed to delete task" });
+    }
+  });
+
   // Get deleted items endpoint (admin only)
   app.get('/api/admin/deleted-items', isAuthenticated, async (req: any, res) => {
     try {
