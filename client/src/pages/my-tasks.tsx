@@ -1,10 +1,15 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { TeamMemberTasks } from '@/components/team-member-tasks';
+import { CalendarSyncDialog } from '@/components/calendar-sync-dialog';
 import { Card, CardContent } from '@/components/ui/card';
-import { User, AlertCircle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { User, AlertCircle, Calendar } from 'lucide-react';
 
 export function MyTasksPage() {
+  const [showCalendarDialog, setShowCalendarDialog] = useState(false);
+
   // Get current user info
   const { data: user, isLoading: userLoading } = useQuery({
     queryKey: ["/api/auth/user"],
@@ -73,9 +78,25 @@ export function MyTasksPage() {
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-6xl mx-auto">
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-bold text-gray-900">My Tasks</h1>
+          <Button
+            onClick={() => setShowCalendarDialog(true)}
+            variant="outline"
+            className="flex items-center gap-2"
+          >
+            <Calendar className="h-4 w-4" />
+            Calendar Sync
+          </Button>
+        </div>
         <TeamMemberTasks 
           teamMemberId={currentTeamMember.id} 
           teamMemberName={currentTeamMember.name}
+        />
+        
+        <CalendarSyncDialog
+          isOpen={showCalendarDialog}
+          onClose={() => setShowCalendarDialog(false)}
         />
       </div>
     </div>
