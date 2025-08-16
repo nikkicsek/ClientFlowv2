@@ -27,7 +27,7 @@ export function TeamMemberTasks({ teamMemberId, teamMemberName }: TeamMemberTask
   // Mark assignment as completed
   const completeAssignmentMutation = useMutation({
     mutationFn: async (assignmentId: string) => {
-      const response = await apiRequest("PUT", `/api/task-assignments/${assignmentId}`, {
+      const response = await apiRequest("PUT", `/api/assignments/${assignmentId}`, {
         isCompleted: true
       });
       return response.json();
@@ -52,7 +52,7 @@ export function TeamMemberTasks({ teamMemberId, teamMemberName }: TeamMemberTask
   // Mark assignment as not completed (undo)
   const uncompleteAssignmentMutation = useMutation({
     mutationFn: async (assignmentId: string) => {
-      const response = await apiRequest("PUT", `/api/task-assignments/${assignmentId}`, {
+      const response = await apiRequest("PUT", `/api/assignments/${assignmentId}`, {
         isCompleted: false
       });
       return response.json();
