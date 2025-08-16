@@ -679,13 +679,25 @@ export class DatabaseStorage implements IStorage {
       .from(taskAssignments)
       .innerJoin(tasks, eq(taskAssignments.taskId, tasks.id))
       .leftJoin(projects, eq(tasks.projectId, projects.id))
-      .where(and(eq(taskAssignments.teamMemberId, teamMemberId), eq(taskAssignments.isCompleted, false)));
+      .where(and(
+        eq(taskAssignments.teamMemberId, teamMemberId),
+        eq(tasks.isDeleted, false)
+      ))
+      .orderBy(desc(taskAssignments.createdAt));
     
     return results.map(row => ({
       ...row.assignment,
       task: row.task,
       project: row.project || undefined,
     }));
+  }
+
+  async getTeamMember(id: string): Promise<TeamMember | undefined> {
+    const [member] = await db
+      .select()
+      .from(teamMembers)
+      .where(and(eq(teamMembers.id, id), eq(teamMembers.isActive, true)));
+    return member;
   }
 
   async createTaskAssignment(assignment: InsertTaskAssignment): Promise<TaskAssignment> {
