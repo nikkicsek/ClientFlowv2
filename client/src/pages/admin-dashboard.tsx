@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Users, Briefcase, Settings, Eye, Building2, Edit, CheckSquare, Clock, AlertTriangle } from "lucide-react";
+import { Plus, Users, Briefcase, Settings, Eye, Building2, Edit, CheckSquare, Clock, AlertTriangle, Grid3X3, List } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
@@ -38,6 +38,7 @@ export default function AdminDashboard() {
   const [selectedProjectForTasks, setSelectedProjectForTasks] = useState<Project | null>(null);
   const [showTeamManagement, setShowTeamManagement] = useState(false);
   const [activeTab, setActiveTab] = useState("projects");
+  const [organizationViewMode, setOrganizationViewMode] = useState<"grid" | "list">("grid");
 
   const { data: projects, isLoading: projectsLoading } = useQuery({
     queryKey: ["/api/admin/projects"],
@@ -484,7 +485,27 @@ export default function AdminDashboard() {
                 <h2 className="text-xl font-semibold text-gray-900">Business Organizations</h2>
                 <p className="text-gray-600">Manage client business entities</p>
               </div>
-              <OrganizationManagementModal />
+              <div className="flex items-center gap-2">
+                <div className="flex items-center border rounded-lg">
+                  <Button
+                    variant={organizationViewMode === "grid" ? "default" : "ghost"}
+                    size="sm"
+                    onClick={() => setOrganizationViewMode("grid")}
+                    className="rounded-r-none"
+                  >
+                    <Grid3X3 className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant={organizationViewMode === "list" ? "default" : "ghost"}
+                    size="sm"
+                    onClick={() => setOrganizationViewMode("list")}
+                    className="rounded-l-none"
+                  >
+                    <List className="h-4 w-4" />
+                  </Button>
+                </div>
+                <OrganizationManagementModal />
+              </div>
             </div>
 
             {!organizations || organizations.length === 0 ? (
@@ -496,7 +517,7 @@ export default function AdminDashboard() {
                   <OrganizationManagementModal />
                 </CardContent>
               </Card>
-            ) : (
+            ) : organizationViewMode === "grid" ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {organizations
                   .sort((a, b) => a.name.localeCompare(b.name))
@@ -537,6 +558,48 @@ export default function AdminDashboard() {
                         )}
                         <div>
                           Created: {new Date(org.createdAt).toLocaleDateString()}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {organizations
+                  .sort((a, b) => a.name.localeCompare(b.name))
+                  .map((org) => (
+                  <Card key={org.id} className="hover:shadow-sm transition-shadow">
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4 flex-1">
+                          <Building2 className="h-6 w-6 text-blue-600 flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <h3 className="font-semibold text-gray-900 truncate">{org.name}</h3>
+                              {org.industry && (
+                                <Badge variant="secondary" className="flex-shrink-0">
+                                  {org.industry}
+                                </Badge>
+                              )}
+                            </div>
+                            {org.description && (
+                              <p className="text-gray-600 text-sm mb-1 line-clamp-1">{org.description}</p>
+                            )}
+                            <div className="flex items-center gap-4 text-xs text-gray-500">
+                              {org.website && (
+                                <a 
+                                  href={org.website} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer" 
+                                  className="text-blue-600 hover:underline truncate max-w-48"
+                                >
+                                  {org.website}
+                                </a>
+                              )}
+                              <span>Created: {new Date(org.createdAt).toLocaleDateString()}</span>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </CardContent>
