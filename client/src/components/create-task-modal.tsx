@@ -1,14 +1,17 @@
 import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { apiRequest } from "@/lib/queryClient";
+import { Users, X } from "lucide-react";
+import type { TeamMember } from "@shared/schema";
 
 
 interface CreateTaskModalProps {
@@ -20,12 +23,23 @@ interface CreateTaskModalProps {
 
 export default function CreateTaskModal({ isOpen, onClose, onSuccess, projectId }: CreateTaskModalProps) {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
+  
   const [formData, setFormData] = useState({
     title: "",
     description: "",
     status: "in_progress",
+    priority: "medium",
     dueDate: "",
     googleDriveLink: "",
+  });
+  
+  const [selectedTeamMembers, setSelectedTeamMembers] = useState<string[]>([]);
+
+  // Fetch team members for assignment
+  const { data: teamMembers = [] } = useQuery<TeamMember[]>({
+    queryKey: ["/api/team-members"],
+    enabled: isOpen,
   });
 
   const createTaskMutation = useMutation({
@@ -33,14 +47,40 @@ export default function CreateTaskModal({ isOpen, onClose, onSuccess, projectId 
       const response = await apiRequest("POST", `/api/projects/${projectId}/tasks`, data);
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: async (newTask) => {
+      // Assign selected team members to the task
+      if (selectedTeamMembers.length > 0) {
+        for (const memberId of selectedTeamMembers) {
+          try {
+            await apiRequest("/api/task-assignments", {
+              method: "POST",
+              body: {
+                taskId: newTask.id,
+                teamMemberId: memberId,
+              }
+            });
+          } catch (error) {
+            console.error("Error assigning team member:", error);
+          }
+        }
+      }
+      
+      queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/task-assignments"] });
+      
       onSuccess();
       setFormData({
         title: "",
         description: "",
         status: "in_progress",
+        priority: "medium",
         dueDate: "",
         googleDriveLink: "",
+      });
+      setSelectedTeamMembers([]);
+      toast({
+        title: "Task Created",
+        description: "Project task created successfully",
       });
     },
     onError: (error: Error) => {
@@ -79,7 +119,8 @@ export default function CreateTaskModal({ isOpen, onClose, onSuccess, projectId 
       title: formData.title,
       description: formData.description || null,
       status: formData.status,
-      dueDate: formData.dueDate || null, // Send as string, server will convert
+      priority: formData.priority,
+      dueDate: formData.dueDate || null,
       googleDriveLink: formData.googleDriveLink || null,
     };
 
@@ -121,8 +162,6 @@ export default function CreateTaskModal({ isOpen, onClose, onSuccess, projectId 
             />
           </div>
 
-
-
           <div className="space-y-2">
             <Label htmlFor="status">Status</Label>
             <Select value={formData.status} onValueChange={(value) => handleInputChange('status', value)}>
@@ -137,6 +176,80 @@ export default function CreateTaskModal({ isOpen, onClose, onSuccess, projectId 
                 <SelectItem value="needs_clarification">Needs Clarification</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="priority">Priority</Label>
+            <Select value={formData.priority} onValueChange={(value) => handleInputChange('priority', value)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="low">Low</SelectItem>
+                <SelectItem value="medium">Medium</SelectItem>
+                <SelectItem value="high">High</SelectItem>
+                <SelectItem value="urgent">Urgent</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Team Member Assignment */}
+          <div className="space-y-3">
+            <Label className="flex items-center gap-2">
+              <Users className="h-4 w-4" />
+              Assign Team Members
+            </Label>
+            
+            {/* Team Member Selection */}
+            <div className="space-y-2">
+              <Select onValueChange={(memberId) => {
+                if (memberId && !selectedTeamMembers.includes(memberId)) {
+                  setSelectedTeamMembers(prev => [...prev, memberId]);
+                }
+              }}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select team member to assign" />
+                </SelectTrigger>
+                <SelectContent>
+                  {teamMembers
+                    .filter(member => !selectedTeamMembers.includes(member.id))
+                    .map((member) => (
+                      <SelectItem key={member.id} value={member.id}>
+                        {member.name} ({member.role})
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Selected Team Members */}
+            {selectedTeamMembers.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {selectedTeamMembers.map((memberId) => {
+                  const member = teamMembers.find(m => m.id === memberId);
+                  if (!member) return null;
+                  
+                  return (
+                    <Badge
+                      key={memberId}
+                      variant="secondary"
+                      className="flex items-center gap-1 pr-1"
+                    >
+                      {member.name}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-4 w-4 p-0 hover:bg-destructive hover:text-destructive-foreground"
+                        onClick={() => setSelectedTeamMembers(prev => prev.filter(id => id !== memberId))}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </Badge>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           <div className="space-y-2">
