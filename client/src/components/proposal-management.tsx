@@ -360,11 +360,11 @@ export function ProposalManagement() {
                           <div className="flex-1">
                             <div className="flex items-center gap-3 mb-2">
                               <Checkbox
-                                checked={item.isApproved}
+                                checked={item.isApproved || false}
                                 onCheckedChange={(checked) => {
-                                  // Update item approval immediately
+                                  // Update item approval immediately - allow toggling on/off
                                   handleApprovalUpdate(selectedProposal.id, {
-                                    [item.id]: !!checked
+                                    [item.id]: checked === true
                                   });
                                 }}
                               />
