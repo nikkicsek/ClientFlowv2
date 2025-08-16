@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
-import { insertProjectSchema, insertTaskSchema, insertMessageSchema, insertAnalyticsSchema, insertTeamMemberSchema, insertProposalSchema, insertProposalItemSchema } from "@shared/schema";
+import { insertProjectSchema, insertTaskSchema, insertMessageSchema, insertAnalyticsSchema, insertTeamMemberSchema, insertTaskAssignmentSchema, insertProposalSchema, insertProposalItemSchema } from "@shared/schema";
 import { emailService } from "./emailService";
 import { nangoService } from "./nangoService";
 import multer from "multer";
@@ -301,6 +301,134 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error updating task:", error);
       res.status(500).json({ message: "Failed to update task" });
+    }
+  });
+
+  // Task assignment routes
+  app.get('/api/tasks/:taskId/assignments', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Only admins can view task assignments" });
+      }
+
+      const assignments = await storage.getTaskAssignments(req.params.taskId);
+      res.json(assignments);
+    } catch (error) {
+      console.error("Error fetching task assignments:", error);
+      res.status(500).json({ message: "Failed to fetch task assignments" });
+    }
+  });
+
+  app.post('/api/tasks/:taskId/assignments', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Only admins can create task assignments" });
+      }
+
+      const validation = insertTaskAssignmentSchema.safeParse({
+        ...req.body,
+        taskId: req.params.taskId,
+        assignedBy: userId,
+      });
+
+      if (!validation.success) {
+        return res.status(400).json({ error: validation.error });
+      }
+
+      const assignment = await storage.createTaskAssignment(validation.data);
+
+      // Send notification email to assigned team member
+      try {
+        const teamMember = await storage.getTeamMember(assignment.teamMemberId);
+        const task = await storage.getTasksByProject('').then(tasks => tasks.find(t => t.id === req.params.taskId));
+        const project = task ? await storage.getProject(task.projectId) : null;
+        
+        if (teamMember && task && project) {
+          await emailService.sendTaskAssignmentNotification(
+            teamMember.email,
+            teamMember.name,
+            task.title,
+            project.name,
+            {
+              priority: task.priority,
+              assignedBy: `${user.firstName} ${user.lastName}`,
+              dueDate: task.dueDate ? new Date(task.dueDate).toLocaleDateString() : undefined,
+              notes: assignment.notes || undefined,
+            }
+          );
+        }
+      } catch (emailError) {
+        console.error("Failed to send task assignment email:", emailError);
+      }
+
+      res.status(201).json(assignment);
+    } catch (error) {
+      console.error("Error creating task assignment:", error);
+      res.status(500).json({ message: "Failed to create task assignment" });
+    }
+  });
+
+  app.get('/api/team-members/:teamMemberId/assignments', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Only admins can view team member assignments" });
+      }
+
+      const assignments = await storage.getTaskAssignmentsByTeamMember(req.params.teamMemberId);
+      res.json(assignments);
+    } catch (error) {
+      console.error("Error fetching team member assignments:", error);
+      res.status(500).json({ message: "Failed to fetch team member assignments" });
+    }
+  });
+
+  app.put('/api/assignments/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Only admins can update task assignments" });
+      }
+
+      const updates = req.body;
+      
+      // If marking as completed, set completed timestamp
+      if (updates.isCompleted && !updates.completedAt) {
+        updates.completedAt = new Date();
+      }
+
+      const assignment = await storage.updateTaskAssignment(req.params.id, updates);
+      res.json(assignment);
+    } catch (error) {
+      console.error("Error updating task assignment:", error);
+      res.status(500).json({ message: "Failed to update task assignment" });
+    }
+  });
+
+  app.delete('/api/assignments/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Only admins can delete task assignments" });
+      }
+
+      await storage.deleteTaskAssignment(req.params.id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting task assignment:", error);
+      res.status(500).json({ message: "Failed to delete task assignment" });
     }
   });
 

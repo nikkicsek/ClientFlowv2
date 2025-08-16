@@ -8,6 +8,13 @@
       "when": 1755370654384,
       "tag": "0000_hesitant_impossible_man",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1755374680621,
+      "tag": "0001_daily_sway",
+      "breakpoints": true
     }
   ]
 }

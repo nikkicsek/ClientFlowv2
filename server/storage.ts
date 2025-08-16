@@ -6,6 +6,7 @@ import {
   serviceCategories,
   tasks,
   taskTemplates,
+  taskAssignments,
   projectFiles,
   analytics,
   messages,
@@ -24,6 +25,8 @@ import {
   type InsertServiceCategory,
   type Task,
   type InsertTask,
+  type TaskAssignment,
+  type InsertTaskAssignment,
   type ProjectFile,
   type InsertProjectFile,
   type Analytics,
@@ -118,6 +121,21 @@ export interface IStorage {
   createKpi(kpi: InsertKpi): Promise<Kpi>;
   updateKpi(id: string, updates: Partial<InsertKpi>): Promise<Kpi | undefined>;
 
+  // Team member operations
+  getAllTeamMembers(): Promise<TeamMember[]>;
+  getTeamMember(id: string): Promise<TeamMember | undefined>;
+  getTeamMemberByEmail(email: string): Promise<TeamMember | undefined>;
+  createTeamMember(memberData: InsertTeamMember): Promise<TeamMember>;
+  updateTeamMember(id: string, updates: Partial<TeamMember>): Promise<TeamMember>;
+  deleteTeamMember(id: string): Promise<void>;
+
+  // Task assignment operations
+  getTaskAssignments(taskId: string): Promise<(TaskAssignment & { teamMember: TeamMember })[]>;
+  getTaskAssignmentsByTeamMember(teamMemberId: string): Promise<(TaskAssignment & { task: Task; project?: Project })[]>;
+  createTaskAssignment(assignment: InsertTaskAssignment): Promise<TaskAssignment>;
+  updateTaskAssignment(id: string, updates: Partial<InsertTaskAssignment>): Promise<TaskAssignment>;
+  deleteTaskAssignment(id: string): Promise<void>;
+
   // Team invitation operations
   createTeamInvitation(invitation: InsertTeamInvitation): Promise<TeamInvitation>;
   getTeamInvitationByToken(token: string): Promise<TeamInvitation | undefined>;
@@ -167,11 +185,6 @@ export class DatabaseStorage implements IStorage {
   // User operations
   async getUser(id: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
-    return user;
-  }
-
-  async getUserByEmail(email: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.email, email));
     return user;
   }
 
@@ -619,6 +632,60 @@ export class DatabaseStorage implements IStorage {
 
   async deleteTeamMember(id: string): Promise<void> {
     await db.update(teamMembers).set({ isActive: false }).where(eq(teamMembers.id, id));
+  }
+
+  // Task assignment operations
+  async getTaskAssignments(taskId: string): Promise<(TaskAssignment & { teamMember: TeamMember })[]> {
+    const results = await db
+      .select({
+        assignment: taskAssignments,
+        teamMember: teamMembers,
+      })
+      .from(taskAssignments)
+      .innerJoin(teamMembers, eq(taskAssignments.teamMemberId, teamMembers.id))
+      .where(eq(taskAssignments.taskId, taskId));
+    
+    return results.map(row => ({
+      ...row.assignment,
+      teamMember: row.teamMember,
+    }));
+  }
+
+  async getTaskAssignmentsByTeamMember(teamMemberId: string): Promise<(TaskAssignment & { task: Task; project?: Project })[]> {
+    const results = await db
+      .select({
+        assignment: taskAssignments,
+        task: tasks,
+        project: projects,
+      })
+      .from(taskAssignments)
+      .innerJoin(tasks, eq(taskAssignments.taskId, tasks.id))
+      .leftJoin(projects, eq(tasks.projectId, projects.id))
+      .where(and(eq(taskAssignments.teamMemberId, teamMemberId), eq(taskAssignments.isCompleted, false)));
+    
+    return results.map(row => ({
+      ...row.assignment,
+      task: row.task,
+      project: row.project || undefined,
+    }));
+  }
+
+  async createTaskAssignment(assignment: InsertTaskAssignment): Promise<TaskAssignment> {
+    const [newAssignment] = await db.insert(taskAssignments).values(assignment).returning();
+    return newAssignment;
+  }
+
+  async updateTaskAssignment(id: string, updates: Partial<InsertTaskAssignment>): Promise<TaskAssignment> {
+    const [updatedAssignment] = await db
+      .update(taskAssignments)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(taskAssignments.id, id))
+      .returning();
+    return updatedAssignment;
+  }
+
+  async deleteTaskAssignment(id: string): Promise<void> {
+    await db.delete(taskAssignments).where(eq(taskAssignments.id, id));
   }
 
   // Quote operations

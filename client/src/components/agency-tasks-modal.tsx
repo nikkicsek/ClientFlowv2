@@ -33,6 +33,7 @@ import {
   Edit3
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
+import { TaskAssignmentManager } from "./task-assignment-manager";
 import type { Project, Task } from "@shared/schema";
 
 interface AgencyTasksModalProps {
@@ -149,15 +150,16 @@ export function AgencyTasksModal({ isOpen, onClose, project }: AgencyTasksModalP
               <p className="text-sm text-gray-600 mb-2">{task.description}</p>
             )}
             
-            {/* Assignment Section */}
-            {task.assignedToMember && (
-              <div className="mb-2 p-2 bg-blue-50 rounded text-sm">
-                <div className="flex items-center gap-1 text-blue-700">
-                  <User className="h-3 w-3" />
-                  <span className="font-medium">Assigned to: {task.assignedToMember}</span>
-                </div>
-              </div>
-            )}
+            {/* Task Assignment Manager */}
+            <div className="mb-3 p-3 bg-gray-50 rounded-lg">
+              <TaskAssignmentManager 
+                task={task}
+                onUpdate={() => {
+                  queryClient.invalidateQueries({ queryKey: ["/api/projects", project?.id, "tasks"] });
+                  queryClient.invalidateQueries({ queryKey: ["/api/admin/tasks"] });
+                }}
+              />
+            </div>
             
             <div className="flex items-center gap-4 text-xs text-gray-500">
               {task.assigneeRole && (
