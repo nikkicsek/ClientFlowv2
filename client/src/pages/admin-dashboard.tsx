@@ -1257,7 +1257,6 @@ export default function AdminDashboard() {
         onClose={() => setShowCreateTask(false)}
         onSuccess={handleTaskCreated}
         projectId={selectedProject}
-        services={services || []}
       />
 
       <EditServiceModal
