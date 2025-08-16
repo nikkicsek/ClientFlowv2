@@ -718,6 +718,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Update project Google Drive links
+  app.put('/api/admin/projects/:id/google-drive', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const { googleDriveFolderId, googleDriveFolderUrl } = req.body;
+      
+      // Verify project exists
+      const existingProject = await storage.getProject(req.params.id);
+      if (!existingProject) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
+      const updateData = {
+        googleDriveFolderId: googleDriveFolderId || null,
+        googleDriveFolderUrl: googleDriveFolderUrl || null,
+        updatedAt: new Date()
+      };
+
+      const updatedProject = await storage.updateProject(req.params.id, updateData);
+      console.log("Successfully updated project Google Drive links:", updatedProject);
+      res.json(updatedProject);
+    } catch (error) {
+      console.error("Error updating project Google Drive links:", error);
+      res.status(500).json({ message: `Failed to update Google Drive links: ${error.message}` });
+    }
+  });
+
   app.get('/api/admin/clients', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;

@@ -24,6 +24,7 @@ import { EditClientModal } from "@/components/edit-client-modal";
 import { AgencyTasksModal } from "@/components/agency-tasks-modal";
 import { EditOrganizationModal } from "@/components/edit-organization-modal";
 import { OrganizationContactsModal } from "@/components/organization-contacts-modal";
+import { GoogleDriveLinks } from "@/components/google-drive-links";
 import type { Project, Task, Service, User, Organization } from "@shared/schema";
 
 export default function AdminDashboard() {
@@ -239,6 +240,11 @@ export default function AdminDashboard() {
                             {project.budget ? `$${Number(project.budget).toLocaleString()}` : 'Not set'}
                           </span>
                         </div>
+                        
+                        <div className="mt-4 pt-4 border-t">
+                          <GoogleDriveLinks project={project} />
+                        </div>
+                        
                         <div className="flex gap-2 mt-4 flex-wrap">
                           <Button 
                             variant="outline" 
