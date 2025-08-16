@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
-import { insertProjectSchema, insertTaskSchema, insertMessageSchema, insertAnalyticsSchema, insertTeamMemberSchema } from "@shared/schema";
+import { insertProjectSchema, insertTaskSchema, insertMessageSchema, insertAnalyticsSchema, insertTeamMemberSchema, insertProposalSchema, insertProposalItemSchema } from "@shared/schema";
 import { emailService } from "./emailService";
 import { nangoService } from "./nangoService";
 import multer from "multer";
@@ -1649,6 +1649,158 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error updating quote:", error);
       res.status(500).json({ error: "Failed to update quote" });
+    }
+  });
+
+  // Proposal Management Routes
+  app.get('/api/admin/proposals', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const proposals = await storage.getProposals();
+      
+      // Enrich proposals with items, client, and organization data
+      const enrichedProposals = await Promise.all(proposals.map(async (proposal) => {
+        const [items, client, organization] = await Promise.all([
+          storage.getProposalItems(proposal.id),
+          proposal.clientId ? storage.getUser(proposal.clientId) : null,
+          proposal.organizationId ? storage.getOrganization(proposal.organizationId) : null
+        ]);
+        
+        return {
+          ...proposal,
+          items,
+          client,
+          organization
+        };
+      }));
+      
+      res.json(enrichedProposals);
+    } catch (error) {
+      console.error("Error fetching proposals:", error);
+      res.status(500).json({ message: "Failed to fetch proposals" });
+    }
+  });
+
+  app.post('/api/admin/proposals', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const proposalData = insertProposalSchema.parse(req.body);
+      proposalData.proposalNumber = `PROP-${Date.now()}`;
+      
+      const proposal = await storage.createProposal(proposalData);
+      res.status(201).json(proposal);
+    } catch (error) {
+      console.error("Error creating proposal:", error);
+      res.status(500).json({ message: "Failed to create proposal" });
+    }
+  });
+
+  app.post('/api/admin/proposal-items', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const itemData = insertProposalItemSchema.parse(req.body);
+      const item = await storage.createProposalItem(itemData);
+      res.status(201).json(item);
+    } catch (error) {
+      console.error("Error creating proposal item:", error);
+      res.status(500).json({ message: "Failed to create proposal item" });
+    }
+  });
+
+  app.put('/api/admin/proposals/:id/approve', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const { itemApprovals } = req.body;
+      
+      for (const [itemId, isApproved] of Object.entries(itemApprovals)) {
+        await storage.updateProposalItem(itemId, { isApproved: !!isApproved });
+      }
+      
+      res.json({ message: "Proposal approvals updated" });
+    } catch (error) {
+      console.error("Error updating proposal approvals:", error);
+      res.status(500).json({ message: "Failed to update approvals" });
+    }
+  });
+
+  app.post('/api/admin/proposals/:id/convert', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const { id } = req.params;
+      const proposal = await storage.getProposal(id);
+      
+      if (!proposal) {
+        return res.status(404).json({ message: "Proposal not found" });
+      }
+
+      const approvedItems = await storage.getProposalItems(id);
+      const approvedItemsList = approvedItems.filter(item => item.isApproved);
+      
+      if (approvedItemsList.length === 0) {
+        return res.status(400).json({ message: "No approved items to convert" });
+      }
+
+      const createdProjects = [];
+      
+      for (const item of approvedItemsList) {
+        const projectData = {
+          name: item.title,
+          description: item.description || '',
+          clientId: proposal.clientId!,
+          organizationId: proposal.organizationId,
+          budget: item.amount,
+          status: 'active',
+          progress: 0,
+          startDate: new Date(),
+          expectedCompletion: null
+        };
+        
+        const project = await storage.createProject(projectData);
+        createdProjects.push(project);
+      }
+
+      await storage.updateProposal(id, {
+        status: 'converted',
+        convertedToProjectsAt: new Date()
+      });
+
+      res.json({ 
+        message: `Successfully converted ${createdProjects.length} approved items to projects`,
+        projects: createdProjects 
+      });
+    } catch (error) {
+      console.error("Error converting proposal to projects:", error);
+      res.status(500).json({ message: "Failed to convert proposal to projects" });
     }
   });
 

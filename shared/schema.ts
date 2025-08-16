@@ -203,7 +203,45 @@ export const teamMembers = pgTable("team_members", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// Quotes/Proposals table for automatic project and task generation
+// Proposals table for slide deck and complex proposal management
+export const proposals = pgTable("proposals", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  proposalNumber: varchar("proposal_number").notNull().unique(),
+  clientId: varchar("client_id").references(() => users.id),
+  organizationId: varchar("organization_id").references(() => organizations.id),
+  title: text("title").notNull(),
+  description: text("description"),
+  totalAmount: decimal("total_amount", { precision: 10, scale: 2 }).notNull(),
+  status: varchar("status").notNull().default("draft"), // "draft", "sent", "approved", "partially_approved", "declined", "converted"
+  validUntil: timestamp("valid_until"),
+  terms: text("terms"),
+  notes: text("notes"),
+  attachmentPath: text("attachment_path"), // Path to uploaded proposal/slide deck file
+  approvalType: varchar("approval_type"), // "full", "partial", "declined"
+  approvedDate: timestamp("approved_date"),
+  convertedToProjectsAt: timestamp("converted_to_projects_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Proposal items/phases that can be individually approved
+export const proposalItems = pgTable("proposal_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  proposalId: varchar("proposal_id").notNull().references(() => proposals.id),
+  title: text("title").notNull(),
+  description: text("description"),
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  timeline: text("timeline"), // e.g., "2-3 weeks", "3-4 weeks"
+  phase: integer("phase"), // 1, 2, 3, etc. for phase-based proposals
+  itemOrder: integer("item_order").default(0),
+  isApproved: boolean("is_approved").default(false),
+  serviceId: varchar("service_id").references(() => services.id),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Quotes/Proposals table for automatic project and task generation (legacy - keeping for compatibility)
 export const quotes = pgTable("quotes", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   quoteNumber: varchar("quote_number").notNull().unique(),
@@ -456,6 +494,18 @@ export const insertQuoteLineItemSchema = createInsertSchema(quoteLineItems).omit
   createdAt: true,
 });
 
+export const insertProposalSchema = createInsertSchema(proposals).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertProposalItemSchema = createInsertSchema(proposalItems).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Types
 export type Organization = typeof organizations.$inferSelect;
 export type InsertOrganization = z.infer<typeof insertOrganizationSchema>;
@@ -501,3 +551,7 @@ export type Quote = typeof quotes.$inferSelect;
 export type InsertQuote = z.infer<typeof insertQuoteSchema>;
 export type QuoteLineItem = typeof quoteLineItems.$inferSelect;
 export type InsertQuoteLineItem = z.infer<typeof insertQuoteLineItemSchema>;
+export type Proposal = typeof proposals.$inferSelect;
+export type InsertProposal = z.infer<typeof insertProposalSchema>;
+export type ProposalItem = typeof proposalItems.$inferSelect;
+export type InsertProposalItem = z.infer<typeof insertProposalItemSchema>;
