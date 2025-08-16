@@ -113,7 +113,7 @@ export default function CreateOrganizationTaskModal({
       description: formData.description || null,
       status: formData.status,
       priority: formData.priority,
-      dueDate: formData.dueDate || null,
+      dueDate: formData.dueDate ? new Date(formData.dueDate).toISOString() : null,
       googleDriveLink: formData.googleDriveLink || null,
     };
 
