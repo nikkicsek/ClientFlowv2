@@ -27,6 +27,7 @@ export default function CreateTaskModal({ isOpen, onClose, onSuccess, projectId,
     serviceId: "",
     status: "in_progress",
     dueDate: "",
+    googleDriveLink: "",
   });
 
   const createTaskMutation = useMutation({
@@ -42,6 +43,7 @@ export default function CreateTaskModal({ isOpen, onClose, onSuccess, projectId,
         serviceId: "",
         status: "in_progress",
         dueDate: "",
+        googleDriveLink: "",
       });
     },
     onError: (error: Error) => {
@@ -82,6 +84,7 @@ export default function CreateTaskModal({ isOpen, onClose, onSuccess, projectId,
       serviceId: formData.serviceId || null,
       status: formData.status,
       dueDate: formData.dueDate || null, // Send as string, server will convert
+      googleDriveLink: formData.googleDriveLink || null,
     };
 
     console.log("Creating task with data:", taskData);
@@ -94,7 +97,7 @@ export default function CreateTaskModal({ isOpen, onClose, onSuccess, projectId,
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Add New Task</DialogTitle>
         </DialogHeader>
@@ -163,6 +166,16 @@ export default function CreateTaskModal({ isOpen, onClose, onSuccess, projectId,
               type="date"
               value={formData.dueDate}
               onChange={(e) => handleInputChange('dueDate', e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="googleDriveLink">Google Drive Link</Label>
+            <Input
+              id="googleDriveLink"
+              value={formData.googleDriveLink}
+              onChange={(e) => handleInputChange('googleDriveLink', e.target.value)}
+              placeholder="https://drive.google.com/file/d/..."
             />
           </div>
 
