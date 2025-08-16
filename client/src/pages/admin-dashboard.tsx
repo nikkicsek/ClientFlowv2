@@ -98,6 +98,27 @@ export default function AdminDashboard() {
     },
   });
 
+  const { data: organizations } = useQuery({
+    queryKey: ["/api/admin/organizations"],
+    queryFn: async () => {
+      const response = await apiRequest("GET", "/api/admin/organizations");
+      return response.json();
+    },
+    onError: (error: Error) => {
+      if (isUnauthorizedError(error)) {
+        toast({
+          title: "Unauthorized",
+          description: "You are logged out. Logging in again...",
+          variant: "destructive",
+        });
+        setTimeout(() => {
+          window.location.href = "/api/login";
+        }, 500);
+        return;
+      }
+    },
+  });
+
   const { data: allTasks, isLoading: tasksLoading } = useQuery({
     queryKey: ["/api/admin/tasks"],
     queryFn: async () => {
@@ -461,31 +482,68 @@ export default function AdminDashboard() {
             <div className="flex justify-between items-center">
               <div>
                 <h2 className="text-xl font-semibold text-gray-900">Business Organizations</h2>
-                <p className="text-gray-600">Manage client business entities and group multiple contacts under organizations</p>
+                <p className="text-gray-600">Manage client business entities</p>
               </div>
+              <OrganizationManagementModal />
             </div>
 
-            <Card>
-              <CardContent className="p-8 text-center">
-                <Building2 className="h-16 w-16 mx-auto mb-4 text-gray-400" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">Organize Your Clients</h3>
-                <p className="text-gray-600 mb-4">
-                  Create business organizations to group multiple client contacts together. This helps manage 
-                  projects for companies with multiple stakeholders and points of contact.
-                </p>
-                <div className="bg-blue-50 p-4 rounded-lg mb-6">
-                  <h4 className="font-medium text-blue-900 mb-2">Benefits of Organization Management:</h4>
-                  <ul className="text-blue-800 text-sm space-y-1 text-left max-w-lg mx-auto">
-                    <li>• Group multiple client contacts under one business entity</li>
-                    <li>• Assign projects to organizations instead of individual clients</li>
-                    <li>• Track business relationships and hierarchy</li>
-                    <li>• Streamline communication with primary contacts</li>
-                    <li>• Better organize large enterprise clients</li>
-                  </ul>
-                </div>
-                <OrganizationManagementModal />
-              </CardContent>
-            </Card>
+            {!organizations || organizations.length === 0 ? (
+              <Card>
+                <CardContent className="p-8 text-center">
+                  <Building2 className="h-16 w-16 mx-auto mb-4 text-gray-400" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No Organizations</h3>
+                  <p className="text-gray-600 mb-4">No organizations have been created yet.</p>
+                  <OrganizationManagementModal />
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {organizations
+                  .sort((a, b) => a.name.localeCompare(b.name))
+                  .map((org) => (
+                  <Card key={org.id} className="hover:shadow-md transition-shadow">
+                    <CardContent className="p-6">
+                      <div className="flex items-start justify-between mb-4">
+                        <div className="flex items-center gap-3">
+                          <Building2 className="h-8 w-8 text-blue-600" />
+                          <div>
+                            <h3 className="font-semibold text-gray-900">{org.name}</h3>
+                            {org.industry && (
+                              <Badge variant="secondary" className="mt-1">
+                                {org.industry}
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {org.description && (
+                        <p className="text-gray-600 text-sm mb-3">{org.description}</p>
+                      )}
+                      
+                      <div className="space-y-2 text-sm text-gray-500">
+                        {org.website && (
+                          <div className="flex items-center gap-2">
+                            <span>Website:</span>
+                            <a 
+                              href={org.website} 
+                              target="_blank" 
+                              rel="noopener noreferrer" 
+                              className="text-blue-600 hover:underline truncate"
+                            >
+                              {org.website}
+                            </a>
+                          </div>
+                        )}
+                        <div>
+                          Created: {new Date(org.createdAt).toLocaleDateString()}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
           </TabsContent>
 
           <TabsContent value="services" className="space-y-6">
