@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import { Plus, Edit, Trash2, Mail, Phone, User } from "lucide-react";
+import { Plus, Edit, Trash2, Mail, Phone, User, ClipboardList, CheckCircle } from "lucide-react";
 import type { TeamMember } from "@shared/schema";
 
 interface TeamManagementModalProps {
@@ -44,6 +44,20 @@ export function TeamManagementModal({ isOpen, onClose }: TeamManagementModalProp
     queryKey: ["/api/team-members"],
     enabled: isOpen,
   });
+
+  // Get task assignments for all team members
+  const { data: taskAssignments = [] } = useQuery({
+    queryKey: ["/api/admin/task-assignments"],
+    enabled: isOpen,
+  });
+
+  // Get task count for a specific team member
+  const getTeamMemberTaskCount = (memberId: string) => {
+    const assignments = taskAssignments.filter((assignment: any) => assignment.teamMemberId === memberId);
+    const completed = assignments.filter((assignment: any) => assignment.isCompleted).length;
+    const total = assignments.length;
+    return { total, completed, pending: total - completed };
+  };
 
   const createMemberMutation = useMutation({
     mutationFn: (data: any) => apiRequest("POST", "/api/team-members", data),
@@ -240,9 +254,31 @@ export function TeamManagementModal({ isOpen, onClose }: TeamManagementModalProp
                               </div>
                             )}
                           </div>
-                          <Badge className={`mt-1 ${getRoleColor(member.role)}`}>
-                            {getRoleLabel(member.role)}
-                          </Badge>
+                          <div className="flex items-center gap-2 mt-1">
+                            <Badge className={`${getRoleColor(member.role)}`}>
+                              {getRoleLabel(member.role)}
+                            </Badge>
+                            {(() => {
+                              const taskStats = getTeamMemberTaskCount(member.id);
+                              if (taskStats.total > 0) {
+                                return (
+                                  <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-1 px-2 py-1 bg-blue-50 rounded text-xs">
+                                      <ClipboardList className="h-3 w-3 text-blue-600" />
+                                      <span className="text-blue-700 font-medium">{taskStats.total} tasks</span>
+                                    </div>
+                                    {taskStats.completed > 0 && (
+                                      <div className="flex items-center gap-1 px-2 py-1 bg-green-50 rounded text-xs">
+                                        <CheckCircle className="h-3 w-3 text-green-600" />
+                                        <span className="text-green-700 font-medium">{taskStats.completed} done</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              }
+                              return null;
+                            })()}
+                          </div>
                         </div>
                       </div>
 

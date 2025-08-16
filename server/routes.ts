@@ -2166,8 +2166,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Admin access required" });
       }
 
+      // Get all projects for this organization first
+      const orgProjects = await storage.getProjectsByOrganization(req.params.id);
+      
+      // Delete all task assignments and tasks for projects in this organization
+      for (const project of orgProjects) {
+        const projectTasks = await storage.getProjectTasks(project.id);
+        for (const task of projectTasks) {
+          await storage.deleteTaskAssignments(task.id);
+        }
+        await storage.deleteProjectTasks(project.id);
+      }
+
       const result = await storage.softDeleteOrganization(req.params.id, userId);
-      res.json({ message: "Organization deleted successfully" });
+      res.json({ message: "Organization and related tasks deleted successfully" });
     } catch (error) {
       console.error("Error deleting organization:", error);
       res.status(500).json({ message: "Failed to delete organization" });
@@ -2183,8 +2195,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Admin access required" });
       }
 
+      // Delete all task assignments and tasks for this project
+      const projectTasks = await storage.getProjectTasks(req.params.id);
+      for (const task of projectTasks) {
+        await storage.deleteTaskAssignments(task.id);
+      }
+      await storage.deleteProjectTasks(req.params.id);
+
       const result = await storage.softDeleteProject(req.params.id, userId);
-      res.json({ message: "Project deleted successfully" });
+      res.json({ message: "Project and related tasks deleted successfully" });
     } catch (error) {
       console.error("Error deleting project:", error);
       res.status(500).json({ message: "Failed to delete project" });

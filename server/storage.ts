@@ -706,6 +706,26 @@ export class DatabaseStorage implements IStorage {
     await db.delete(taskAssignments).where(eq(taskAssignments.id, id));
   }
 
+  async deleteTaskAssignments(taskId: string): Promise<void> {
+    await db.delete(taskAssignments).where(eq(taskAssignments.taskId, taskId));
+  }
+
+  async deleteProjectTasks(projectId: string): Promise<void> {
+    await db.update(tasks)
+      .set({ isDeleted: true })
+      .where(eq(tasks.projectId, projectId));
+  }
+
+  async getProjectsByOrganization(organizationId: string): Promise<Project[]> {
+    return await db
+      .select()
+      .from(projects)
+      .where(and(
+        eq(projects.organizationId, organizationId),
+        eq(projects.isDeleted, false)
+      ));
+  }
+
   // Quote operations
   async getQuotes(): Promise<Quote[]> {
     return db.select().from(quotes).orderBy(desc(quotes.createdAt));
