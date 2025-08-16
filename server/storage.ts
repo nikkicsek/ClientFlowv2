@@ -681,7 +681,7 @@ export class DatabaseStorage implements IStorage {
       .leftJoin(projects, eq(tasks.projectId, projects.id))
       .where(and(
         eq(taskAssignments.teamMemberId, teamMemberId),
-        eq(tasks.isDeleted, false)
+        isNull(tasks.deletedAt)
       ))
       .orderBy(desc(taskAssignments.createdAt));
     

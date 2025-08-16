@@ -50,6 +50,16 @@ export function AgencyTasksModal({ isOpen, onClose, project }: AgencyTasksModalP
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [newAssignee, setNewAssignee] = useState("");
 
+  // Get task assignments to show team member icons (moved to top level to fix hooks order)
+  const { data: taskAssignments } = useQuery({
+    queryKey: ["/api/admin/task-assignments"],
+    queryFn: async () => {
+      const response = await apiRequest("GET", "/api/admin/task-assignments");
+      return response.json();
+    },
+    enabled: isOpen // Only fetch when modal is open
+  });
+
   // Get actual team members from the API or provide custom input
   const { data: teamMembers } = useQuery({
     queryKey: ["/api/admin/team-members"],
@@ -124,15 +134,6 @@ export function AgencyTasksModal({ isOpen, onClose, project }: AgencyTasksModalP
       default: return <User className="h-4 w-4" />;
     }
   };
-
-  // Get task assignments to show team member icons
-  const { data: taskAssignments } = useQuery({
-    queryKey: ["/api/admin/task-assignments"],
-    queryFn: async () => {
-      const response = await apiRequest("GET", "/api/admin/task-assignments");
-      return response.json();
-    }
-  });
 
   const getTaskAssignments = (taskId: string) => {
     if (!taskAssignments) return [];
