@@ -1888,6 +1888,170 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Soft delete endpoints (admin only)
+  app.delete('/api/admin/organizations/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const result = await storage.softDeleteOrganization(req.params.id, userId);
+      res.json({ message: "Organization deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting organization:", error);
+      res.status(500).json({ message: "Failed to delete organization" });
+    }
+  });
+
+  app.delete('/api/admin/clients/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const result = await storage.softDeleteUser(req.params.id, userId);
+      res.json({ message: "Client deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting client:", error);
+      res.status(500).json({ message: "Failed to delete client" });
+    }
+  });
+
+  app.delete('/api/admin/projects/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const result = await storage.softDeleteProject(req.params.id, userId);
+      res.json({ message: "Project deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting project:", error);
+      res.status(500).json({ message: "Failed to delete project" });
+    }
+  });
+
+  app.delete('/api/admin/services/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const result = await storage.softDeleteService(req.params.id, userId);
+      res.json({ message: "Service deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting service:", error);
+      res.status(500).json({ message: "Failed to delete service" });
+    }
+  });
+
+  app.delete('/api/admin/tasks/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const result = await storage.softDeleteTask(req.params.id, userId);
+      res.json({ message: "Task deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting task:", error);
+      res.status(500).json({ message: "Failed to delete task" });
+    }
+  });
+
+  app.delete('/api/admin/proposals/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const result = await storage.softDeleteProposal(req.params.id, userId);
+      res.json({ message: "Proposal deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting proposal:", error);
+      res.status(500).json({ message: "Failed to delete proposal" });
+    }
+  });
+
+  // Get deleted items endpoint (admin only)
+  app.get('/api/admin/deleted-items', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const deletedItems = await storage.getDeletedItems();
+      res.json(deletedItems);
+    } catch (error) {
+      console.error("Error fetching deleted items:", error);
+      res.status(500).json({ message: "Failed to fetch deleted items" });
+    }
+  });
+
+  // Restore endpoints (admin only)
+  app.post('/api/admin/restore/:type/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const { type, id } = req.params;
+      let result;
+
+      switch (type) {
+        case 'organization':
+          result = await storage.restoreOrganization(id);
+          break;
+        case 'user':
+          result = await storage.restoreUser(id);
+          break;
+        case 'project':
+          result = await storage.restoreProject(id);
+          break;
+        case 'service':
+          result = await storage.restoreService(id);
+          break;
+        case 'task':
+          result = await storage.restoreTask(id);
+          break;
+        case 'proposal':
+          result = await storage.restoreProposal(id);
+          break;
+        default:
+          return res.status(400).json({ message: "Invalid item type" });
+      }
+
+      res.json({ message: `${type.charAt(0).toUpperCase() + type.slice(1)} restored successfully` });
+    } catch (error) {
+      console.error("Error restoring item:", error);
+      res.status(500).json({ message: "Failed to restore item" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

@@ -34,6 +34,8 @@ export const organizations = pgTable("organizations", {
   website: varchar("website"),
   industry: varchar("industry"),
   primaryContactId: varchar("primary_contact_id").references(() => users.id),
+  deletedAt: timestamp("deleted_at"),
+  deletedBy: varchar("deleted_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -50,6 +52,8 @@ export const users = pgTable("users", {
   jobTitle: varchar("job_title"),
   phone: varchar("phone"),
   address: text("address"),
+  deletedAt: timestamp("deleted_at"),
+  deletedBy: varchar("deleted_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -69,6 +73,8 @@ export const projects = pgTable("projects", {
   displayOrder: integer("display_order").default(0), // For drag-and-drop ordering within organizations
   googleDriveFolderId: text("google_drive_folder_id"),
   googleDriveFolderUrl: text("google_drive_folder_url"),
+  deletedAt: timestamp("deleted_at"),
+  deletedBy: varchar("deleted_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -87,6 +93,8 @@ export const services = pgTable("services", {
   category: varchar("category").notNull(), // Main category field for now
   description: text("description"),
   isActive: boolean("is_active").default(true),
+  deletedAt: timestamp("deleted_at"),
+  deletedBy: varchar("deleted_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -109,6 +117,8 @@ export const tasks = pgTable("tasks", {
   assigneeRole: varchar("assignee_role"), // "project_manager", "content_writer", "photographer", "designer", "client"
   assignedToMember: varchar("assigned_to_member"), // Specific team member name assignment
   clientVisible: boolean("client_visible").default(true), // Whether client can see this task
+  deletedAt: timestamp("deleted_at"),
+  deletedBy: varchar("deleted_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -221,6 +231,8 @@ export const proposals = pgTable("proposals", {
   approvalType: varchar("approval_type"), // "full", "partial", "declined"
   approvedDate: timestamp("approved_date"),
   convertedToProjectsAt: timestamp("converted_to_projects_at"),
+  deletedAt: timestamp("deleted_at"),
+  deletedBy: varchar("deleted_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
