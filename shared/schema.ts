@@ -100,7 +100,8 @@ export const services = pgTable("services", {
 
 export const tasks = pgTable("tasks", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  projectId: varchar("project_id").notNull().references(() => projects.id),
+  projectId: varchar("project_id").references(() => projects.id), // Made nullable for organization tasks
+  organizationId: varchar("organization_id").references(() => organizations.id), // For organization-level tasks
   serviceId: varchar("service_id").references(() => services.id),
   title: text("title").notNull(),
   description: text("description"),
@@ -111,6 +112,7 @@ export const tasks = pgTable("tasks", {
   notes: text("notes"),
   priority: varchar("priority").default("medium"), // "low", "medium", "high", "urgent"
   taskType: varchar("task_type").default("standard"), // "standard", "milestone", "review", "approval"
+  taskScope: varchar("task_scope").default("project"), // "project", "organization"
   dependencies: text("dependencies").array(), // Array of task IDs that must be completed first
   estimatedHours: integer("estimated_hours"),
   actualHours: integer("actual_hours"),

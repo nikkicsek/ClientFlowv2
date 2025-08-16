@@ -29,6 +29,7 @@ import { EditClientModal } from "@/components/edit-client-modal";
 import { AgencyTasksModal } from "@/components/agency-tasks-modal";
 import { EditOrganizationModal } from "@/components/edit-organization-modal";
 import { OrganizationContactsModal } from "@/components/organization-contacts-modal";
+import { OrganizationTasksModal } from "@/components/organization-tasks-modal";
 import { GoogleDriveLinks } from "@/components/google-drive-links";
 import { ProposalManagement } from "@/components/proposal-management";
 import { LiveDiseaseFreeProposal } from "@/components/live-disease-free-proposal";
@@ -56,6 +57,7 @@ export default function AdminDashboard() {
   const [projectViewMode, setProjectViewMode] = useState<"grid" | "list">("list");
   const [editingOrganization, setEditingOrganization] = useState<Organization | null>(null);
   const [viewingOrgContacts, setViewingOrgContacts] = useState<Organization | null>(null);
+  const [viewingOrgTasks, setViewingOrgTasks] = useState<Organization | null>(null);
   const [selectedOrgForProjects, setSelectedOrgForProjects] = useState<string | null>(null);
   const [showLDFProposal, setShowLDFProposal] = useState(false);
   const [selectedClientForProposal, setSelectedClientForProposal] = useState<{clientId: string, organizationId?: string} | null>(null);
@@ -1036,6 +1038,14 @@ export default function AdminDashboard() {
                           <Button
                             variant="ghost"
                             size="sm"
+                            onClick={() => setViewingOrgTasks(org)}
+                            title="Organization Tasks"
+                          >
+                            <CheckSquare className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             onClick={() => setEditingOrganization(org)}
                             title="Edit Organization"
                           >
@@ -1138,6 +1148,14 @@ export default function AdminDashboard() {
                             title="Manage Contacts"
                           >
                             <Users className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setViewingOrgTasks(org)}
+                            title="Organization Tasks"
+                          >
+                            <CheckSquare className="h-4 w-4" />
                           </Button>
                           <Button
                             variant="ghost"
@@ -1284,6 +1302,15 @@ export default function AdminDashboard() {
         organization={viewingOrgContacts}
         isOpen={!!viewingOrgContacts}
         onClose={() => setViewingOrgContacts(null)}
+        clients={clients || []}
+      />
+
+      {/* Organization Tasks Modal */}
+      <OrganizationTasksModal
+        organization={viewingOrgTasks}
+        isOpen={!!viewingOrgTasks}
+        onClose={() => setViewingOrgTasks(null)}
+        services={services || []}
       />
 
       <DeleteConfirmationDialog
