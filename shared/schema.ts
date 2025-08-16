@@ -66,6 +66,8 @@ export const projects = pgTable("projects", {
   expectedCompletion: timestamp("expected_completion"),
   budget: decimal("budget", { precision: 10, scale: 2 }),
   progress: integer("progress").default(0), // percentage 0-100
+  googleDriveFolderId: text("google_drive_folder_id"),
+  googleDriveFolderUrl: text("google_drive_folder_url"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
