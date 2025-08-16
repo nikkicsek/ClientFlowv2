@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Users, Briefcase, Settings, Eye, Building2, Edit, CheckSquare, Clock, AlertTriangle, Grid3X3, List, UserPlus, FolderOpen, GripVertical, Trash2 } from "lucide-react";
+import { Plus, Users, Briefcase, Settings, Eye, Building2, Edit, CheckSquare, Clock, AlertTriangle, Grid3X3, List, UserPlus, FolderOpen, GripVertical, Trash2, User as UserIcon } from "lucide-react";
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { useSortable } from '@dnd-kit/sortable';
@@ -679,8 +679,19 @@ export default function AdminDashboard() {
 
           <TabsContent value="tasks" className="space-y-6">
             <div className="flex justify-between items-center">
-              <h2 className="text-xl font-semibold text-gray-900">All Tasks</h2>
-              <p className="text-gray-600">View and manage tasks across all projects</p>
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900">Task Management</h2>
+                <p className="text-gray-600">Organized by team member and priority</p>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setActiveTab("projects")}
+                >
+                  Create Task
+                </Button>
+              </div>
             </div>
 
             {tasksLoading ? (
@@ -698,60 +709,174 @@ export default function AdminDashboard() {
                 </CardContent>
               </Card>
             ) : (
-              <div className="space-y-4">
-                {allTasks.map((task: any) => (
-                  <Card key={task.id} className="hover:shadow-md transition-shadow">
-                    <CardContent className="p-4">
-                      <div className="flex justify-between items-start">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-3 mb-2">
-                            <h3 className="font-medium text-gray-900">{task.title}</h3>
-                            <Badge variant={
-                              task.status === 'completed' ? 'default' :
-                              task.status === 'in_progress' ? 'secondary' :
-                              task.status === 'needs_approval' ? 'outline' :
-                              'destructive'
-                            }>
-                              {task.status === 'in_progress' ? 'In Progress' :
-                               task.status === 'completed' ? 'Completed' :
-                               task.status === 'needs_approval' ? 'Needs Approval' :
-                               task.status === 'outstanding' ? 'Outstanding' :
-                               'Needs Clarification'}
-                            </Badge>
+              <div className="space-y-6">
+                {/* Overdue Tasks Section */}
+                {(() => {
+                  const overdueTasks = allTasks.filter((task: any) => 
+                    task.dueDate && 
+                    new Date(task.dueDate) < new Date() && 
+                    task.status !== 'completed'
+                  );
+                  
+                  if (overdueTasks.length > 0) {
+                    return (
+                      <Card className="border-red-200 bg-red-50">
+                        <CardContent className="p-6">
+                          <div className="flex items-center gap-2 mb-4">
+                            <AlertTriangle className="h-5 w-5 text-red-600" />
+                            <h3 className="text-lg font-semibold text-red-800">
+                              Overdue Tasks ({overdueTasks.length})
+                            </h3>
                           </div>
-                          {task.description && (
-                            <p className="text-sm text-gray-600 mb-2">{task.description}</p>
-                          )}
-                          <div className="flex items-center gap-4 text-sm text-gray-500">
-                            <span>Project: <strong>{task.project?.name || 'Unknown Project'}</strong></span>
-                            {task.service && (
-                              <span>Service: <strong>{task.service.name}</strong></span>
-                            )}
-                            {task.dueDate && (
-                              <span>Due: <strong>{new Date(task.dueDate).toLocaleDateString()}</strong></span>
-                            )}
+                          <div className="space-y-3">
+                            {overdueTasks.map((task: any) => (
+                              <div key={task.id} className="bg-white rounded-lg p-4 border border-red-200">
+                                <div className="flex justify-between items-start">
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-3 mb-2">
+                                      <h4 className="font-medium text-gray-900">{task.title}</h4>
+                                      <Badge variant="destructive">
+                                        {Math.floor((new Date().getTime() - new Date(task.dueDate).getTime()) / (1000 * 60 * 60 * 24))} days overdue
+                                      </Badge>
+                                    </div>
+                                    <div className="flex items-center gap-4 text-sm text-gray-600">
+                                      <span>Project: <strong>{task.project?.name}</strong></span>
+                                      {task.assignedTo && (
+                                        <span>Assigned: <strong>{task.assignedTo}</strong></span>
+                                      )}
+                                      <span>Due: <strong>{new Date(task.dueDate).toLocaleDateString()}</strong></span>
+                                    </div>
+                                  </div>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => setDeletingItem({ type: 'tasks', id: task.id, name: task.title })}
+                                    title="Delete Task"
+                                    className="text-red-600 hover:text-red-700"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  }
+                })()}
+
+                {/* Tasks by Team Member */}
+                {(() => {
+                  const tasksByAssignee = allTasks.reduce((acc: any, task: any) => {
+                    const assignee = task.assignedTo || 'Unassigned';
+                    if (!acc[assignee]) {
+                      acc[assignee] = [];
+                    }
+                    acc[assignee].push(task);
+                    return acc;
+                  }, {});
+
+                  return Object.entries(tasksByAssignee).map(([assignee, tasks]: [string, any]) => (
+                    <Card key={assignee}>
+                      <CardContent className="p-6">
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                              <UserIcon className="h-4 w-4 text-blue-600" />
+                            </div>
+                            <div>
+                              <h3 className="text-lg font-semibold text-gray-900">{assignee}</h3>
+                              <p className="text-sm text-gray-600">
+                                {tasks.length} task{tasks.length !== 1 ? 's' : ''} • 
+                                {tasks.filter((t: any) => t.status === 'completed').length} completed • 
+                                {tasks.filter((t: any) => t.status === 'in_progress').length} in progress
+                              </p>
+                            </div>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setDeletingItem({ type: 'tasks', id: task.id, name: task.title })}
-                            title="Delete Task"
-                            className="text-red-600 hover:text-red-700"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                          <div className="text-right text-sm text-gray-500">
-                            {task.createdAt && (
-                              <p>Created: {new Date(task.createdAt).toLocaleDateString()}</p>
-                            )}
-                          </div>
+                        
+                        <div className="space-y-3">
+                          {tasks
+                            .sort((a: any, b: any) => {
+                              // Sort by: overdue first, then by due date, then by status
+                              const aOverdue = a.dueDate && new Date(a.dueDate) < new Date() && a.status !== 'completed';
+                              const bOverdue = b.dueDate && new Date(b.dueDate) < new Date() && b.status !== 'completed';
+                              
+                              if (aOverdue && !bOverdue) return -1;
+                              if (!aOverdue && bOverdue) return 1;
+                              
+                              if (a.dueDate && b.dueDate) {
+                                return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+                              }
+                              
+                              return a.status.localeCompare(b.status);
+                            })
+                            .map((task: any) => {
+                              const isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && task.status !== 'completed';
+                              
+                              return (
+                                <div 
+                                  key={task.id} 
+                                  className={`p-4 rounded-lg border ${
+                                    isOverdue ? 'border-red-200 bg-red-50' : 'border-gray-200 bg-gray-50'
+                                  }`}
+                                >
+                                  <div className="flex justify-between items-start">
+                                    <div className="flex-1">
+                                      <div className="flex items-center gap-3 mb-2">
+                                        <h4 className="font-medium text-gray-900">{task.title}</h4>
+                                        <Badge variant={
+                                          task.status === 'completed' ? 'default' :
+                                          task.status === 'in_progress' ? 'secondary' :
+                                          task.status === 'needs_approval' ? 'outline' :
+                                          isOverdue ? 'destructive' : 'secondary'
+                                        }>
+                                          {task.status === 'in_progress' ? 'In Progress' :
+                                           task.status === 'completed' ? 'Completed' :
+                                           task.status === 'needs_approval' ? 'Needs Approval' :
+                                           task.status === 'outstanding' ? 'Outstanding' :
+                                           'Needs Clarification'}
+                                        </Badge>
+                                        {isOverdue && (
+                                          <Badge variant="destructive" className="text-xs">
+                                            Overdue
+                                          </Badge>
+                                        )}
+                                      </div>
+                                      {task.description && (
+                                        <p className="text-sm text-gray-600 mb-2">{task.description}</p>
+                                      )}
+                                      <div className="flex items-center gap-4 text-sm text-gray-500">
+                                        <span>Project: <strong>{task.project?.name || 'Unknown Project'}</strong></span>
+                                        {task.service && (
+                                          <span>Service: <strong>{task.service.name}</strong></span>
+                                        )}
+                                        {task.dueDate && (
+                                          <span className={isOverdue ? 'text-red-600 font-medium' : ''}>
+                                            Due: <strong>{new Date(task.dueDate).toLocaleDateString()}</strong>
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => setDeletingItem({ type: 'tasks', id: task.id, name: task.title })}
+                                      title="Delete Task"
+                                      className="text-red-600 hover:text-red-700"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                </div>
+                              );
+                            })}
                         </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                      </CardContent>
+                    </Card>
+                  ));
+                })()}
               </div>
             )}
           </TabsContent>
