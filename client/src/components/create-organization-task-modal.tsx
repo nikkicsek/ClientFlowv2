@@ -38,6 +38,7 @@ export default function CreateOrganizationTaskModal({
     status: "in_progress",
     priority: "medium",
     dueDate: "",
+    googleDriveLink: "",
   });
   
   const [selectedTeamMembers, setSelectedTeamMembers] = useState<string[]>([]);
@@ -78,6 +79,7 @@ export default function CreateOrganizationTaskModal({
         status: "in_progress",
         priority: "medium",
         dueDate: "",
+        googleDriveLink: "",
       });
       setSelectedTeamMembers([]);
       toast({
@@ -112,6 +114,7 @@ export default function CreateOrganizationTaskModal({
       status: formData.status,
       priority: formData.priority,
       dueDate: formData.dueDate || null,
+      googleDriveLink: formData.googleDriveLink || null,
     };
 
     createTaskMutation.mutate(taskData);
@@ -240,6 +243,20 @@ export default function CreateOrganizationTaskModal({
               value={formData.dueDate}
               onChange={(e) => handleInputChange('dueDate', e.target.value)}
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="googleDriveLink">Google Drive Link (Optional)</Label>
+            <Input
+              id="googleDriveLink"
+              type="url"
+              value={formData.googleDriveLink}
+              onChange={(e) => handleInputChange('googleDriveLink', e.target.value)}
+              placeholder="https://drive.google.com/..."
+            />
+            <p className="text-sm text-muted-foreground">
+              Link to completed files, signed contracts, or related documents in Google Drive
+            </p>
           </div>
 
           <div className="flex justify-end space-x-2 pt-4">
