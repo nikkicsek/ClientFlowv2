@@ -1641,6 +1641,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/admin/team-members", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const teamMembers = await storage.getAllTeamMembers();
+      // Filter for active team members only
+      const activeTeamMembers = teamMembers.filter(member => member.isActive);
+      res.json(activeTeamMembers);
+    } catch (error) {
+      console.error("Error fetching team members:", error);
+      res.status(500).json({ error: "Failed to fetch team members" });
+    }
+  });
+
   app.post("/api/team-members", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
