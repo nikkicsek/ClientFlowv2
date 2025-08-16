@@ -17,12 +17,14 @@ import {
   Plus,
   Users,
   Building2,
-  ExternalLink
+  ExternalLink,
+  Trash2
 } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { TaskAssignmentManager } from './task-assignment-manager';
 import CreateOrganizationTaskModal from './create-organization-task-modal';
+import { DeleteConfirmationDialog } from './delete-confirmation-dialog';
 import type { Organization, Service } from '@shared/schema';
 
 interface OrganizationTasksModalProps {
@@ -39,6 +41,7 @@ export function OrganizationTasksModal({ isOpen, onClose, organization, services
   const [filterPriority, setFilterPriority] = useState<string>("all");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedTaskForAssignment, setSelectedTaskForAssignment] = useState<string | null>(null);
+  const [deletingTask, setDeletingTask] = useState<{id: string, title: string} | null>(null);
 
   const { data: tasks = [], isLoading } = useQuery({
     queryKey: ["/api/organizations", organization?.id, "tasks"],
@@ -66,6 +69,23 @@ export function OrganizationTasksModal({ isOpen, onClose, organization, services
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/organizations", organization?.id, "tasks"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/tasks"] });
+    },
+  });
+
+  // Delete task mutation
+  const deleteTaskMutation = useMutation({
+    mutationFn: async (taskId: string) => {
+      const response = await fetch(`/api/tasks/${taskId}/soft`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) throw new Error('Failed to delete task');
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/organizations", organization?.id, "tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/deleted-items"] });
+      setDeletingTask(null);
     },
   });
 
@@ -290,6 +310,16 @@ export function OrganizationTasksModal({ isOpen, onClose, organization, services
                             <Users className="h-4 w-4 mr-1" />
                             Assign Team
                           </Button>
+                          
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setDeletingTask({ id: task.id, title: task.title })}
+                            className="text-red-600 hover:text-red-700 hover:border-red-300"
+                          >
+                            <Trash2 className="h-4 w-4 mr-1" />
+                            Delete
+                          </Button>
                         </div>
                       </div>
                     </CardContent>
@@ -331,6 +361,21 @@ export function OrganizationTasksModal({ isOpen, onClose, organization, services
           </DialogContent>
         </Dialog>
       )}
+
+      <DeleteConfirmationDialog
+        isOpen={!!deletingTask}
+        onClose={() => setDeletingTask(null)}
+        onConfirm={() => {
+          if (deletingTask) {
+            deleteTaskMutation.mutate(deletingTask.id);
+          }
+        }}
+        title="Delete Organization Task"
+        description="This task will be moved to deleted items and can be restored later."
+        itemName={deletingTask?.title || ''}
+        itemType="task"
+        isLoading={deleteTaskMutation.isPending}
+      />
     </>
   );
 }
