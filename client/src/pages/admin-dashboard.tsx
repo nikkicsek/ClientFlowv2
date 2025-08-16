@@ -37,7 +37,7 @@ export default function AdminDashboard() {
   const [showAgencyTasks, setShowAgencyTasks] = useState(false);
   const [selectedProjectForTasks, setSelectedProjectForTasks] = useState<Project | null>(null);
   const [showTeamManagement, setShowTeamManagement] = useState(false);
-  const [showOrganizations, setShowOrganizations] = useState(false);
+  const [activeTab, setActiveTab] = useState("projects");
 
   const { data: projects, isLoading: projectsLoading } = useQuery({
     queryKey: ["/api/admin/projects"],
@@ -199,7 +199,7 @@ export default function AdminDashboard() {
               </Button>
               <Button
                 variant="outline"
-                onClick={() => setShowOrganizations(true)}
+                onClick={() => setActiveTab("organizations")}
                 className="flex items-center gap-2"
               >
                 <Building2 className="h-4 w-4" />
@@ -225,7 +225,7 @@ export default function AdminDashboard() {
 
       {/* Main Content */}
       <div className="p-6">
-        <Tabs defaultValue="projects" className="space-y-6">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="projects">Projects</TabsTrigger>
             <TabsTrigger value="tasks">Tasks</TabsTrigger>
@@ -646,10 +646,7 @@ export default function AdminDashboard() {
         onClose={() => setShowTeamManagement(false)}
       />
 
-      <OrganizationManagementModal
-        isOpen={showOrganizations}
-        onClose={() => setShowOrganizations(false)}
-      />
+
     </div>
   );
 }
