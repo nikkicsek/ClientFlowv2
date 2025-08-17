@@ -27,6 +27,7 @@ function Router() {
       {!isAuthenticated ? (
         <>
           <Route path="/" component={Landing} />
+          <Route path="/my-tasks" component={Landing} />
           <Route path="*" component={Landing} />
         </>
       ) : (
