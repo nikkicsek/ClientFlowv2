@@ -1,0 +1,52 @@
+We need the debug endpoints to work without a session, and fix a schema mismatch in the My Tasks query.
+
+A) Add impersonation by email to all debug endpoints
+- Create a helper getEffectiveUser(req) that:
+  1) If a logged-in session exists, return { userId, email, sessionExists: true } using the SAME user id that My Tasks uses.
+  2) Else if req.query.as is present (an email), look up users.id by that email and return { userId, email, sessionExists: false, impersonated: true }.
+  3) If neither exists, return a 401 JSON { message: 'No session. Pass ?as=<email>' }.
+- Use this helper in ALL /debug routes (/me, /my-tasks, /calendar-status, /calendar-create-test, /create-test-task).
+- In /debug/me, return { userId, email, sessionExists, impersonated }.
+
+B) Fix the "My Tasks" query crash
+- The error says: column projects.is_deleted does not exist.
+- Update the storage/service method that My Tasks uses:
+  - Either remove the filter on projects.is_deleted,
+  - Or add a safe default with COALESCE or LEFT JOIN and don’t reference the column if it’s missing.
+  - Do NOT crash if the column is absent; the query should return tasks without that filter.
+- Wrap the /debug/my-tasks route in try/catch and on error return res.status(500).json({ message, stack }).
+
+C) Make Create Test Task use a real users.id and trigger calendar hooks
+- In /debug/create-test-task:
+  - Use getEffectiveUser(req) to obtain the current users.id.
+  - Create a task titled "Replit Sync Test (server)" due in 15 minutes.
+  - Assign it to that users.id (use whatever field/table your app expects; if assignments are separate, insert into the assignment table).
+  - After a successful DB write, call:
+      await onTaskCreatedOrUpdated(task.id);
+      and if assignment is separate: await onAssignmentCreated(newAssignment.id);
+  - Return { id, assigneeUserIds, due_at }.
+- Make sure this does not violate any FK (use the users.id from the lookup).
+
+D) Calendar status + direct event test
+- In /debug/calendar-status, look up oauth_tokens by the SAME users.id from getEffectiveUser(req).
+- In /debug/calendar-create-test, use those tokens to create a 30-min event starting 10 minutes from now on 'primary'. Log payload and any Google error: console.error(err.response?.data || err.message).
+
+E) Dashboard links
+- Ensure /debug renders real links (not static headings):
+  /debug/health
+  /debug/me
+  /debug/my-tasks
+  /debug/calendar-status
+  /debug/calendar-create-test
+  /debug/create-test-task
+  (Each link should preserve an optional ?as=<email> query string if present.)
+
+F) Prove it
+- Restart the server.
+- I will visit:
+  /debug/me?as=nikki@csekcreative.com
+  /debug/calendar-status?as=nikki@csekcreative.com
+  /debug/calendar-create-test?as=nikki@csekcreative.com
+  /debug/create-test-task?as=nikki@csekcreative.com
+  /debug/my-tasks?as=nikki@csekcreative.com
+- All should return JSON (no crashes). The calendar endpoints should create events for Nikki’s calendar.
