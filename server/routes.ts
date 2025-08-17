@@ -527,12 +527,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.claims.sub;
       const user = await storage.getUser(userId);
+      const { teamMemberId } = req.params;
       
-      if (user?.role !== 'admin') {
-        return res.status(403).json({ message: "Only admins can view team member assignments" });
+      // Get the team member to check ownership
+      const teamMember = await storage.getTeamMember(teamMemberId);
+      if (!teamMember) {
+        return res.status(404).json({ message: "Team member not found" });
+      }
+      
+      // Allow access if user is admin or if the team member's email matches the user's email
+      if (user?.role !== 'admin' && user?.email !== teamMember.email) {
+        return res.status(403).json({ message: "Access denied" });
       }
 
-      const assignments = await storage.getTaskAssignmentsByTeamMember(req.params.teamMemberId);
+      const assignments = await storage.getTaskAssignmentsByTeamMember(teamMemberId);
       res.json(assignments);
     } catch (error) {
       console.error("Error fetching team member assignments:", error);
