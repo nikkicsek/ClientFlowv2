@@ -9,29 +9,17 @@ const router = Router();
 
 // Simple HTML debug dashboard
 router.get('/', (req, res) => {
-  const html = `
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Debug Dashboard</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 40px; }
-        .link { display: block; margin: 10px 0; padding: 10px; background: #f5f5f5; text-decoration: none; color: #333; }
-        .link:hover { background: #e0e0e0; }
-    </style>
-</head>
-<body>
+  res.type('html').send(`
     <h1>Debug Dashboard</h1>
-    <a href="/debug/health" class="link">Health Check</a>
-    <a href="/debug/me" class="link">Current User Info</a>
-    <a href="/debug/my-tasks" class="link">My Tasks</a>
-    <a href="/debug/calendar-status" class="link">Calendar Status</a>
-    <a href="/debug/calendar-create-test" class="link">Create Test Calendar Event</a>
-    <a href="/debug/create-test-task" class="link">Create Test Task</a>
-</body>
-</html>
-  `;
-  res.send(html);
+    <ul>
+      <li><a href="/debug/health" target="_top">Health Check</a></li>
+      <li><a href="/debug/me" target="_top">Current User Info</a></li>
+      <li><a href="/debug/my-tasks" target="_top">My Tasks</a></li>
+      <li><a href="/debug/calendar-status" target="_top">Calendar Status</a></li>
+      <li><a href="/debug/calendar-create-test" target="_top">Create Test Calendar Event</a></li>
+      <li><a href="/debug/create-test-task" target="_top">Create Test Task</a></li>
+    </ul>
+  `);
 });
 
 // Health check
@@ -143,7 +131,13 @@ router.get('/calendar-create-test', isAuthenticated, async (req: any, res) => {
 
     console.log("Creating test calendar event with payload:", eventData);
 
-    const eventId = await googleCalendarService.createEvent(user.id, 'primary', eventData);
+    const eventId = await googleCalendarService.createTaskEvent(user.id, {
+      title: eventData.summary,
+      description: eventData.description,
+      dueDate: eventData.start.dateTime,
+      status: 'in_progress',
+      priority: 'medium'
+    });
     
     res.json({ ok: true, eventId });
   } catch (error) {
@@ -182,9 +176,14 @@ router.get('/create-test-task', isAuthenticated, async (req: any, res) => {
     // Call calendar hooks
     await onTaskCreatedOrUpdated(task.id);
     
-    // Check if we need to call assignment hook
+    // Create task assignment if there's an assigned user
     if (task.assignedTo) {
-      await onAssignmentCreated(task.id, task.assignedTo);
+      const assignment = await storage.createTaskAssignment({
+        taskId: task.id,
+        teamMemberId: task.assignedTo,
+        assignedBy: userId
+      });
+      await onAssignmentCreated(assignment.id);
     }
 
     res.json({
