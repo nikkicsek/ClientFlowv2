@@ -685,6 +685,18 @@ export class DatabaseStorage implements IStorage {
     return updatedUser;
   }
 
+  async getOAuthTokensByUserId(userId: string): Promise<any | null> {
+    try {
+      // Use pool directly for raw SQL query since this table isn't in our schema
+      const { pool } = await import('./db');
+      const result = await pool.query('SELECT * FROM oauth_tokens WHERE user_id = $1', [userId]);
+      return result.rows?.[0] || null;
+    } catch (error) {
+      console.error('Error fetching OAuth tokens:', error);
+      return null;
+    }
+  }
+
   async updateUserCalendarSync(userId: string, enabled: boolean): Promise<User> {
     const [updatedUser] = await db
       .update(users)

@@ -4,6 +4,7 @@ import { googleCalendarService, setSyncEnabled, SYNC_ENABLED } from "./googleCal
 import { onTaskCreatedOrUpdated, onAssignmentCreated } from './hooks/taskCalendarHooks';
 import { insertTaskSchema, type TeamMember } from "@shared/schema";
 import { pool } from "./db";
+import { google } from 'googleapis';
 
 const router = Router();
 
@@ -31,8 +32,8 @@ async function getEffectiveUser(req: any) {
   return null;
 }
 
-// Unified token resolution helper for debug endpoints
-async function resolveUserAndTokens(req: any) {
+// Session or impersonation user helper
+async function getSessionOrImpersonatedUser(req: any) {
   const effectiveUser = await getEffectiveUser(req);
   if (!effectiveUser) {
     return null;
@@ -43,40 +44,30 @@ async function resolveUserAndTokens(req: any) {
   const teamMember = teamMembers.find(member => member.email === effectiveUser.email);
   const teamMemberId = teamMember?.id || null;
 
-  // Try both userId and teamMemberId keys in oauth_tokens table
-  let tokenData = null;
-  let keyType = null;
+  return {
+    userId: effectiveUser.userId,
+    teamMemberId,
+    email: effectiveUser.email,
+    impersonated: effectiveUser.impersonated
+  };
+}
 
-  // Try canonical userId first
-  try {
-    const userTokenResult = await pool.query('SELECT * FROM oauth_tokens WHERE user_id = $1', [effectiveUser.userId]);
-    if (userTokenResult.rows.length > 0) {
-      tokenData = userTokenResult.rows[0];
-      keyType = "userId";
-    }
-  } catch (err) {
-    console.error('Error querying oauth_tokens by userId:', err);
+// Unified token resolution helper for debug endpoints
+async function resolveUserAndTokens(req: any) {
+  const u = await getSessionOrImpersonatedUser(req);
+  if (!u) {
+    return null;
   }
 
-  // If not found by userId, try teamMemberId
-  if (!tokenData && teamMemberId) {
-    try {
-      const teamTokenResult = await pool.query('SELECT * FROM oauth_tokens WHERE user_id = $1', [teamMemberId]);
-      if (teamTokenResult.rows.length > 0) {
-        tokenData = teamTokenResult.rows[0];
-        keyType = "teamMemberId";
-      }
-    } catch (err) {
-      console.error('Error querying oauth_tokens by teamMemberId:', err);
-    }
-  }
+  const byUser = await storage.getOAuthTokensByUserId(u.userId);
+  const byTeam = u.teamMemberId ? await storage.getOAuthTokensByUserId(u.teamMemberId) : null;
+  const token = byUser ?? byTeam ?? null;
 
   return {
-    ...effectiveUser,
-    teamMemberId,
-    token: tokenData,
-    hasTokens: !!tokenData,
-    keyType: tokenData ? keyType : null
+    ...u,
+    token,
+    hasTokens: !!token,
+    keyType: byUser ? "userId" : (byTeam ? "teamMemberId" : null)
   };
 }
 
@@ -123,9 +114,9 @@ router.get('/', (req, res) => {
           🟡 Calendar Status <span class="status">(Shows OAuth token status)</span>
         </a>
         
-        <button onclick="createTestCalendarEvent()" class="link testing" style="width: 100%; text-align: left; border: none; font-size: inherit; cursor: pointer;">
+        <a href="/debug/calendar-create-test${asParam}" class="link testing">
           🟡 Create Test Calendar Event <span class="status">(Creates 30-min calendar event)</span>
-        </button>
+        </a>
         
         <a href="/debug/create-test-task${asParam}" class="link testing">
           🟡 Create Test Task <span class="status">(Creates task + triggers hooks)</span>
@@ -171,18 +162,7 @@ router.get('/', (req, res) => {
             }
           }
           
-          async function createTestCalendarEvent() {
-            try {
-              const asParam = '${req.query.as ? `?as=${req.query.as}` : ''}';
-              const response = await fetch(\`/debug/calendar-create-test\${asParam}\`, { method: 'POST' });
-              const data = await response.json();
-              console.log('Calendar event creation result:', data);
-              alert('Result: ' + JSON.stringify(data, null, 2));
-            } catch (error) {
-              console.error('Error creating calendar event:', error);
-              alert('Error: ' + error.message);
-            }
-          }
+
           
           // Update status on page load
           updateSyncStatus();
@@ -335,8 +315,8 @@ router.get('/tokens/dump', async (req: any, res) => {
   }
 });
 
-// Calendar create test - unified token resolution with event creation
-router.post('/calendar-create-test', async (req: any, res) => {
+// Calendar create test - unified token resolution with event creation  
+router.get('/calendar-create-test', async (req: any, res) => {
   try {
     const userAndTokens = await resolveUserAndTokens(req);
     if (!userAndTokens) {
@@ -363,39 +343,50 @@ router.post('/calendar-create-test', async (req: any, res) => {
 
     // Create a 30-minute test event starting now
     const now = new Date();
-    const endTime = new Date(now.getTime() + 30 * 60 * 1000); // 30 minutes later
+    const end = new Date(now.getTime() + 30 * 60 * 1000); // 30 minutes later
 
-    const testTask = {
-      title: "Debug Calendar Test",
-      description: `Test event created via debug endpoint at ${now.toISOString()}`,
-      dueDate: now.toISOString(),
-      status: "in_progress",
-      priority: "medium"
-    };
+    try {
+      // Use GoogleCalendarService's existing createTaskEvent method
+      const testTask = {
+        title: "Replit Debug Test Event",
+        description: "created from /debug/calendar-create-test",
+        dueDate: now.toISOString(),
+        status: "in_progress" as const,
+        priority: "medium" as const
+      };
 
-    // Use GoogleCalendarService to create the event
-    const eventId = await googleCalendarService.createTaskEvent(userAndTokens.userId, testTask);
+      const eventId = await googleCalendarService.createTaskEvent(userAndTokens.userId, testTask);
 
-    if (eventId) {
-      res.json({
-        ok: true,
-        eventId,
-        message: "Test calendar event created successfully",
-        userId: userAndTokens.userId,
-        email: userAndTokens.email,
-        keyType: userAndTokens.keyType,
-        impersonated: userAndTokens.impersonated,
-        startTime: now.toISOString(),
-        endTime: endTime.toISOString()
-      });
-    } else {
+      if (eventId) {
+        res.json({
+          ok: true,
+          eventId,
+          keyType: userAndTokens.keyType,
+          userId: userAndTokens.userId,
+          email: userAndTokens.email,
+          start: now.toISOString(),
+          end: end.toISOString()
+        });
+      } else {
+        res.json({
+          ok: false,
+          error: "Calendar service returned null event ID",
+          userId: userAndTokens.userId,
+          email: userAndTokens.email,
+          keyType: userAndTokens.keyType,
+          impersonated: userAndTokens.impersonated
+        });
+      }
+    } catch (calendarError) {
+      console.error('Calendar API error:', calendarError);
       res.json({
         ok: false,
         error: "Failed to create calendar event",
         userId: userAndTokens.userId,
         email: userAndTokens.email,
         keyType: userAndTokens.keyType,
-        impersonated: userAndTokens.impersonated
+        impersonated: userAndTokens.impersonated,
+        details: calendarError instanceof Error ? calendarError.message : String(calendarError)
       });
     }
   } catch (error) {
@@ -503,6 +494,41 @@ router.get('/sync/status', (req, res) => {
 
 router.post('/sync/status', (req, res) => {
   res.json({ enabled: SYNC_ENABLED });
+});
+
+// Compatibility aliases
+router.get('/create-calendar-event', (req, res) => {
+  res.redirect(307, `/debug/calendar-create-test${req.url.includes('?') ? '&' + req.url.split('?')[1] : ''}`);
+});
+
+router.get('/api/debug/calendar-create-test', (req, res) => {
+  res.redirect(307, `/debug/calendar-create-test${req.url.includes('?') ? '?' + req.url.split('?')[1] : ''}`);
+});
+
+// Routes listing endpoint
+router.get('/routes', (req, res) => {
+  const routes = [
+    'GET /debug/',
+    'GET /debug/health',
+    'GET /debug/me',
+    'GET /debug/my-tasks',
+    'GET /debug/calendar-status',
+    'GET /debug/calendar-create-test',
+    'GET /debug/create-test-task',
+    'GET /debug/tokens/dump',
+    'GET /debug/sync/status',
+    'POST /debug/sync/enable',
+    'POST /debug/sync/disable',
+    'GET /debug/create-calendar-event (alias)',
+    'GET /api/debug/calendar-create-test (alias)',
+    'GET /debug/routes'
+  ];
+  
+  res.json({
+    registered_routes: routes,
+    total_count: routes.length,
+    note: "All routes support ?as=email parameter for impersonation"
+  });
 });
 
 router.get('/sync/disable', (req, res) => {

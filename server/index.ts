@@ -14,6 +14,7 @@ app.set('db', pool);
 
 // Debug startup logging
 console.log('REDIRECT_URI =', process.env.GOOGLE_REDIRECT_URI);
+console.log('Mounted debug routes at /debug');
 
 // CRITICAL: Mount debug and oauth routes EARLY BEFORE any other routes
 app.use('/debug', debugRouter);
