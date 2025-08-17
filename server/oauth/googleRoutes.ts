@@ -69,8 +69,8 @@ googleRouter.get('/oauth/google/callback', async (req: any, res) => {
     client.setCredentials(tokens);
 
     // Get user profile from Google
-    const oauth2 = google.oauth2({ version: 'v2', auth: client });
-    const { data: profile } = await oauth2.userinfo.get();
+    const oauth2Api = google.oauth2({ version: 'v2', auth: client });
+    const { data: profile } = await oauth2Api.userinfo.get();
     const email = profile.email;
     const googleSub = profile.id;
 
@@ -130,8 +130,8 @@ googleRouter.get('/api/oauth/google/callback', async (req: any, res) => {
     client.setCredentials(tokens);
 
     // Get user profile from Google
-    const oauth2 = google.oauth2({ version: 'v2', auth: client });
-    const { data: profile } = await oauth2.userinfo.get();
+    const oauth2Api = google.oauth2({ version: 'v2', auth: client });
+    const { data: profile } = await oauth2Api.userinfo.get();
     const email = profile.email;
     const googleSub = profile.id;
 
@@ -180,6 +180,12 @@ googleRouter.get('/api/oauth/google/callback', async (req: any, res) => {
     console.error('OAuth callback failure', { query: req.query, err: e?.message });
     res.status(500).send('OAuth error occurred. Please try again or contact support.');
   }
+});
+
+// Hard test route to confirm Express routing
+googleRouter.get('/oauth/ping', (_req, res) => {
+  console.log('>> HIT /oauth/ping');
+  res.type('text').send('pong');
 });
 
 // Debug health route to confirm router is mounted

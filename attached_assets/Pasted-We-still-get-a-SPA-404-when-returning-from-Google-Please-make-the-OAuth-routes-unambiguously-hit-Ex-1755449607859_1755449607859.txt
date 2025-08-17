@@ -1,0 +1,51 @@
+We still get a SPA 404 when returning from Google. Please make the OAuth routes unambiguously hit Express and prove it with logs.
+
+FILES: server/index.ts (main Express), server/oauth/googleRoutes.ts
+
+1) ROUTE ORDER
+- In server/index.ts, ensure:
+    a) app.use(googleRouter) is mounted as EARLY as possible,
+    b) BEFORE any static serving (e.g., express.static) and BEFORE any SPA catch-all such as:
+         app.get('*', ...send index.html...)
+- DO NOT remove SPA; just place googleRouter before it.
+- Keep googleRouter mounted at ROOT (no '/api' base). Also OK to mount both:
+    app.use(googleRouter);
+    app.use('/api', googleRouter);  // alias
+
+2) ADD A HARD TEST ROUTE
+- In server/oauth/googleRoutes.ts, add:
+    googleRouter.get('/oauth/ping', (_req, res) => res.type('text').send('pong'));
+- Then in server/index.ts add a routes dump endpoint:
+    app.get('/debug/express-routes', (_req,res) => {
+      const routes = [];
+      const stack = app._router?.stack || [];
+      stack.forEach((m) => {
+        if (m.route?.path) routes.push({ method: Object.keys(m.route.methods)[0], path: m.route.path });
+        else if (m.name === 'router' && m.handle?.stack) {
+          m.handle.stack.forEach((h) => {
+            if (h.route?.path) routes.push({ method: Object.keys(h.route.methods)[0], path: h.route.path });
+          });
+        }
+      });
+      res.json(routes);
+    });
+
+3) LOG HITS
+- At the TOP of each handler, log to console:
+    console.log('>> HIT /oauth/google/connect');
+    console.log('>> HIT /oauth/google/callback', req.query);
+    console.log('>> HIT /oauth/ping');
+
+4) FRONTEND BUTTON
+- Ensure the “Connect Google Calendar” UI uses a FULL NAVIGATION to the root path:
+    <a href="/oauth/google/connect" className="btn btn-primary" rel="external">Connect Google Calendar</a>
+  (No React Router <Link>, no navigate()).
+
+5) SHOW PROOF
+- Restart the server.
+- Paste the JSON from GET /debug/express-routes (should include /oauth/ping, /oauth/google/connect, /oauth/google/callback).
+- Confirm that any catch-all route appears AFTER the google routes.
+- Then open /oauth/ping in the browser → should show 'pong'.
+- Finally, run the OAuth flow and paste the Console logs showing:
+    >> HIT /oauth/google/connect
+    >> HIT /oauth/google/callback ...
