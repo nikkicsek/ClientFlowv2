@@ -39,6 +39,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Temporary route to upgrade current user to admin (for development)
+  app.post('/api/auth/upgrade-to-admin', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const claims = req.user.claims;
+      
+      // Update user to admin role
+      await storage.upsertUser({
+        id: claims.sub,
+        email: claims.email,
+        firstName: claims.first_name,
+        lastName: claims.last_name,
+        profileImageUrl: claims.profile_image_url,
+        role: 'admin', // Upgrade to admin
+      });
+      
+      const updatedUser = await storage.getUser(userId);
+      res.json({ message: "Successfully upgraded to admin", user: updatedUser });
+    } catch (error) {
+      console.error("Error upgrading user:", error);
+      res.status(500).json({ message: "Failed to upgrade user" });
+    }
+  });
+
   // Project routes
   app.get('/api/projects', isAuthenticated, async (req: any, res) => {
     try {

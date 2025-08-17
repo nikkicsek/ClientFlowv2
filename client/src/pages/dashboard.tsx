@@ -11,6 +11,7 @@ import UpdatesSection from "@/components/updates-section";
 import { Button } from "@/components/ui/button";
 import { Menu } from "lucide-react";
 import { QuoteUpload } from "@/components/quote-upload";
+import { AdminUpgradeButton } from "@/components/admin-upgrade-button";
 
 export default function Dashboard() {
   const { user, isAuthenticated, isLoading } = useAuth();
@@ -66,6 +67,8 @@ export default function Dashboard() {
         return <UpdatesSection />;
       case "quotes":
         return <QuoteUpload />;
+      case "admin-upgrade":
+        return <AdminUpgradeButton userRole={(user as any)?.role} />;
       default:
         return <ProjectOverview />;
     }
@@ -79,6 +82,7 @@ export default function Dashboard() {
       files: "Project Files",
       updates: "Updates & Messages",
       quotes: "Quote Upload",
+      "admin-upgrade": "Admin Access",
     };
     return titles[activeSection as keyof typeof titles] || "Dashboard";
   };

@@ -8,7 +8,8 @@ import {
   MessageSquare, 
   LogOut,
   BarChart,
-  Upload
+  Upload,
+  Shield
 } from "lucide-react";
 import type { User } from "@shared/schema";
 
@@ -26,6 +27,7 @@ const navigation = [
   { id: "files", label: "Project Files", icon: Folder },
   { id: "updates", label: "Updates & Messages", icon: MessageSquare },
   { id: "quotes", label: "Quote Upload", icon: Upload },
+  { id: "admin-upgrade", label: "Get Admin Access", icon: Shield },
 ];
 
 export default function Sidebar({ activeSection, setActiveSection, collapsed, user }: SidebarProps) {
