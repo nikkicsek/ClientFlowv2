@@ -424,10 +424,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
               task.title,
               project.name,
               {
-                priority: task.priority,
-                assignedBy: `${user.firstName} ${user.lastName}`,
+                priority: task.priority ?? undefined,
+                assignedBy: `${user.firstName ?? ''} ${user.lastName ?? ''}`,
                 dueDate: task.dueDate ? new Date(task.dueDate).toLocaleDateString() : undefined,
-                notes: task.notes || undefined,
+                notes: task.notes ?? undefined,
               }
             );
           }
@@ -490,10 +490,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
               task.title,
               project.name,
               {
-                priority: task.priority,
-                assignedBy: `${user.firstName} ${user.lastName}`,
+                priority: task.priority ?? undefined,
+                assignedBy: `${user.firstName ?? ''} ${user.lastName ?? ''}`,
                 dueDate: task.dueDate ? new Date(task.dueDate).toLocaleDateString() : undefined,
-                notes: task.notes || undefined,
+                notes: task.notes ?? undefined,
               }
             );
           }
@@ -1071,7 +1071,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ message: "Service deleted successfully" });
     } catch (error) {
       console.error("Error deleting service:", error);
-      res.status(500).json({ message: `Failed to delete service: ${error.message}` });
+      const message = error instanceof Error ? error.message : "Unknown error";
+      res.status(500).json({ message: `Failed to delete service: ${message}` });
     }
   });
 
@@ -1230,7 +1231,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(updatedProject);
     } catch (error) {
       console.error("Error updating project Google Drive links:", error);
-      res.status(500).json({ message: `Failed to update Google Drive links: ${error.message}` });
+      const message = error instanceof Error ? error.message : "Unknown error";
+      res.status(500).json({ message: `Failed to update Google Drive links: ${message}` });
     }
   });
 
@@ -1245,7 +1247,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const { status } = req.body;
-      const project = await storage.updateProject(req.params.id, { status, updatedAt: new Date() });
+      const project = await storage.updateProject(req.params.id, { status });
       res.json(project);
     } catch (error) {
       console.error("Error updating project status:", error);

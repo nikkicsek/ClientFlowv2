@@ -77,6 +77,7 @@ export const projects = pgTable("projects", {
   displayOrder: integer("display_order").default(0), // For drag-and-drop ordering within organizations
   googleDriveFolderId: text("google_drive_folder_id"),
   googleDriveFolderUrl: text("google_drive_folder_url"),
+  isDeleted: boolean("is_deleted").default(false), // Soft delete flag
   deletedAt: timestamp("deleted_at"),
   deletedBy: varchar("deleted_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
@@ -234,6 +235,7 @@ export const taskAssignments = pgTable("task_assignments", {
   notes: text("notes"), // Individual notes for this assignment
   estimatedHours: integer("estimated_hours"), // Can be different per team member
   actualHours: integer("actual_hours"),
+  calendarEventId: varchar("calendar_event_id"), // Google Calendar event ID for this assignment
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
