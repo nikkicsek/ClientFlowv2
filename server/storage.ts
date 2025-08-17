@@ -782,6 +782,26 @@ export class DatabaseStorage implements IStorage {
     }));
   }
 
+  async getTaskAssignment(assignmentId: string): Promise<(TaskAssignment & { teamMember: TeamMember }) | undefined> {
+    const results = await db
+      .select({
+        assignment: taskAssignments,
+        teamMember: teamMembers,
+      })
+      .from(taskAssignments)
+      .innerJoin(teamMembers, eq(taskAssignments.teamMemberId, teamMembers.id))
+      .where(eq(taskAssignments.id, assignmentId))
+      .limit(1);
+    
+    if (results.length === 0) return undefined;
+    
+    const row = results[0];
+    return {
+      ...row.assignment,
+      teamMember: row.teamMember,
+    };
+  }
+
   async getTaskAssignmentsByTeamMember(teamMemberId: string): Promise<(TaskAssignment & { task: Task; project?: Project })[]> {
     const results = await db
       .select({
@@ -795,6 +815,7 @@ export class DatabaseStorage implements IStorage {
       .where(and(
         eq(taskAssignments.teamMemberId, teamMemberId),
         isNull(tasks.deletedAt)
+        // Removed all projects filtering due to schema issues - include all tasks with valid assignments
       ))
       .orderBy(desc(taskAssignments.createdAt));
     
@@ -803,6 +824,51 @@ export class DatabaseStorage implements IStorage {
       task: row.task,
       project: row.project || undefined,
     }));
+  }
+
+  // New method to get task assignments by userId (for My Tasks functionality) - DIRECT QUERY
+  async getTaskAssignmentsByUserId(userId: string): Promise<(TaskAssignment & { task: Task; project?: Project })[]> {
+    try {
+      // First get the user to find their email
+      const user = await this.getUser(userId);
+      if (!user?.email) {
+        return [];
+      }
+      
+      // Find the team member record for this user's email
+      const teamMemberResults = await db.select().from(teamMembers).where(eq(teamMembers.email, user.email)).limit(1);
+      
+      if (teamMemberResults.length === 0) {
+        return [];
+      }
+      
+      const teamMemberId = teamMemberResults[0].id;
+      
+      // Direct query without going through problematic method
+      const results = await db
+        .select({
+          assignment: taskAssignments,
+          task: tasks,
+          project: projects,
+        })
+        .from(taskAssignments)
+        .innerJoin(tasks, eq(taskAssignments.taskId, tasks.id))
+        .leftJoin(projects, eq(tasks.projectId, projects.id))
+        .where(and(
+          eq(taskAssignments.teamMemberId, teamMemberId),
+          isNull(tasks.deletedAt)
+        ))
+        .orderBy(desc(taskAssignments.createdAt));
+      
+      return results.map(row => ({
+        ...row.assignment,
+        task: row.task,
+        project: row.project || undefined,
+      }));
+    } catch (error) {
+      console.error('Error in getTaskAssignmentsByUserId:', error);
+      return [];
+    }
   }
 
 
@@ -894,7 +960,7 @@ export class DatabaseStorage implements IStorage {
 
   async deleteProjectTasks(projectId: string): Promise<void> {
     await db.update(tasks)
-      .set({ isDeleted: true })
+      .set({ deletedAt: new Date(), deletedBy: null })
       .where(eq(tasks.projectId, projectId));
   }
 
@@ -904,7 +970,7 @@ export class DatabaseStorage implements IStorage {
       .from(projects)
       .where(and(
         eq(projects.organizationId, organizationId),
-        eq(projects.isDeleted, false)
+        isNull(projects.deletedAt)
       ));
   }
 

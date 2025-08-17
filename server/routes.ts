@@ -47,6 +47,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Manual sync endpoint for tasks (accessible without session for debugging)
+  app.post('/api/tasks/:id/sync-calendar', async (req: any, res) => {
+    try {
+      const taskId = req.params.id;
+      
+      // Trigger the calendar hook to recompute and upsert events
+      await onTaskCreatedOrUpdated(taskId);
+      
+      res.json({ success: true, message: "Calendar sync triggered successfully" });
+    } catch (error) {
+      console.error("Error syncing task calendar:", error);
+      res.status(500).json({ message: "Failed to sync calendar", error: error instanceof Error ? error.message : String(error) });
+    }
+  });
+
   // Debug endpoints
   app.get('/debug/me', isAuthenticated, async (req: any, res) => {
     try {
@@ -531,7 +546,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Access denied" });
       }
 
-      const assignments = await storage.getTaskAssignmentsByTeamMember(teamMemberId);
+      // Use the userId-based method for better schema compatibility
+      const assignments = await storage.getTaskAssignmentsByUserId(userId);
       res.json(assignments);
     } catch (error) {
       console.error("Error fetching team member assignments:", error);

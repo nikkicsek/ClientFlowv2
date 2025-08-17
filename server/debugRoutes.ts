@@ -48,6 +48,7 @@ router.get('/', (req, res) => {
         .testing { background: #ffc107; }
         .status { font-size: 12px; opacity: 0.8; }
         .impersonation { background: #17a2b8; padding: 10px; border-radius: 5px; margin-bottom: 20px; }
+        .hidden { display: none; }
       </style>
     </head>
     <body>
@@ -80,7 +81,7 @@ router.get('/', (req, res) => {
           🟡 Create Test Task <span class="status">(Creates task + triggers hooks)</span>
         </a>
         
-        <p><small>Add ?as=email@example.com to impersonate a user</small></p>
+        ${process.env.NODE_ENV === 'production' ? '' : '<p><small>Add ?as=email@example.com to impersonate a user</small></p>'}
       </div>
     </body>
     </html>
@@ -132,20 +133,8 @@ router.get('/my-tasks', async (req: any, res) => {
       return res.json({ message: "No team member record found", userId: effectiveUser.userId, email: effectiveUser.email, tasks: [] });
     }
 
-    // Get assignments using same logic as My Tasks - but with safe query that doesn't crash on missing columns
-    let assignments = [];
-    try {
-      assignments = await storage.getTaskAssignmentsByTeamMember(currentTeamMember.id);
-    } catch (dbError: any) {
-      // If projects.is_deleted column doesn't exist, try without that filter
-      if (dbError.message?.includes('projects.is_deleted does not exist')) {
-        console.log("projects.is_deleted column missing, fetching tasks without that filter");
-        // For now, return empty array until schema is fixed
-        assignments = [];
-      } else {
-        throw dbError;
-      }
-    }
+    // Get assignments using the new userId-based method that handles schema issues
+    const assignments = await storage.getTaskAssignmentsByUserId(effectiveUser.userId);
     
     const tasks = assignments.slice(0, 50).map(assignment => ({
       id: assignment.task.id,
