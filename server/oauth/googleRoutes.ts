@@ -153,6 +153,29 @@ googleRouter.get('/debug/oauth-info', (req, res) => {
   });
 });
 
+// Debug endpoint for OAuth auth URL
+googleRouter.get('/debug/oauth-authurl', (req, res) => {
+  const client = oauth2();
+  const scope = [
+    'openid', 'email', 'profile',
+    'https://www.googleapis.com/auth/calendar.events'
+  ];
+  const state = (req.user?.claims?.sub as string) || (req.user?.id as string) || '';
+  
+  // Compute redirect at runtime (same as connect handler)
+  const redirect = `${req.protocol}://${req.headers.host}/oauth/google/callback`;
+  
+  const url = client.generateAuthUrl({
+    access_type: 'offline',
+    prompt: 'consent',
+    scope,
+    redirect_uri: redirect,
+    state,
+  });
+  
+  res.json({ url, redirect });
+});
+
 // Debug health route to confirm router is mounted
 googleRouter.get('/debug/google-router', (req, res) => {
   res.json({ ok: true });
