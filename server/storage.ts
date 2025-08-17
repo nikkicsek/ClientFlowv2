@@ -98,8 +98,10 @@ export interface IStorage {
   getProjectTasks(projectId: string): Promise<Task[]>; // Alias for getTasksByProject for calendar integration
   getTasksByProjectWithDetails(projectId: string): Promise<(Task & { service?: Service })[]>;
   getAllTasksWithDetails(): Promise<(Task & { service?: Service; project?: Project })[]>;
+  getTasksQuery(filters: { title?: string; createdAfter?: Date; createdBefore?: Date; assignedToTeamMember?: string; }): Promise<Task[]>;
   createTask(task: InsertTask): Promise<Task>;
   updateTask(id: string, updates: Partial<InsertTask>): Promise<Task>;
+  softDeleteTask(id: string, deletedBy: string): Promise<void>;
   
   // Task template operations (for Faces of Kelowna workflow)
   getTaskTemplatesForService(serviceId: string): Promise<any[]>;
@@ -392,6 +394,59 @@ export class DatabaseStorage implements IStorage {
       .from(tasks)
       .where(and(eq(tasks.id, id), isNull(tasks.deletedAt)));
     return task;
+  }
+
+  // Query tasks with flexible filters (for debug functionality)
+  async getTasksQuery(filters: {
+    title?: string;
+    createdAfter?: Date;
+    createdBefore?: Date;
+    assignedToTeamMember?: string;
+  }): Promise<Task[]> {
+    const conditions = [isNull(tasks.deletedAt)];
+    
+    if (filters.title) {
+      conditions.push(eq(tasks.title, filters.title));
+    }
+    if (filters.createdAfter) {
+      conditions.push(gte(tasks.createdAt, filters.createdAfter));
+    }
+    if (filters.createdBefore) {
+      conditions.push(lte(tasks.createdAt, filters.createdBefore));
+    }
+    
+    let query = db.select().from(tasks).where(and(...conditions));
+    
+    if (filters.assignedToTeamMember) {
+      // Join with task_assignments to filter by assigned team member
+      query = db.select({
+        id: tasks.id,
+        title: tasks.title,
+        description: tasks.description,
+        status: tasks.status,
+        priority: tasks.priority,
+        dueDate: tasks.dueDate,
+        dueTime: tasks.dueTime,
+        projectId: tasks.projectId,
+        organizationId: tasks.organizationId,
+        serviceId: tasks.serviceId,
+        assignedTo: tasks.assignedTo,
+        taskScope: tasks.taskScope,
+        googleDriveLink: tasks.googleDriveLink,
+        googleCalendarEventId: tasks.googleCalendarEventId,
+        createdAt: tasks.createdAt,
+        updatedAt: tasks.updatedAt,
+        deletedAt: tasks.deletedAt,
+      })
+      .from(tasks)
+      .innerJoin(taskAssignments, eq(tasks.id, taskAssignments.taskId))
+      .where(and(
+        ...conditions,
+        eq(taskAssignments.teamMemberId, filters.assignedToTeamMember)
+      ));
+    }
+    
+    return query.orderBy(desc(tasks.createdAt));
   }
 
   async getProjectTasks(projectId: string): Promise<Task[]> {

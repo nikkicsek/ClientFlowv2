@@ -1,0 +1,42 @@
+We have a runaway loop creating "Replit Sync Test (server)" tasks. Please do the following:
+
+A) STOP THE LOOP
+1) Search the repo for "Replit Sync Test (server)". It should be in server/debugRoutes.ts (or similar).
+2) Ensure the debug dashboard NEVER auto-calls the create-test-task route:
+   - No setInterval, no auto-fetch in useEffect/onload, no meta refresh.
+   - The "Create Test Task" link/button must only run on an explicit click.
+3) Confirm there is no other code path calling the debug create-test-task on page load or via polling.
+
+B) IDEMPOTENT TEST TASK CREATION
+Implement idempotency for the debug route:
+- Only create the test task if one with the same title AND due_at AND assignee exists in the last 10 minutes = false.
+- Otherwise return the existing one.
+- Add a DB helper that does:
+    SELECT id FROM tasks
+    WHERE title = 'Replit Sync Test (server)'
+      AND due_at BETWEEN now() - interval '10 minutes' AND now() + interval '10 minutes'
+      AND EXISTS (SELECT 1 FROM task_assignments ta WHERE ta.task_id = tasks.id AND ta.user_id = <targetUserId>)
+    LIMIT 1;
+  If found → return it. If not → create once.
+
+Optional (stronger): add a unique partial index for debug tasks to hard-stop duplicates:
+  CREATE UNIQUE INDEX IF NOT EXISTS tasks_debug_dedupe
+  ON tasks (title, due_at)
+  WHERE title = 'Replit Sync Test (server)';
+
+C) CLEANUP ENDPOINT
+Add a safe cleanup route:
+- DELETE /debug/cleanup-test-tasks?as=<email>&minutes=240
+  Deletes tasks titled 'Replit Sync Test (server)' created within the last N minutes for that user (and cascades assignments).
+  Return { deletedCount }.
+
+D) ROUTING SANITY (so / loads the app)
+- Mount debug ONLY at /debug:  app.use('/debug', debugRouter)
+- Do NOT mount debug at '/'. Ensure SPA/static catch-all is after that.
+- Verify GET / shows the normal app.
+
+E) PROVE
+1) Visit /debug once → it should NOT create any task by itself.
+2) Click the create-test-task link once → exactly one new task appears (not more).
+3) Refresh the page a few times → no new tasks are created.
+4) Run the cleanup route → duplicates are removed and counts match the response.

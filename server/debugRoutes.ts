@@ -88,6 +88,13 @@ router.get('/', (req, res) => {
           <br><small>Current status: ${SYNC_ENABLED ? 'ENABLED' : 'DISABLED'}</small>
         </div>
         
+        <div style="margin: 20px 0; padding: 15px; background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 5px;">
+          <strong>🧹 Cleanup Test Tasks</strong><br>
+          <button onclick="fetch('/debug/cleanup-test-tasks${asParam}&minutes=60', {method:'DELETE'}).then(r=>r.json()).then(d => alert('Deleted: ' + d.deletedCount + ' items'))" style="margin: 5px; padding: 8px 12px; background: #f39c12; color: white; border: none; border-radius: 3px; cursor: pointer;">Clean Last Hour</button>
+          <button onclick="fetch('/debug/cleanup-test-tasks${asParam}&minutes=240', {method:'DELETE'}).then(r=>r.json()).then(d => alert('Deleted: ' + d.deletedCount + ' items'))" style="margin: 5px; padding: 8px 12px; background: #e67e22; color: white; border: none; border-radius: 3px; cursor: pointer;">Clean Last 4 Hours</button>
+          <br><small>Removes 'Replit Sync Test (server)' tasks and their assignments</small>
+        </div>
+        
         ${process.env.NODE_ENV === 'production' ? '' : '<p><small>Add ?as=email@example.com to impersonate a user</small></p>'}
       </div>
     </body>
@@ -251,7 +258,7 @@ router.get('/calendar-create-test', async (req: any, res) => {
   }
 });
 
-// Create test task
+// Create test task (with idempotency to prevent runaway loops)
 router.get('/create-test-task', async (req: any, res) => {
   try {
     const effectiveUser = await getEffectiveUser(req);
@@ -264,10 +271,6 @@ router.get('/create-test-task', async (req: any, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    const dueDate = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes from now
-    const hours = dueDate.getHours().toString().padStart(2, '0');
-    const minutes = dueDate.getMinutes().toString().padStart(2, '0');
-
     // Find the team member record for this user
     const teamMembers = await storage.getAllTeamMembers();
     const currentTeamMember = teamMembers.find((member: TeamMember) => member.email === effectiveUser.email);
@@ -275,6 +278,29 @@ router.get('/create-test-task', async (req: any, res) => {
     if (!currentTeamMember) {
       return res.status(400).json({ message: "No team member record found for this user" });
     }
+
+    // IDEMPOTENCY CHECK: Look for existing test task created within the last 10 minutes
+    const existingTask = await findExistingDebugTask(effectiveUser.userId, currentTeamMember.id);
+    if (existingTask) {
+      console.log('Debug task already exists, returning existing:', existingTask.id);
+      return res.json({
+        id: existingTask.id,
+        assigneeUserIds: [currentTeamMember.id],
+        due_at: existingTask.dueDate,
+        title: existingTask.title,
+        status: existingTask.status,
+        userId: effectiveUser.userId,
+        email: effectiveUser.email,
+        sessionExists: effectiveUser.sessionExists,
+        impersonated: effectiveUser.impersonated,
+        teamMemberId: currentTeamMember.id,
+        wasExisting: true
+      });
+    }
+
+    const dueDate = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes from now
+    const hours = dueDate.getHours().toString().padStart(2, '0');
+    const minutes = dueDate.getMinutes().toString().padStart(2, '0');
 
     const taskData = insertTaskSchema.parse({
       title: "Replit Sync Test (server)",
@@ -288,6 +314,7 @@ router.get('/create-test-task', async (req: any, res) => {
     });
 
     const task = await storage.createTask(taskData);
+    console.log('Created new debug task:', task.id);
 
     // Call calendar hooks
     await onTaskCreatedOrUpdated(task.id);
@@ -310,7 +337,8 @@ router.get('/create-test-task', async (req: any, res) => {
       email: effectiveUser.email,
       sessionExists: effectiveUser.sessionExists,
       impersonated: effectiveUser.impersonated,
-      teamMemberId: currentTeamMember.id
+      teamMemberId: currentTeamMember.id,
+      wasExisting: false
     });
   } catch (error) {
     console.error("Error creating test task:", error);
@@ -334,6 +362,68 @@ router.post('/sync/enable', (req, res) => {
     res.json({ ok: true, message: 'Calendar sync ENABLED' });
   } catch (error) {
     res.status(500).json({ ok: false, error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+// Helper function to find existing debug task (idempotency check)
+async function findExistingDebugTask(userId: string, teamMemberId: string) {
+  try {
+    const allTasks = await storage.getAllTasksWithDetails();
+    const debugTasks = allTasks.filter(t => 
+      t.title === "Replit Sync Test (server)" && 
+      t.createdAt > new Date(Date.now() - 10 * 60 * 1000) &&
+      !t.deletedAt
+    );
+    console.log(`Idempotency check: Found ${debugTasks.length} debug tasks in last 10 minutes`);
+    return debugTasks.length > 0 ? debugTasks[0] : null;
+  } catch (error) {
+    console.error('Error checking for existing debug task:', error);
+    return null;
+  }
+}
+
+// Cleanup endpoint for removing test tasks
+router.delete('/cleanup-test-tasks', async (req: any, res) => {
+  try {
+    const effectiveUser = await getEffectiveUser(req);
+    if (!effectiveUser) {
+      return res.status(401).json({ message: 'No session. Pass ?as=<email>' });
+    }
+
+    const minutes = parseInt(req.query.minutes as string) || 240; // Default 4 hours
+    const cutoffDate = new Date(Date.now() - minutes * 60 * 1000);
+
+    // Find all debug test tasks created after the cutoff
+    const allTasks = await storage.getAllTasksWithDetails();
+    const tasks = allTasks.filter(t => 
+      t.title === "Replit Sync Test (server)" && 
+      t.createdAt > cutoffDate &&
+      !t.deletedAt
+    );
+
+    let deletedCount = 0;
+    for (const task of tasks) {
+      // Delete assignments first (cascading)
+      const assignments = await storage.getTaskAssignments(task.id);
+      for (const assignment of assignments) {
+        await storage.deleteTaskAssignment(assignment.id);
+        deletedCount++;
+      }
+      
+      // Soft delete the task
+      await storage.softDeleteTask(task.id, effectiveUser.userId);
+      deletedCount++;
+    }
+
+    res.json({ 
+      deletedCount,
+      tasksDeleted: tasks.length,
+      minutesBack: minutes,
+      cutoffDate: cutoffDate.toISOString()
+    });
+  } catch (error) {
+    console.error("Error cleaning up test tasks:", error);
+    res.status(500).json({ message: "Failed to cleanup test tasks", error: error instanceof Error ? error.message : String(error) });
   }
 });
 
