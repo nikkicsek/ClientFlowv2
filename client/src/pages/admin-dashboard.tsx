@@ -28,6 +28,7 @@ import { WelcomeVideoModal } from "@/components/welcome-video-modal";
 import { EditClientModal } from "@/components/edit-client-modal";
 import { AgencyTasksModal } from "@/components/agency-tasks-modal";
 import { EnhancedTaskCard } from "@/components/enhanced-task-card";
+import { ModernTaskCard } from "@/components/modern-task-card";
 import { EditTaskModal } from "@/components/edit-task-modal";
 import { EditOrganizationModal } from "@/components/edit-organization-modal";
 import { OrganizationContactsModal } from "@/components/organization-contacts-modal";
@@ -720,15 +721,21 @@ export default function AdminDashboard() {
                           </div>
                         </div>
                         
-                        <div className="space-y-3">
+                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                           {tasks
                             .sort((a: any, b: any) => {
-                              // Sort by: overdue first, then by due date, then by status
+                              // Sort by: overdue first, then by due date, then by priority
                               const aOverdue = a.dueDate && new Date(a.dueDate) < new Date() && a.status !== 'completed';
                               const bOverdue = b.dueDate && new Date(b.dueDate) < new Date() && b.status !== 'completed';
                               
                               if (aOverdue && !bOverdue) return -1;
                               if (!aOverdue && bOverdue) return 1;
+                              
+                              const priorityOrder = { urgent: 0, high: 1, medium: 2, low: 3 };
+                              const aPriority = priorityOrder[a.priority as keyof typeof priorityOrder] ?? 2;
+                              const bPriority = priorityOrder[b.priority as keyof typeof priorityOrder] ?? 2;
+                              
+                              if (aPriority !== bPriority) return aPriority - bPriority;
                               
                               if (a.dueDate && b.dueDate) {
                                 return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
@@ -736,22 +743,18 @@ export default function AdminDashboard() {
                               
                               return a.status.localeCompare(b.status);
                             })
-                            .map((task: any) => {
-                              const isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && task.status !== 'completed';
-                              
-                              return (
-                                <EnhancedTaskCard
-                                  key={task.id}
-                                  task={task}
-                                  assignments={getTaskAssignments(task.id)}
-                                  showProjectName={true}
-                                  onEdit={(taskId) => {
-                                    const taskToEdit = allTasks.find(t => t.id === taskId);
-                                    if (taskToEdit) setEditingTask(taskToEdit);
-                                  }}
-                                />
-                              );
-                            })}
+                            .map((task: any) => (
+                              <ModernTaskCard
+                                key={task.id}
+                                task={task}
+                                assignments={getTaskAssignments(task.id)}
+                                showProjectName={true}
+                                onEdit={(taskId) => {
+                                  const taskToEdit = allTasks.find(t => t.id === taskId);
+                                  if (taskToEdit) setEditingTask(taskToEdit);
+                                }}
+                              />
+                            ))}
                         </div>
                       </CardContent>
                     </Card>

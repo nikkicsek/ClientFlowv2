@@ -33,14 +33,24 @@ export function EditTaskModal({ isOpen, onClose, task }: EditTaskModalProps) {
   // Initialize form data when task changes
   useEffect(() => {
     if (task) {
-      const dueDate = task.dueDate ? new Date(task.dueDate) : null;
+      let dateValue = "";
+      let timeValue = "";
+      
+      if (task.dueDate) {
+        const dueDate = new Date(task.dueDate);
+        if (!isNaN(dueDate.getTime())) {
+          dateValue = dueDate.toISOString().split('T')[0];
+          timeValue = dueDate.toISOString().split('T')[1].slice(0, 5);
+        }
+      }
+      
       setFormData({
         title: task.title || "",
         description: task.description || "",
         status: task.status || "in_progress",
         priority: task.priority || "medium",
-        dueDate: dueDate ? dueDate.toISOString().split('T')[0] : "",
-        dueTime: dueDate ? dueDate.toTimeString().slice(0, 5) : "",
+        dueDate: dateValue,
+        dueTime: timeValue,
         googleDriveLink: task.googleDriveLink || "",
       });
     }
