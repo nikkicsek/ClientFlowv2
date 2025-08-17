@@ -589,10 +589,11 @@ export default function AdminDashboard() {
       {/* Main Content */}
       <div className="p-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-6">
+          <TabsList className="grid w-full grid-cols-7">
             <TabsTrigger value="organizations">Organizations</TabsTrigger>
             <TabsTrigger value="proposals">Proposals</TabsTrigger>
             <TabsTrigger value="tasks">Tasks</TabsTrigger>
+            <TabsTrigger value="team">Team</TabsTrigger>
             <TabsTrigger value="clients">Clients</TabsTrigger>
             <TabsTrigger value="services">Services</TabsTrigger>
             <TabsTrigger value="deleted">Deleted Items</TabsTrigger>
@@ -600,6 +601,40 @@ export default function AdminDashboard() {
 
           <TabsContent value="proposals" className="space-y-6">
             <ProposalManagement />
+          </TabsContent>
+
+          <TabsContent value="team" className="space-y-6">
+            <div className="flex justify-between items-center">
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900">Team Management</h2>
+                <p className="text-gray-600">Manage agency team members and invitations</p>
+              </div>
+              <Button
+                onClick={() => setShowTeamManagement(true)}
+                className="flex items-center gap-2"
+              >
+                <UserPlus className="h-4 w-4" />
+                Invite Team Member
+              </Button>
+            </div>
+
+            <Card>
+              <CardContent className="p-8 text-center">
+                <Users className="h-16 w-16 mx-auto mb-4 text-gray-400" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">Team Management</h3>
+                <p className="text-gray-600 mb-4">
+                  Invite agency team members to get admin access to the dashboard. 
+                  Team members can manage all projects, clients, and tasks.
+                </p>
+                <Button
+                  onClick={() => setShowTeamManagement(true)}
+                  className="flex items-center gap-2 mx-auto"
+                >
+                  <UserPlus className="h-4 w-4" />
+                  Open Team Management
+                </Button>
+              </CardContent>
+            </Card>
           </TabsContent>
 
           <TabsContent value="tasks" className="space-y-6">
