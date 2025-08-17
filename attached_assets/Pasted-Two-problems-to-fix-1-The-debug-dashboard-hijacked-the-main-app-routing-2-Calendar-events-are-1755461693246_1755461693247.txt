@@ -1,0 +1,53 @@
+Two problems to fix:
+(1) The /debug dashboard hijacked the main app routing.
+(2) Calendar events are being created repeatedly. Add a kill-switch and make event creation idempotent per task-assignment.
+
+A) ROUTING: don’t override the app
+- Mount debug only at /debug:
+    import { debugRouter } from './debugRoutes';
+    app.use('/debug', debugRouter);
+- Ensure there is NO app.use('/', debugRouter) or wildcard in debug routes.
+- Place the SPA/static catch-all AFTER the debug mount, e.g.:
+    app.use(express.static('client/dist'));
+    app.get('*', (_req, res) => res.sendFile(path.join(__dirname, '../client/dist/index.html')));
+- Verify that GET / renders the normal app, and GET /debug shows the dashboard.
+
+B) EMERGENCY KILL-SWITCH (so Nikki can stop calendar writes instantly)
+- In server/calendar/GoogleCalendarService.ts add:
+    export let SYNC_ENABLED = process.env.CALENDAR_SYNC_ENABLED !== 'false';
+    export function setSyncEnabled(v: boolean) { SYNC_ENABLED = v; }
+- At the very top of createOrUpdateEvent/deleteEvent methods:
+    if (!SYNC_ENABLED) { console.warn('Calendar sync disabled'); return { disabled: true }; }
+- In debugRoutes add:
+    POST /debug/sync/disable -> setSyncEnabled(false); return { ok: true }
+    POST /debug/sync/enable  -> setSyncEnabled(true);  return { ok: true }
+- Also respect env var CALENDAR_SYNC_ENABLED at startup (default to true).
+
+C) IDEMPOTENT EVENTS (no duplicates)
+- We already have columns on task_assignments: calendar_event_id, calendar_id (default 'primary').
+- In the calendar hook path (onTaskCreatedOrUpdated / onAssignmentCreated):
+    1) Compute the event window (start/end) once.
+    2) For each assignee, look up that assignment’s calendar_event_id.
+       - If it exists -> call events.update (not insert).
+       - If it doesn’t -> call events.insert, then persist the returned event.id back into calendar_event_id.
+- In onAssignmentDeleted (or when unassigning), if calendar_event_id exists -> delete event and clear calendar_event_id in DB.
+- Add logs:
+    console.log('Calendar upsert', { taskId, userId, hadEventId: !!eventId, action: eventId ? 'update' : 'insert' });
+
+D) AVOID DOUBLE-FIRING HOOKS
+- Ensure we don’t call create/update twice for the same change:
+    - Only call onTaskCreatedOrUpdated AFTER a successful DB write.
+    - If task create also adds the first assignment, don’t double-call for both within the same request (guard with a simple “alreadySyncedTaskIds” Set scoped to the request or combine into a single sync).
+- The /debug HTML must not auto-call anything; it should be static links only (no JS intervals or auto-requests).
+
+E) CLEANUP UTILITIES (optional but helpful)
+- Add GET /debug/calendar-delete-duplicates?as=<email>&minutes=120:
+   - For the impersonated user, list events with the same summary/time window within the last N minutes and delete extras, keeping the newest one.
+   - Return { deletedCount }.
+- Keep /debug endpoints preserving ?as=<email> and never crash (try/catch + res.status(500).json).
+
+F) PROVE
+- Restart server. Confirm:
+   - GET / shows the normal app.
+   - POST /debug/sync/disable stops additional event writes (try creating a task and check logs).
+   - With sync enabled, creating/updating a task only ever creates **one** event per assignee (update replaces, not insert).
