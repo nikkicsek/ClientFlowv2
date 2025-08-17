@@ -27,6 +27,7 @@ import { ServiceCategoryModal } from "@/components/service-category-modal";
 import { WelcomeVideoModal } from "@/components/welcome-video-modal";
 import { EditClientModal } from "@/components/edit-client-modal";
 import { AgencyTasksModal } from "@/components/agency-tasks-modal";
+import { EnhancedTaskCard } from "@/components/enhanced-task-card";
 import { EditOrganizationModal } from "@/components/edit-organization-modal";
 import { OrganizationContactsModal } from "@/components/organization-contacts-modal";
 import { OrganizationTasksModal } from "@/components/organization-tasks-modal";
@@ -157,6 +158,15 @@ export default function AdminDashboard() {
   const { data: allTasks, isLoading: tasksLoading } = useQuery<Task[]>({
     queryKey: ["/api/admin/tasks"],
   });
+
+  const { data: allAssignments = [] } = useQuery({
+    queryKey: ["/api/admin/task-assignments"],
+  });
+
+  // Helper function to get task assignments
+  const getTaskAssignments = (taskId: string) => {
+    return allAssignments.filter((assignment: any) => assignment.taskId === taskId);
+  };
 
   const handleProjectCreated = () => {
     queryClient.invalidateQueries({ queryKey: ["/api/admin/projects"] });
@@ -728,60 +738,12 @@ export default function AdminDashboard() {
                               const isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && task.status !== 'completed';
                               
                               return (
-                                <div 
-                                  key={task.id} 
-                                  className={`p-4 rounded-lg border ${
-                                    isOverdue ? 'border-red-200 bg-red-50' : 'border-gray-200 bg-gray-50'
-                                  }`}
-                                >
-                                  <div className="flex justify-between items-start">
-                                    <div className="flex-1">
-                                      <div className="flex items-center gap-3 mb-2">
-                                        <h4 className="font-medium text-gray-900">{task.title}</h4>
-                                        <Badge variant={
-                                          task.status === 'completed' ? 'default' :
-                                          task.status === 'in_progress' ? 'secondary' :
-                                          task.status === 'needs_approval' ? 'outline' :
-                                          isOverdue ? 'destructive' : 'secondary'
-                                        }>
-                                          {task.status === 'in_progress' ? 'In Progress' :
-                                           task.status === 'completed' ? 'Completed' :
-                                           task.status === 'needs_approval' ? 'Needs Approval' :
-                                           task.status === 'outstanding' ? 'Outstanding' :
-                                           'Needs Clarification'}
-                                        </Badge>
-                                        {isOverdue && (
-                                          <Badge variant="destructive" className="text-xs">
-                                            Overdue
-                                          </Badge>
-                                        )}
-                                      </div>
-                                      {task.description && (
-                                        <p className="text-sm text-gray-600 mb-2">{task.description}</p>
-                                      )}
-                                      <div className="flex items-center gap-4 text-sm text-gray-500">
-                                        <span>Project: <strong>{task.project?.name || 'Unknown Project'}</strong></span>
-                                        {task.service && (
-                                          <span>Service: <strong>{task.service.name}</strong></span>
-                                        )}
-                                        {task.dueDate && (
-                                          <span className={isOverdue ? 'text-red-600 font-medium' : ''}>
-                                            Due: <strong>{new Date(task.dueDate).toLocaleDateString()}</strong>
-                                          </span>
-                                        )}
-                                      </div>
-                                    </div>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => setDeletingItem({ type: 'tasks', id: task.id, name: task.title })}
-                                      title="Delete Task"
-                                      className="text-red-600 hover:text-red-700"
-                                    >
-                                      <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                  </div>
-                                </div>
+                                <EnhancedTaskCard
+                                  key={task.id}
+                                  task={task}
+                                  assignments={getTaskAssignments(task.id)}
+                                  showProjectName={true}
+                                />
                               );
                             })}
                         </div>
