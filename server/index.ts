@@ -15,10 +15,10 @@ app.set('db', pool);
 // Debug startup logging
 console.log('REDIRECT_URI =', process.env.GOOGLE_REDIRECT_URI);
 
-// CRITICAL: Mount routes EARLY BEFORE any other routes
+// CRITICAL: Mount debug and oauth routes EARLY BEFORE any other routes
+app.use('/debug', debugRouter);
 app.use(googleRouter);
 app.use('/api', googleRouter);
-app.use('/debug', debugRouter);
 
 // Add routes introspection endpoint for debugging
 app.get('/debug/express-routes', (_req, res) => {
