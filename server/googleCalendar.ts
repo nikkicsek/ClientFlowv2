@@ -1,5 +1,6 @@
 import { google } from 'googleapis';
 import { storage } from './storage';
+import { pool } from './db';
 
 // Emergency kill-switch for calendar sync
 export let SYNC_ENABLED = process.env.CALENDAR_SYNC_ENABLED !== 'false';
@@ -73,33 +74,79 @@ class GoogleCalendarService {
     }
   }
 
+  // Accept userId OR email, normalize to canonical user ID, fetch tokens
+  async getClientForUser(userIdOrEmail: string): Promise<any> {
+    if (!this.oauth2Client) {
+      throw new Error('Google Calendar service not initialized');
+    }
+
+    let canonicalUserId = userIdOrEmail;
+
+    // If it's an email, resolve to canonical user ID
+    if (userIdOrEmail.includes('@')) {
+      try {
+        const userResult = await pool.query('SELECT id FROM users WHERE email = $1', [userIdOrEmail]);
+        if (userResult.rows.length > 0) {
+          canonicalUserId = userResult.rows[0].id;
+        } else {
+          // Try team_members.user_id fallback
+          const teamResult = await pool.query('SELECT user_id FROM team_members WHERE email = $1', [userIdOrEmail]);
+          if (teamResult.rows.length > 0 && teamResult.rows[0].user_id) {
+            canonicalUserId = teamResult.rows[0].user_id;
+          } else {
+            throw new Error(`No user found for email: ${userIdOrEmail}`);
+          }
+        }
+      } catch (err) {
+        throw new Error(`Failed to resolve email to user ID: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+
+    return this.getAuthenticatedClient(canonicalUserId);
+  }
+
   private async getAuthenticatedClient(userId: string) {
     if (!this.oauth2Client) {
       throw new Error('Google Calendar service not initialized');
     }
 
-    const user = await storage.getUser(userId);
-    if (!user?.googleAccessToken) {
-      throw new Error('User has no Google Calendar access token');
+    // Get tokens directly from oauth_tokens table (canonical source)
+    let tokenData;
+    try {
+      const tokenResult = await pool.query('SELECT access_token, refresh_token, expiry FROM oauth_tokens WHERE user_id = $1', [userId]);
+      if (tokenResult.rows.length === 0) {
+        throw new Error(`User ${userId} has no Google Calendar access token`);
+      }
+      tokenData = tokenResult.rows[0];
+    } catch (err) {
+      throw new Error(`Failed to fetch tokens for user ${userId}: ${err instanceof Error ? err.message : String(err)}`);
     }
 
     this.oauth2Client.setCredentials({
-      access_token: user.googleAccessToken,
-      refresh_token: user.googleRefreshToken,
-      expiry_date: user.googleTokenExpiry?.getTime()
+      access_token: tokenData.access_token,
+      refresh_token: tokenData.refresh_token,
+      expiry_date: tokenData.expiry?.getTime()
     });
 
     // Check if token needs refresh
-    if (user.googleTokenExpiry && user.googleTokenExpiry < new Date()) {
+    if (tokenData.expiry && new Date(tokenData.expiry) < new Date()) {
       try {
         const { credentials } = await this.oauth2Client.refreshAccessToken();
         
-        // Update stored tokens
-        await storage.updateUserGoogleTokens(userId, {
-          accessToken: credentials.access_token || user.googleAccessToken,
-          refreshToken: credentials.refresh_token || user.googleRefreshToken,
-          expiryDate: credentials.expiry_date ? new Date(credentials.expiry_date) : user.googleTokenExpiry
-        });
+        // Update stored tokens directly in oauth_tokens table
+        await pool.query(`
+          UPDATE oauth_tokens SET 
+            access_token = $1,
+            refresh_token = COALESCE($2, refresh_token),
+            expiry = $3,
+            updated_at = now()
+          WHERE user_id = $4
+        `, [
+          credentials.access_token || tokenData.access_token,
+          credentials.refresh_token || tokenData.refresh_token,
+          credentials.expiry_date ? new Date(credentials.expiry_date) : tokenData.expiry,
+          userId
+        ]);
 
         this.oauth2Client.setCredentials(credentials);
       } catch (error) {
