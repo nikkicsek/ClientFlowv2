@@ -1,0 +1,49 @@
+Add real user login using our existing Google OAuth:
+
+Goal
+- After OAuth callback, set a signed cookie session so pages have a real user session (no more relying on Replit auto-auth).
+- Keep Calendar OAuth exactly as-is; just also establish an app session.
+- Maintain debug ?as=… impersonation for admins only.
+
+Server (Express)
+1) Add cookie-based session middleware (cookie-session or express-session with MemoryStore is fine):
+   - ENV: SESSION_SECRET (random 32+ chars).
+   - req.session.user = { userId, email, teamMemberId? }.
+
+2) In /oauth/google/callback (and the /auth/google/callback alias), after we save tokens:
+   - Resolve or create the app user id (the same id used on task assignments).
+   - Look up the teamMemberId for that email if it exists.
+   - Set req.session.user = { userId, email, teamMemberId }.
+   - Redirect to req.session.returnTo || '/my-tasks'.
+
+3) Add routes:
+   - GET /auth/status → { sessionExists, user: { userId, email, teamMemberId } | null }.
+   - GET /auth/logout → clear cookie; redirect to '/'.
+   - GET /auth/login → set req.session.returnTo from ?returnTo=… and 302 to /oauth/google/connect.
+
+4) Update any “require user” middleware used by API pages to read req.session.user first; fall back to Replit headers only if session is missing (for local Preview). Do NOT require ?as= for normal app use.
+
+5) Protect debug/impersonation:
+   - /debug/* keeps support for ?as, but only if current session user is admin OR running in dev. Otherwise ignore ?as.
+
+Client
+6) In the header/top-nav, add Login/Logout UI:
+   - If /auth/status says no session → show “Sign in with Google” linking to /auth/login?returnTo=/my-tasks.
+   - If session exists → show email + “Sign out” (/auth/logout).
+
+7) On “My Tasks” page:
+   - If no session, show an empty-state with a big “Sign in with Google” button → /auth/login?returnTo=/my-tasks.
+   - Stop depending on impersonation (?as) for the normal page.
+
+Tests
+8) Manual flow to prove it works:
+   - Visit /auth/status → sessionExists:false.
+   - Click Login → Google consent → callback → redirected to /my-tasks.
+   - Visit /auth/status again → sessionExists:true with user info.
+   - /debug/my-tasks (no ?as) should return tasks for the session user.
+   - Logout → /auth/logout → /auth/status shows sessionExists:false.
+
+Notes
+- We already request openid/email/profile scopes; keep them so we can identify the user.
+- Do not change the calendar token save logic, just add the app session.
+- Keep the /debug endpoints as-is for diagnostics; they should prefer req.session.user when present.

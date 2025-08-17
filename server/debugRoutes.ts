@@ -10,15 +10,33 @@ const router = Router();
 
 // Helper function to get effective user for debug endpoints
 async function getEffectiveUser(req: any) {
-  // 1) If logged-in session exists, return session user
+  // 1) Check for real session user first
+  const sessionUser = (req.session as any)?.user;
+  if (sessionUser) {
+    return { 
+      userId: sessionUser.userId, 
+      email: sessionUser.email, 
+      sessionExists: true, 
+      impersonated: false,
+      teamMemberId: sessionUser.teamMemberId 
+    };
+  }
+
+  // 2) Fallback to Replit auth for local development
   if (req.user?.claims?.sub) {
     const userId = req.user.claims.sub;
     const user = await storage.getUser(userId);
     return { userId, email: user?.email, sessionExists: true, impersonated: false };
   }
   
-  // 2) If req.query.as is present (an email), look up users.id by that email
+  // 3) Handle ?as=email impersonation (only for admins or dev environment)
   if (req.query.as) {
+    // Check if current user is admin or in dev mode
+    const isAdmin = sessionUser?.role === 'admin' || process.env.NODE_ENV === 'development';
+    if (!isAdmin && sessionUser) {
+      throw new Error('Impersonation not allowed for non-admin users');
+    }
+    
     const email = req.query.as;
     const user = await storage.getUserByEmail(email);
     if (user) {
@@ -28,7 +46,7 @@ async function getEffectiveUser(req: any) {
     }
   }
   
-  // 3) If neither exists, return null (caller should handle 401)
+  // 4) If no session, return null (caller should handle 401)
   return null;
 }
 

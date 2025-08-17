@@ -1,4 +1,6 @@
 import express, { type Request, Response, NextFunction } from "express";
+import session from 'express-session';
+import cookieParser from 'cookie-parser';
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { googleRouter } from './oauth/googleRoutes';
@@ -8,6 +10,19 @@ import { pool } from './db';
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+app.use(cookieParser());
+
+// Session middleware
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'dev-session-secret-change-in-production',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: false, // Set to true in production with HTTPS
+    httpOnly: true,
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+  }
+}));
 
 // Attach database pool to app for Google OAuth
 app.set('db', pool);
