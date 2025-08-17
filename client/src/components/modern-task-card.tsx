@@ -204,19 +204,27 @@ export function ModernTaskCard({ task, assignments = [], showProjectName = false
                   {task.dueDate && (
                     <span className="text-gray-500 ml-1">
                       {(() => {
+                        // Debug: Log the actual date format
+                        console.log('ModernTaskCard - Raw dueDate:', task.dueDate, 'for task:', task.title);
+                        
                         // Handle PostgreSQL timestamp format properly for display
                         let date;
                         if (task.dueDate.includes(' ') && !task.dueDate.includes('T')) {
                           // PostgreSQL format: "2025-08-29 13:00:00" - treat as local time
+                          console.log('ModernTaskCard - Converting PostgreSQL format');
                           date = new Date(task.dueDate.replace(' ', 'T'));
                         } else {
+                          console.log('ModernTaskCard - Using standard Date parsing');
                           date = new Date(task.dueDate);
                         }
-                        return date.toLocaleTimeString([], { 
+                        
+                        const result = date.toLocaleTimeString([], { 
                           hour: '2-digit', 
                           minute: '2-digit',
                           hour12: true 
                         });
+                        console.log('ModernTaskCard - Final time display:', result);
+                        return result;
                       })()}
                     </span>
                   )}
