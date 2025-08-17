@@ -98,10 +98,14 @@ export function ModernTaskCard({ task, assignments = [], showProjectName = false
   const formatDueDate = (dateString: string) => {
     if (!dateString) return null;
     
-    // Handle PostgreSQL timestamp format properly
+    // Handle different date formats from API
     let date;
-    if (dateString.includes(' ') && !dateString.includes('T')) {
-      // PostgreSQL format: "2025-08-29 13:00:00" - treat as local time
+    if (dateString.includes('T') && dateString.includes('Z')) {
+      // ISO format from API: "2025-08-29T13:00:00.000Z"
+      const dateStr = dateString.replace('Z', '');
+      date = new Date(dateStr);
+    } else if (dateString.includes(' ') && !dateString.includes('T')) {
+      // PostgreSQL format: "2025-08-29 13:00:00"
       date = new Date(dateString.replace(' ', 'T'));
     } else {
       date = new Date(dateString);
@@ -204,27 +208,26 @@ export function ModernTaskCard({ task, assignments = [], showProjectName = false
                   {task.dueDate && (
                     <span className="text-gray-500 ml-1">
                       {(() => {
-                        // Debug: Log the actual date format
-                        console.log('ModernTaskCard - Raw dueDate:', task.dueDate, 'for task:', task.title);
-                        
-                        // Handle PostgreSQL timestamp format properly for display
+                        // Handle different date formats from API
                         let date;
-                        if (task.dueDate.includes(' ') && !task.dueDate.includes('T')) {
-                          // PostgreSQL format: "2025-08-29 13:00:00" - treat as local time
-                          console.log('ModernTaskCard - Converting PostgreSQL format');
+                        
+                        if (task.dueDate.includes('T') && task.dueDate.includes('Z')) {
+                          // ISO format from API: "2025-08-29T13:00:00.000Z"
+                          // This is UTC, but we want to display the time as-is (not convert timezone)
+                          const dateStr = task.dueDate.replace('Z', '');
+                          date = new Date(dateStr);
+                        } else if (task.dueDate.includes(' ') && !task.dueDate.includes('T')) {
+                          // PostgreSQL format: "2025-08-29 13:00:00"
                           date = new Date(task.dueDate.replace(' ', 'T'));
                         } else {
-                          console.log('ModernTaskCard - Using standard Date parsing');
                           date = new Date(task.dueDate);
                         }
                         
-                        const result = date.toLocaleTimeString([], { 
+                        return date.toLocaleTimeString([], { 
                           hour: '2-digit', 
                           minute: '2-digit',
                           hour12: true 
                         });
-                        console.log('ModernTaskCard - Final time display:', result);
-                        return result;
                       })()}
                     </span>
                   )}
