@@ -107,7 +107,18 @@ class GoogleCalendarService {
     try {
       const calendar = await this.getAuthenticatedClient(userId);
       
-      const startDate = task.dueDate ? new Date(task.dueDate) : new Date();
+      // Handle PostgreSQL timestamp format properly
+      let startDate;
+      if (task.dueDate) {
+        if (task.dueDate.includes(' ') && !task.dueDate.includes('T')) {
+          // PostgreSQL format: "2025-08-29 13:00:00" - treat as local time
+          startDate = new Date(task.dueDate.replace(' ', 'T'));
+        } else {
+          startDate = new Date(task.dueDate);
+        }
+      } else {
+        startDate = new Date();
+      }
       const endDate = new Date(startDate.getTime() + 60 * 60 * 1000); // 1 hour duration
 
       const event = {
@@ -146,7 +157,18 @@ class GoogleCalendarService {
     try {
       const calendar = await this.getAuthenticatedClient(userId);
       
-      const startDate = task.dueDate ? new Date(task.dueDate) : new Date();
+      // Handle PostgreSQL timestamp format properly
+      let startDate;
+      if (task.dueDate) {
+        if (task.dueDate.includes(' ') && !task.dueDate.includes('T')) {
+          // PostgreSQL format: "2025-08-29 13:00:00" - treat as local time
+          startDate = new Date(task.dueDate.replace(' ', 'T'));
+        } else {
+          startDate = new Date(task.dueDate);
+        }
+      } else {
+        startDate = new Date();
+      }
       const endDate = new Date(startDate.getTime() + 60 * 60 * 1000);
 
       const event = {

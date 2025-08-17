@@ -97,7 +97,16 @@ export function ModernTaskCard({ task, assignments = [], showProjectName = false
 
   const formatDueDate = (dateString: string) => {
     if (!dateString) return null;
-    const date = new Date(dateString);
+    
+    // Handle PostgreSQL timestamp format properly
+    let date;
+    if (dateString.includes(' ') && !dateString.includes('T')) {
+      // PostgreSQL format: "2025-08-29 13:00:00" - treat as local time
+      date = new Date(dateString.replace(' ', 'T'));
+    } else {
+      date = new Date(dateString);
+    }
+    
     const today = new Date();
     const diffTime = date.getTime() - today.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
@@ -192,9 +201,23 @@ export function ModernTaskCard({ task, assignments = [], showProjectName = false
                   }`}>
                     {dueInfo.text}
                   </span>
-                  {task.dueDate.includes('T') && (
+                  {task.dueDate && (
                     <span className="text-gray-500 ml-1">
-                      {new Date(task.dueDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      {(() => {
+                        // Handle PostgreSQL timestamp format properly for display
+                        let date;
+                        if (task.dueDate.includes(' ') && !task.dueDate.includes('T')) {
+                          // PostgreSQL format: "2025-08-29 13:00:00" - treat as local time
+                          date = new Date(task.dueDate.replace(' ', 'T'));
+                        } else {
+                          date = new Date(task.dueDate);
+                        }
+                        return date.toLocaleTimeString([], { 
+                          hour: '2-digit', 
+                          minute: '2-digit',
+                          hour12: true 
+                        });
+                      })()}
                     </span>
                   )}
                 </div>
