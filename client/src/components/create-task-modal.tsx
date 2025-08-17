@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { apiRequest } from "@/lib/queryClient";
-import { Users, X } from "lucide-react";
+import { Users, X, Calendar, Clock } from "lucide-react";
 import type { TeamMember } from "@shared/schema";
 
 
@@ -31,6 +31,7 @@ export default function CreateTaskModal({ isOpen, onClose, onSuccess, projectId 
     status: "in_progress",
     priority: "medium",
     dueDate: "",
+    dueTime: "",
     googleDriveLink: "",
   });
   
@@ -52,12 +53,9 @@ export default function CreateTaskModal({ isOpen, onClose, onSuccess, projectId 
       if (selectedTeamMembers.length > 0) {
         for (const memberId of selectedTeamMembers) {
           try {
-            await apiRequest("/api/task-assignments", {
-              method: "POST",
-              body: {
-                taskId: newTask.id,
-                teamMemberId: memberId,
-              }
+            await apiRequest("POST", "/api/task-assignments", {
+              taskId: newTask.id,
+              teamMemberId: memberId,
             });
           } catch (error) {
             console.error("Error assigning team member:", error);
@@ -75,6 +73,7 @@ export default function CreateTaskModal({ isOpen, onClose, onSuccess, projectId 
         status: "in_progress",
         priority: "medium",
         dueDate: "",
+        dueTime: "",
         googleDriveLink: "",
       });
       setSelectedTeamMembers([]);
@@ -115,12 +114,22 @@ export default function CreateTaskModal({ isOpen, onClose, onSuccess, projectId 
       return;
     }
 
+    // Combine date and time for due date if both are provided
+    let dueDateTime = null;
+    if (formData.dueDate) {
+      if (formData.dueTime) {
+        dueDateTime = `${formData.dueDate}T${formData.dueTime}:00`;
+      } else {
+        dueDateTime = `${formData.dueDate}T09:00:00`; // Default to 9 AM if no time specified
+      }
+    }
+
     const taskData = {
       title: formData.title,
       description: formData.description || null,
       status: formData.status,
       priority: formData.priority,
-      dueDate: formData.dueDate || null,
+      dueDate: dueDateTime,
       googleDriveLink: formData.googleDriveLink || null,
     };
 
@@ -252,14 +261,34 @@ export default function CreateTaskModal({ isOpen, onClose, onSuccess, projectId 
             )}
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="dueDate">Due Date</Label>
-            <Input
-              id="dueDate"
-              type="date"
-              value={formData.dueDate}
-              onChange={(e) => handleInputChange('dueDate', e.target.value)}
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="dueDate" className="flex items-center gap-2">
+                <Calendar className="h-4 w-4" />
+                Due Date
+              </Label>
+              <Input
+                id="dueDate"
+                type="date"
+                value={formData.dueDate}
+                onChange={(e) => handleInputChange('dueDate', e.target.value)}
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="dueTime" className="flex items-center gap-2">
+                <Clock className="h-4 w-4" />
+                Due Time
+              </Label>
+              <Input
+                id="dueTime"
+                type="time"
+                value={formData.dueTime}
+                onChange={(e) => handleInputChange('dueTime', e.target.value)}
+                placeholder="09:00"
+              />
+              <p className="text-xs text-gray-500">Time for Google Calendar sync</p>
+            </div>
           </div>
 
           <div className="space-y-2">
