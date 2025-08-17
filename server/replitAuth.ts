@@ -126,6 +126,12 @@ export async function setupAuth(app: Express) {
 
   app.get("/api/login", (req, res, next) => {
     console.log(`Login attempt for hostname: ${req.hostname}`);
+    
+    // Store returnTo in session for callback
+    if (req.query.returnTo) {
+      (req.session as any).returnTo = req.query.returnTo;
+    }
+    
     passport.authenticate(`replitauth:${req.hostname}`, {
       prompt: "login consent",
       scope: ["openid", "email", "profile", "offline_access"],
@@ -135,7 +141,7 @@ export async function setupAuth(app: Express) {
   app.get("/api/callback", (req, res, next) => {
     console.log(`Callback for hostname: ${req.hostname}`);
     passport.authenticate(`replitauth:${req.hostname}`, {
-      successReturnToOrRedirect: "/",
+      successReturnToOrRedirect: (req.session as any)?.returnTo || "/my-tasks",
       failureRedirect: "/api/login",
     })(req, res, next);
   });
