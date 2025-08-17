@@ -206,17 +206,17 @@ export interface IStorage {
 export class DatabaseStorage implements IStorage {
   // User operations
   async getUser(id: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.id, id));
-    return user;
+    const result = await db.select().from(users).where(eq(users.id, id));
+    return result[0];
   }
 
   async getUserByEmail(email: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.email, email));
-    return user;
+    const result = await db.select().from(users).where(eq(users.email, email));
+    return result[0];
   }
 
   async upsertUser(userData: UpsertUser): Promise<User> {
-    const [user] = await db
+    const result = await db
       .insert(users)
       .values(userData)
       .onConflictDoUpdate({
@@ -227,11 +227,12 @@ export class DatabaseStorage implements IStorage {
         },
       })
       .returning();
-    return user;
+    return result[0];
   }
 
   async getClientUsers(): Promise<User[]> {
-    return db.select().from(users).where(and(eq(users.role, 'client'), isNull(users.deletedAt)));
+    const result = await db.select().from(users).where(and(eq(users.role, 'client'), isNull(users.deletedAt)));
+    return result;
   }
 
   // Project operations
@@ -568,45 +569,46 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getOrganizationUsers(organizationId: string): Promise<User[]> {
-    return db.select().from(users).where(and(eq(users.organizationId, organizationId), isNull(users.deletedAt)));
+    const result = await db.select().from(users).where(and(eq(users.organizationId, organizationId), isNull(users.deletedAt)));
+    return result;
   }
 
   async assignUserToOrganization(userId: string, organizationId: string): Promise<User> {
-    const [updatedUser] = await db
+    const result = await db
       .update(users)
       .set({ organizationId })
       .where(eq(users.id, userId))
       .returning();
-    return updatedUser;
+    return result[0];
   }
 
   async removeUserFromOrganization(userId: string): Promise<User> {
-    const [updatedUser] = await db
+    const result = await db
       .update(users)
       .set({ organizationId: null })
       .where(eq(users.id, userId))
       .returning();
-    return updatedUser;
+    return result[0];
   }
 
   async createClient(clientData: UpsertUser): Promise<User> {
-    const [newClient] = await db
+    const result = await db
       .insert(users)
       .values({
         ...clientData,
         role: 'client',
       })
       .returning();
-    return newClient;
+    return result[0];
   }
 
   async updateUser(id: string, updates: Partial<UpsertUser>): Promise<User | undefined> {
-    const [updatedUser] = await db
+    const result = await db
       .update(users)
       .set({ ...updates, updatedAt: new Date() })
       .where(eq(users.id, id))
       .returning();
-    return updatedUser;
+    return result[0];
   }
 
   // Google Calendar integration methods
