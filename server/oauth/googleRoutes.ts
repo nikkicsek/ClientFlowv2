@@ -116,6 +116,29 @@ googleRouter.get('/oauth/ping', (req, res) => {
   res.type('text').send('pong');
 });
 
+// COMPATIBILITY ALIASES - redirect wrong paths to correct ones
+googleRouter.get('/auth/google/callback', (req, res) => {
+  console.log('>> HIT COMPAT /auth/google/callback - redirecting to /oauth/google/callback');
+  const qs = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
+  return res.redirect(307, '/oauth/google/callback' + qs);
+});
+
+googleRouter.get('/api/auth/google/callback', (req, res) => {
+  console.log('>> HIT COMPAT /api/auth/google/callback - redirecting to /api/oauth/google/callback');
+  const qs = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
+  return res.redirect(307, '/api/oauth/google/callback' + qs);
+});
+
+// Debug endpoint for OAuth info
+googleRouter.get('/debug/oauth-info', (_req, res) => {
+  res.json({
+    envRedirect: process.env.GOOGLE_REDIRECT_URI,
+    hasConnect: true,
+    hasCallback: true,
+    compatAuthAlias: true
+  });
+});
+
 // Debug health route to confirm router is mounted
 googleRouter.get('/debug/google-router', (req, res) => {
   res.json({ ok: true });
