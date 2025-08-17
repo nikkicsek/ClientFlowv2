@@ -150,27 +150,26 @@ export function EnhancedTaskCard({ task, assignments = [], showProjectName = fal
                   {task.dueDate && (
                     <span className="text-gray-500">
                       {(() => {
-                        // Debug: Log the actual date format
-                        console.log('EnhancedTaskCard - Raw dueDate:', task.dueDate, 'for task:', task.title);
-                        
-                        // Handle PostgreSQL timestamp format properly for display
+                        // Handle different date formats from API
                         let date;
-                        if (task.dueDate.includes(' ') && !task.dueDate.includes('T')) {
-                          // PostgreSQL format: "2025-08-29 13:00:00" - treat as local time
-                          console.log('EnhancedTaskCard - Converting PostgreSQL format');
+                        
+                        if (task.dueDate.includes('T') && task.dueDate.includes('Z')) {
+                          // ISO format from API: "2025-08-29T13:00:00.000Z"
+                          // This is UTC, but we want to display the time as-is (not convert timezone)
+                          const dateStr = task.dueDate.replace('Z', '');
+                          date = new Date(dateStr);
+                        } else if (task.dueDate.includes(' ') && !task.dueDate.includes('T')) {
+                          // PostgreSQL format: "2025-08-29 13:00:00"
                           date = new Date(task.dueDate.replace(' ', 'T'));
                         } else {
-                          console.log('EnhancedTaskCard - Using standard Date parsing');
                           date = new Date(task.dueDate);
                         }
                         
-                        const result = date.toLocaleTimeString([], { 
+                        return date.toLocaleTimeString([], { 
                           hour: '2-digit', 
                           minute: '2-digit',
                           hour12: true 
                         });
-                        console.log('EnhancedTaskCard - Final time display:', result);
-                        return result;
                       })()}
                     </span>
                   )}
