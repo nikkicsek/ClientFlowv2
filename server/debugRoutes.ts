@@ -3,6 +3,7 @@ import { storage } from "./storage";
 import { googleCalendarService, setSyncEnabled, SYNC_ENABLED } from "./googleCalendar";
 import { onTaskCreatedOrUpdated, onAssignmentCreated } from './hooks/taskCalendarHooks';
 import { insertTaskSchema, type TeamMember } from "@shared/schema";
+import { pool } from "./db";
 
 const router = Router();
 
@@ -28,6 +29,55 @@ async function getEffectiveUser(req: any) {
   
   // 3) If neither exists, return null (caller should handle 401)
   return null;
+}
+
+// Unified token resolution helper for debug endpoints
+async function resolveUserAndTokens(req: any) {
+  const effectiveUser = await getEffectiveUser(req);
+  if (!effectiveUser) {
+    return null;
+  }
+
+  // Get team member ID if available
+  const teamMembers = await storage.getAllTeamMembers();
+  const teamMember = teamMembers.find(member => member.email === effectiveUser.email);
+  const teamMemberId = teamMember?.id || null;
+
+  // Try both userId and teamMemberId keys in oauth_tokens table
+  let tokenData = null;
+  let keyType = null;
+
+  // Try canonical userId first
+  try {
+    const userTokenResult = await pool.query('SELECT * FROM oauth_tokens WHERE user_id = $1', [effectiveUser.userId]);
+    if (userTokenResult.rows.length > 0) {
+      tokenData = userTokenResult.rows[0];
+      keyType = "userId";
+    }
+  } catch (err) {
+    console.error('Error querying oauth_tokens by userId:', err);
+  }
+
+  // If not found by userId, try teamMemberId
+  if (!tokenData && teamMemberId) {
+    try {
+      const teamTokenResult = await pool.query('SELECT * FROM oauth_tokens WHERE user_id = $1', [teamMemberId]);
+      if (teamTokenResult.rows.length > 0) {
+        tokenData = teamTokenResult.rows[0];
+        keyType = "teamMemberId";
+      }
+    } catch (err) {
+      console.error('Error querying oauth_tokens by teamMemberId:', err);
+    }
+  }
+
+  return {
+    ...effectiveUser,
+    teamMemberId,
+    token: tokenData,
+    hasTokens: !!tokenData,
+    keyType: tokenData ? keyType : null
+  };
 }
 
 // Simple HTML debug dashboard
@@ -73,9 +123,9 @@ router.get('/', (req, res) => {
           🟡 Calendar Status <span class="status">(Shows OAuth token status)</span>
         </a>
         
-        <a href="/debug/calendar-create-test${asParam}" class="link testing">
-          🟡 Create Test Calendar Event <span class="status">(Creates calendar event)</span>
-        </a>
+        <button onclick="createTestCalendarEvent()" class="link testing" style="width: 100%; text-align: left; border: none; font-size: inherit; cursor: pointer;">
+          🟡 Create Test Calendar Event <span class="status">(Creates 30-min calendar event)</span>
+        </button>
         
         <a href="/debug/create-test-task${asParam}" class="link testing">
           🟡 Create Test Task <span class="status">(Creates task + triggers hooks)</span>
@@ -118,6 +168,19 @@ router.get('/', (req, res) => {
               await updateSyncStatus();
             } catch (error) {
               console.error('Error enabling sync:', error);
+            }
+          }
+          
+          async function createTestCalendarEvent() {
+            try {
+              const asParam = '${req.query.as ? `?as=${req.query.as}` : ''}';
+              const response = await fetch(\`/debug/calendar-create-test\${asParam}\`, { method: 'POST' });
+              const data = await response.json();
+              console.log('Calendar event creation result:', data);
+              alert('Result: ' + JSON.stringify(data, null, 2));
+            } catch (error) {
+              console.error('Error creating calendar event:', error);
+              alert('Error: ' + error.message);
             }
           }
           
@@ -214,42 +277,22 @@ router.get('/my-tasks', async (req: any, res) => {
   }
 });
 
-// Calendar status - canonical user ID lookup only
+// Calendar status - unified token resolution
 router.get('/calendar-status', async (req: any, res) => {
   try {
-    const effectiveUser = await getEffectiveUser(req);
-    if (!effectiveUser) {
+    const userAndTokens = await resolveUserAndTokens(req);
+    if (!userAndTokens) {
       return res.status(401).json({ message: 'No session. Pass ?as=<email>' });
     }
 
-    // Get database connection for direct oauth_tokens queries
-    const db = req.app?.get?.('db') as any;
-    if (!db) {
-      return res.status(500).json({ message: "Database connection not available" });
-    }
-
-    let hasTokens = false;
-    let keyType = effectiveUser.impersonated ? 'impersonated' : 'session';
-    let tokenData: any = null;
-
-    // Only check canonical userId (source of truth)
-    try {
-      const tokenResult = await db.query('SELECT expiry, scopes FROM oauth_tokens WHERE user_id = $1', [effectiveUser.userId]);
-      if (tokenResult.rows.length > 0) {
-        hasTokens = true;
-        tokenData = tokenResult.rows[0];
-      }
-    } catch (err) {
-      console.error('Error querying oauth_tokens by canonical userId:', err);
-    }
-
     res.json({
-      hasTokens,
-      userId: effectiveUser.userId,
-      email: effectiveUser.email,
-      keyType,
-      expiry: tokenData?.expiry || null,
-      scopes: tokenData?.scopes || null
+      hasTokens: userAndTokens.hasTokens,
+      userId: userAndTokens.userId,
+      email: userAndTokens.email,
+      keyType: userAndTokens.keyType,
+      expiry: userAndTokens.token?.expiry || null,
+      scopes: userAndTokens.token?.scopes || null,
+      impersonated: userAndTokens.impersonated
     });
   } catch (error) {
     console.error("Error in debug/calendar-status:", error);
@@ -257,47 +300,34 @@ router.get('/calendar-status', async (req: any, res) => {
   }
 });
 
-// Debug tokens - show redacted token record for canonical user ID
+// Debug tokens - show redacted token record using unified resolver
 router.get('/tokens/dump', async (req: any, res) => {
   try {
-    const effectiveUser = await getEffectiveUser(req);
-    if (!effectiveUser) {
+    const userAndTokens = await resolveUserAndTokens(req);
+    if (!userAndTokens) {
       return res.status(401).json({ message: 'No session. Pass ?as=<email>' });
     }
 
-    // Get database connection for direct oauth_tokens queries
-    const db = req.app?.get?.('db') as any;
-    if (!db) {
-      return res.status(500).json({ message: "Database connection not available" });
-    }
-
     let tokenRecord = null;
-
-    // Query only by canonical userId
-    try {
-      const tokenResult = await db.query('SELECT user_id, expiry, scopes, created_at, updated_at, access_token, refresh_token FROM oauth_tokens WHERE user_id = $1', [effectiveUser.userId]);
-      if (tokenResult.rows.length > 0) {
-        const row = tokenResult.rows[0];
-        tokenRecord = {
-          user_id: row.user_id,
-          expiry: row.expiry,
-          scopes: row.scopes,
-          created_at: row.created_at,
-          updated_at: row.updated_at,
-          access_token: row.access_token ? `${row.access_token.slice(0, 10)}...` : null,
-          refresh_token: row.refresh_token ? `${row.refresh_token.slice(0, 10)}...` : null
-        };
-      }
-    } catch (err) {
-      console.error('Error querying oauth_tokens by canonical userId:', err);
+    if (userAndTokens.token) {
+      tokenRecord = {
+        user_id: userAndTokens.token.user_id,
+        expiry: userAndTokens.token.expiry,
+        scopes: userAndTokens.token.scopes,
+        created_at: userAndTokens.token.created_at,
+        updated_at: userAndTokens.token.updated_at,
+        access_token: userAndTokens.token.access_token ? `${userAndTokens.token.access_token.slice(0, 10)}...` : null,
+        refresh_token: userAndTokens.token.refresh_token ? `${userAndTokens.token.refresh_token.slice(0, 10)}...` : null
+      };
     }
 
     res.json({
-      userId: effectiveUser.userId,
-      email: effectiveUser.email,
+      userId: userAndTokens.userId,
+      email: userAndTokens.email,
       tokenRecord,
-      hasTokens: !!tokenRecord,
-      keyType: effectiveUser.impersonated ? 'impersonated' : 'session'
+      hasTokens: userAndTokens.hasTokens,
+      keyType: userAndTokens.keyType,
+      impersonated: userAndTokens.impersonated
     });
   } catch (error) {
     console.error("Error in debug/tokens/dump:", error);
@@ -305,56 +335,76 @@ router.get('/tokens/dump', async (req: any, res) => {
   }
 });
 
-// Create test calendar event
-router.get('/calendar-create-test', async (req: any, res) => {
+// Calendar create test - unified token resolution with event creation
+router.post('/calendar-create-test', async (req: any, res) => {
   try {
-    const effectiveUser = await getEffectiveUser(req);
-    if (!effectiveUser) {
-      return res.status(401).json({ message: 'No session. Pass ?as=<email>' });
-    }
-
-    const user = await storage.getUser(effectiveUser.userId);
-    if (!user || !user.googleAccessToken) {
-      return res.json({ 
+    const userAndTokens = await resolveUserAndTokens(req);
+    if (!userAndTokens) {
+      return res.status(401).json({ 
         ok: false, 
-        error: "No Google tokens available", 
-        userId: effectiveUser.userId,
-        email: effectiveUser.email,
-        sessionExists: effectiveUser.sessionExists,
-        impersonated: effectiveUser.impersonated
+        error: "Unauthorized - No session. Pass ?as=<email>",
+        userId: null,
+        email: null,
+        keyType: null,
+        impersonated: false
       });
     }
 
-    const startTime = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes from now
-    const endTime = new Date(startTime.getTime() + 30 * 60 * 1000); // 30 minutes later
+    if (!userAndTokens.hasTokens) {
+      return res.json({
+        ok: false,
+        error: "No Google tokens available",
+        userId: userAndTokens.userId,
+        email: userAndTokens.email,
+        keyType: userAndTokens.keyType,
+        impersonated: userAndTokens.impersonated
+      });
+    }
 
-    const eventData = {
-      summary: "Replit Debug Test Event",
-      description: "Test event created from debug dashboard",
-      start: {
-        dateTime: startTime.toISOString(),
-        timeZone: 'America/Vancouver'
-      },
-      end: {
-        dateTime: endTime.toISOString(),
-        timeZone: 'America/Vancouver'
-      }
+    // Create a 30-minute test event starting now
+    const now = new Date();
+    const endTime = new Date(now.getTime() + 30 * 60 * 1000); // 30 minutes later
+
+    const testTask = {
+      title: "Debug Calendar Test",
+      description: `Test event created via debug endpoint at ${now.toISOString()}`,
+      dueDate: now.toISOString(),
+      status: "in_progress",
+      priority: "medium"
     };
 
-    console.log("Creating test calendar event with payload:", eventData);
+    // Use GoogleCalendarService to create the event
+    const eventId = await googleCalendarService.createTaskEvent(userAndTokens.userId, testTask);
 
-    const eventId = await googleCalendarService.createTaskEvent(user.id, {
-      title: eventData.summary,
-      description: eventData.description,
-      dueDate: eventData.start.dateTime,
-      status: 'in_progress',
-      priority: 'medium'
-    });
-    
-    res.json({ ok: true, eventId });
+    if (eventId) {
+      res.json({
+        ok: true,
+        eventId,
+        message: "Test calendar event created successfully",
+        userId: userAndTokens.userId,
+        email: userAndTokens.email,
+        keyType: userAndTokens.keyType,
+        impersonated: userAndTokens.impersonated,
+        startTime: now.toISOString(),
+        endTime: endTime.toISOString()
+      });
+    } else {
+      res.json({
+        ok: false,
+        error: "Failed to create calendar event",
+        userId: userAndTokens.userId,
+        email: userAndTokens.email,
+        keyType: userAndTokens.keyType,
+        impersonated: userAndTokens.impersonated
+      });
+    }
   } catch (error) {
-    console.error("Error creating test calendar event:", error);
-    res.json({ ok: false, error: error instanceof Error ? error.message : String(error) });
+    console.error("Error in debug/calendar-create-test:", error);
+    res.status(500).json({ 
+      ok: false,
+      error: "Failed to create test calendar event", 
+      stack: error instanceof Error ? error.stack : String(error) 
+    });
   }
 });
 
