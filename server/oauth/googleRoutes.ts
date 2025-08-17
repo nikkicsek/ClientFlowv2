@@ -34,10 +34,16 @@ googleRouter.get('/oauth/google/connect', async (req: any, res) => {
     'https://www.googleapis.com/auth/calendar.events'
   ];
   const state = (req.user?.claims?.sub as string) || (req.user?.id as string) || '';
+  
+  // Compute redirect at runtime (authoritative)
+  const redirect = `${req.protocol}://${req.headers.host}/oauth/google/callback`;
+  console.log('AUTH redirect_uri =', redirect);
+  
   const url = client.generateAuthUrl({
     access_type: 'offline',
     prompt: 'consent',
     scope,
+    redirect_uri: redirect,
     state,
   });
   res.redirect(url);
@@ -49,7 +55,14 @@ googleRouter.get('/oauth/google/callback', async (req: any, res) => {
   console.log('>> HIT', req.path, req.query);
   try {
     const client = oauth2();
-    const { tokens } = await client.getToken(req.query.code as string);
+    
+    // Compute redirect at runtime (must match the value used in connect)
+    const redirect = `${req.protocol}://${req.headers.host}/oauth/google/callback`;
+    
+    const { tokens } = await client.getToken({
+      code: req.query.code as string,
+      redirect_uri: redirect,
+    });
     client.setCredentials(tokens);
 
     // Get user profile from Google
@@ -130,9 +143,10 @@ googleRouter.get('/api/auth/google/callback', (req, res) => {
 });
 
 // Debug endpoint for OAuth info
-googleRouter.get('/debug/oauth-info', (_req, res) => {
+googleRouter.get('/debug/oauth-info', (req, res) => {
   res.json({
-    envRedirect: process.env.GOOGLE_REDIRECT_URI,
+    envRedirect: process.env.GOOGLE_REDIRECT_URI || null,
+    computedRedirect: `${req.protocol}://${req.headers.host}/oauth/google/callback`,
     hasConnect: true,
     hasCallback: true,
     compatAuthAlias: true
