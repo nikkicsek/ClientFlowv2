@@ -1,10 +1,18 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { googleRouter } from './oauth/googleRoutes';
+import { pool } from './db';
 
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+
+// Attach database pool to app for Google OAuth
+app.set('db', pool);
+
+// Mount Google OAuth routes
+app.use(googleRouter);
 
 app.use((req, res, next) => {
   const start = Date.now();

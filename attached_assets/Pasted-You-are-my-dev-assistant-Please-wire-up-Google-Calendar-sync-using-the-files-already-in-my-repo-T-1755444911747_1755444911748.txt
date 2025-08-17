@@ -1,0 +1,45 @@
+You are my dev assistant. Please wire up Google Calendar sync using the files already in my repo.
+
+Tasks:
+1) In the main Express server file (the one that calls `const app = express()`), add:
+   import { googleRouter } from '<CORRECT_PATH>/oauth/googleRoutes';
+   app.use(googleRouter);
+   - If the main file lives in /server, the import path is './oauth/googleRoutes'.
+   - If it lives at project root, the path is './server/oauth/googleRoutes'.
+
+2) Ensure a Postgres Pool is created and attached to the Express app:
+   import { Pool } from 'pg';
+   const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
+   app.set('db', pool);
+   - If a Pool already exists anywhere (used by Drizzle or otherwise), reuse that instance instead of creating a new one.
+
+3) Open migrations/001_calendar_patch.sql and apply it to my database.
+   - Use our existing migration tool if available (Drizzle). If not, run the SQL via pg client code or instruct me clearly how to run it in my DB console (Neon/Supabase/etc.) and confirm table/columns exist afterwards:
+     - oauth_tokens table
+     - task_assignments.calendar_event_id
+     - task_assignments.calendar_id
+
+4) In the task + assignment endpoints, call these hooks AFTER the DB writes:
+   import {
+     onTaskCreatedOrUpdated,
+     onTaskDeleted,
+     onAssignmentCreated,
+     onAssignmentDeleted
+   } from '<CORRECT_PATH>/hooks/taskCalendarHooks';
+
+   - After create or update task: await onTaskCreatedOrUpdated(task.id)
+   - After delete task: await onTaskDeleted(task.id)
+   - After create assignment: await onAssignmentCreated(assignment.id)
+   - After delete assignment: await onAssignmentDeleted(assignment.id)
+
+   Find the routes by searching for create/update/delete of tasks and for adding/removing task assignments. Paste the calls in the right places.
+
+5) Add a tiny health route `/debug/google-router` that returns `{ ok: true }` so I can tell the router is mounted.
+
+6) Do NOT hardcode any secrets. Confirm the app reads:
+   - GOOGLE_CLIENT_ID
+   - GOOGLE_CLIENT_SECRET
+   - GOOGLE_REDIRECT_URI
+   from environment variables (Replit Secrets).
+
+7) Tell me exactly which file(s) you touched and what lines you changed.

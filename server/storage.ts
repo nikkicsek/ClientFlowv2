@@ -134,9 +134,16 @@ export interface IStorage {
   // Task assignment operations
   getTaskAssignments(taskId: string): Promise<(TaskAssignment & { teamMember: TeamMember })[]>;
   getTaskAssignmentsByTeamMember(teamMemberId: string): Promise<(TaskAssignment & { task: Task; project?: Project })[]>;
+  getTaskAssignmentById(assignmentId: string): Promise<TaskAssignment | undefined>;
+  getAllTaskAssignments(): Promise<(TaskAssignment & { teamMember: TeamMember; task: Task })[]>;
   createTaskAssignment(assignment: InsertTaskAssignment): Promise<TaskAssignment>;
   updateTaskAssignment(id: string, updates: Partial<InsertTaskAssignment>): Promise<TaskAssignment>;
   deleteTaskAssignment(id: string): Promise<void>;
+  
+  // Calendar integration methods
+  getUserByTeamMemberId(teamMemberId: string): Promise<User | undefined>;
+  setAssignmentCalendarEventId(assignmentId: string, eventId: string): Promise<void>;
+  clearAssignmentCalendarEventId(assignmentId: string): Promise<void>;
 
   // Team invitation operations
   createTeamInvitation(invitation: InsertTeamInvitation): Promise<TeamInvitation>;
@@ -822,6 +829,46 @@ export class DatabaseStorage implements IStorage {
 
   async deleteTaskAssignment(id: string): Promise<void> {
     await db.delete(taskAssignments).where(eq(taskAssignments.id, id));
+  }
+
+  async getTaskAssignmentById(assignmentId: string): Promise<TaskAssignment | undefined> {
+    const [assignment] = await db
+      .select()
+      .from(taskAssignments)
+      .where(eq(taskAssignments.id, assignmentId));
+    return assignment;
+  }
+
+  // Calendar integration methods
+  async getUserByTeamMemberId(teamMemberId: string): Promise<User | undefined> {
+    const [teamMember] = await db
+      .select()
+      .from(teamMembers)
+      .where(eq(teamMembers.id, teamMemberId));
+    
+    if (!teamMember) return undefined;
+    
+    return this.getUserByEmail(teamMember.email);
+  }
+
+  async setAssignmentCalendarEventId(assignmentId: string, eventId: string): Promise<void> {
+    await db
+      .update(taskAssignments)
+      .set({ 
+        calendarEventId: eventId,
+        updatedAt: new Date()
+      })
+      .where(eq(taskAssignments.id, assignmentId));
+  }
+
+  async clearAssignmentCalendarEventId(assignmentId: string): Promise<void> {
+    await db
+      .update(taskAssignments)
+      .set({ 
+        calendarEventId: null,
+        updatedAt: new Date()
+      })
+      .where(eq(taskAssignments.id, assignmentId));
   }
 
   async deleteTaskAssignments(taskId: string): Promise<void> {
