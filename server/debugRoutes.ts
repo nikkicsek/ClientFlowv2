@@ -83,10 +83,47 @@ router.get('/', (req, res) => {
         
         <div style="margin: 20px 0; padding: 15px; background: #f8f9fa; border-radius: 5px;">
           <strong>Calendar Sync Control</strong><br>
-          <button onclick="fetch('/debug/sync/disable', {method:'POST'}).then(r=>r.json()).then(console.log)" style="margin: 5px; padding: 8px 12px; background: #dc3545; color: white; border: none; border-radius: 3px; cursor: pointer;">🛑 DISABLE SYNC</button>
-          <button onclick="fetch('/debug/sync/enable', {method:'POST'}).then(r=>r.json()).then(console.log)" style="margin: 5px; padding: 8px 12px; background: #28a745; color: white; border: none; border-radius: 3px; cursor: pointer;">▶️ ENABLE SYNC</button>
-          <br><small>Current status: ${SYNC_ENABLED ? 'ENABLED' : 'DISABLED'}</small>
+          <button onclick="disableSync()" style="margin: 5px; padding: 8px 12px; background: #dc3545; color: white; border: none; border-radius: 3px; cursor: pointer;">🛑 DISABLE SYNC</button>
+          <button onclick="enableSync()" style="margin: 5px; padding: 8px 12px; background: #28a745; color: white; border: none; border-radius: 3px; cursor: pointer;">▶️ ENABLE SYNC</button>
+          <br><small id="sync-status">Current status: ${SYNC_ENABLED ? 'ENABLED' : 'DISABLED'}</small>
         </div>
+        
+        <script>
+          async function updateSyncStatus() {
+            try {
+              const response = await fetch('/debug/sync/status');
+              const data = await response.json();
+              document.getElementById('sync-status').textContent = 'Current status: ' + (data.enabled ? 'ENABLED' : 'DISABLED');
+            } catch (error) {
+              console.error('Error updating status:', error);
+            }
+          }
+          
+          async function disableSync() {
+            try {
+              const response = await fetch('/debug/sync/disable', { method: 'POST' });
+              const data = await response.json();
+              console.log('Sync disabled:', data);
+              await updateSyncStatus();
+            } catch (error) {
+              console.error('Error disabling sync:', error);
+            }
+          }
+          
+          async function enableSync() {
+            try {
+              const response = await fetch('/debug/sync/enable', { method: 'POST' });
+              const data = await response.json();
+              console.log('Sync enabled:', data);
+              await updateSyncStatus();
+            } catch (error) {
+              console.error('Error enabling sync:', error);
+            }
+          }
+          
+          // Update status on page load
+          updateSyncStatus();
+        </script>
         
         <div style="margin: 20px 0; padding: 15px; background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 5px;">
           <strong>🧹 Cleanup Test Tasks</strong><br>
@@ -346,23 +383,33 @@ router.get('/create-test-task', async (req: any, res) => {
   }
 });
 
-// Sync control endpoints
+// Sync control endpoints (accept both GET and POST)
+router.get('/sync/status', (req, res) => {
+  res.json({ enabled: SYNC_ENABLED });
+});
+
+router.post('/sync/status', (req, res) => {
+  res.json({ enabled: SYNC_ENABLED });
+});
+
+router.get('/sync/disable', (req, res) => {
+  setSyncEnabled(false);
+  res.json({ enabled: false });
+});
+
 router.post('/sync/disable', (req, res) => {
-  try {
-    setSyncEnabled(false);
-    res.json({ ok: true, message: 'Calendar sync DISABLED' });
-  } catch (error) {
-    res.status(500).json({ ok: false, error: error instanceof Error ? error.message : String(error) });
-  }
+  setSyncEnabled(false);
+  res.json({ enabled: false });
+});
+
+router.get('/sync/enable', (req, res) => {
+  setSyncEnabled(true);
+  res.json({ enabled: true });
 });
 
 router.post('/sync/enable', (req, res) => {
-  try {
-    setSyncEnabled(true);
-    res.json({ ok: true, message: 'Calendar sync ENABLED' });
-  } catch (error) {
-    res.status(500).json({ ok: false, error: error instanceof Error ? error.message : String(error) });
-  }
+  setSyncEnabled(true);
+  res.json({ enabled: true });
 });
 
 // Helper function to find existing debug task (idempotency check)
