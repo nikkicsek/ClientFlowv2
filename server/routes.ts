@@ -2449,7 +2449,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/auth/google/callback', async (req, res) => {
+  // Handle Google OAuth callback - this needs to be accessible without /api prefix
+  app.get('/auth/google/callback', async (req, res) => {
     try {
       const { code, state: userId } = req.query;
       
