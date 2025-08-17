@@ -81,7 +81,7 @@ export function MyTasksPage() {
               <h3 className="text-lg font-medium text-gray-900 mb-2">Sign In Required</h3>
               <p className="text-gray-600 mb-6">Sign in with Google to view your tasks and manage your calendar sync.</p>
               <Button 
-                onClick={() => window.location.href = `/api/login?returnTo=${encodeURIComponent('/my-tasks')}`}
+                onClick={() => window.location.href = `/auth/login?returnTo=${encodeURIComponent('/my-tasks')}`}
                 className="bg-blue-600 hover:bg-blue-700"
               >
                 <LogIn className="h-4 w-4 mr-2" />
@@ -138,15 +138,32 @@ export function MyTasksPage() {
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-6xl mx-auto">
         <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">My Tasks</h1>
-          <Button
-            onClick={() => setShowCalendarDialog(true)}
-            variant="outline"
-            className="flex items-center gap-2"
-          >
-            <Calendar className="h-4 w-4" />
-            Calendar Sync
-          </Button>
+          <div className="flex items-center gap-4">
+            <h1 className="text-2xl font-bold text-gray-900">My Tasks</h1>
+            {(authStatus as any)?.sessionExists && (authStatus as any)?.user?.email && (
+              <div className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium">
+                {(authStatus as any).user.email}
+              </div>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={() => window.location.href = `/oauth/google/connect?returnTo=${encodeURIComponent('/my-tasks')}`}
+              variant="outline"
+              className="flex items-center gap-2"
+            >
+              <Calendar className="h-4 w-4" />
+              Connect Google Calendar
+            </Button>
+            <Button
+              onClick={() => setShowCalendarDialog(true)}
+              variant="outline"
+              className="flex items-center gap-2"
+            >
+              <Calendar className="h-4 w-4" />
+              Calendar Sync
+            </Button>
+          </div>
         </div>
         
         <div className="grid gap-6">
