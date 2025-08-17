@@ -5,6 +5,7 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { googleRouter } from './oauth/googleRoutes';
 import { debugRouter } from './debugRoutes';
+import { devAuthRouter } from './auth/devAuth';
 import { pool } from './db';
 
 const app = express();
@@ -14,13 +15,15 @@ app.use(cookieParser());
 
 // Session middleware
 app.use(session({
+  name: 'sid', // Cookie name
   secret: process.env.SESSION_SECRET || 'dev-session-secret-change-in-production',
   resave: false,
   saveUninitialized: false,
   cookie: {
     secure: false, // Set to true in production with HTTPS
     httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    maxAge: 24 * 60 * 60 * 1000, // 24 hours
+    sameSite: 'lax'
   }
 }));
 
@@ -35,6 +38,9 @@ console.log('Mounted debug routes at /debug');
 app.use('/debug', debugRouter);
 app.use(googleRouter);
 app.use('/api', googleRouter);
+
+// Mount dev auth routes
+app.use('/auth', devAuthRouter);
 
 // Add routes introspection endpoint for debugging
 app.get('/debug/express-routes', (_req, res) => {

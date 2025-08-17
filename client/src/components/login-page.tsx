@@ -2,14 +2,23 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Users, Shield, Calendar, FileText, BarChart3, Settings } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Users, Shield, Calendar, FileText, BarChart3, Settings, Mail } from "lucide-react";
 
 export function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
+  const [devEmail, setDevEmail] = useState("");
+  const [isDevLoading, setIsDevLoading] = useState(false);
 
   const handleLogin = () => {
     setIsLoading(true);
     window.location.href = "/auth/login?returnTo=/my-tasks";
+  };
+
+  const handleDevLogin = () => {
+    if (!devEmail) return;
+    setIsDevLoading(true);
+    window.location.href = `/auth/dev/login?email=${encodeURIComponent(devEmail)}`;
   };
 
   const features = [
@@ -77,8 +86,47 @@ export function LoginPage() {
                 className="w-full h-12"
                 size="lg"
               >
-                {isLoading ? "Signing in..." : "Sign in with Replit"}
+                {isLoading ? "Signing in..." : "Sign in with Google"}
               </Button>
+
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-white px-2 text-muted-foreground">Or</span>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <label className="text-sm font-medium text-gray-700">Dev Email Login</label>
+                <div className="flex gap-2">
+                  <Input
+                    type="email"
+                    placeholder="Enter email address"
+                    value={devEmail}
+                    onChange={(e) => setDevEmail(e.target.value)}
+                    className="flex-1"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        handleDevLogin();
+                      }
+                    }}
+                  />
+                  <Button 
+                    onClick={handleDevLogin}
+                    disabled={isDevLoading || !devEmail}
+                    size="sm"
+                    variant="outline"
+                    className="px-3"
+                  >
+                    <Mail className="h-4 w-4" />
+                  </Button>
+                </div>
+                <p className="text-xs text-gray-500">
+                  For non-Replit users: enter any email to create a dev account
+                </p>
+              </div>
               
               <div className="text-center text-sm text-gray-500">
                 <p>New team member?</p>

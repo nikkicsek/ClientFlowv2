@@ -60,6 +60,7 @@ export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
   upsertUser(user: UpsertUser): Promise<User>;
+  createUser(user: UpsertUser): Promise<User>;
   getClientUsers(): Promise<User[]>;
   
   // Organization operations
@@ -229,6 +230,11 @@ export class DatabaseStorage implements IStorage {
         },
       })
       .returning();
+    return result[0];
+  }
+
+  async createUser(userData: UpsertUser): Promise<User> {
+    const result = await db.insert(users).values(userData).returning();
     return result[0];
   }
 

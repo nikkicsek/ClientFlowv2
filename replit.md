@@ -117,6 +117,14 @@ UI preferences: Clean, functional interfaces without promotional or instructiona
     - OAuth connect: `/oauth/google/connect?as=email` preserves impersonation in Google's state parameter
     - OAuth callback: `/oauth/google/callback` extracts and restores impersonation from state
     - Canonical user ID resolution: All token storage normalized by userId as source of truth
+  - **Dev Authentication System (August 17, 2025)**: Complete non-Replit user authentication with session management
+    - **Dev Login Route**: `GET /auth/dev/login?email=<email>` creates/finds users and establishes sessions
+    - **Session Management**: Express sessions with 'sid' cookie, secure configuration, 24-hour expiry
+    - **Logout Functionality**: `POST /auth/logout` destroys sessions and redirects properly
+    - **Frontend Integration**: Dev email login form on login page for non-Replit users
+    - **Session Auth Gates**: `/auth/status` endpoint for session verification without impersonation
+    - **API Integration**: All API routes use session authentication with `credentials: include`
+    - **QA Verified**: Complete login/logout flow tested and working with real task data access
   - **Debug Endpoints Streamlined**: Simplified debug endpoints to use canonical user ID approach
     - `/debug/calendar-status` returns single token record with keyType indicators ("session"|"impersonated")
     - `/debug/tokens/dump` shows redacted token information for canonical user only
