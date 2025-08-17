@@ -76,7 +76,8 @@ googleRouter.get('/oauth/google/callback', async (req: any, res) => {
 
     if (!email) {
       console.error('OAuth callback failure: No email in Google profile', { query: req.query });
-      return res.status(400).send('Unable to retrieve email from Google profile. Please try again.');
+      const origin = `${req.protocol}://${req.headers.host}`;
+      return res.redirect(303, `${origin}/my-tasks?calendar=error`);
     }
 
     // Find user ID by email in our database
@@ -93,13 +94,12 @@ googleRouter.get('/oauth/google/callback', async (req: any, res) => {
       console.error('Error querying users table:', err);
     }
 
-    // If not found in users, try team_members table
+    // If not found in users, try to resolve via team_members.user_id
     if (!userId) {
       try {
-        const teamResult = await db.query('SELECT id FROM team_members WHERE email = $1', [email]);
-        if (teamResult.rows.length > 0) {
-          // For team members, we'll use their team_member ID as the userId for tokens
-          userId = teamResult.rows[0].id;
+        const teamResult = await db.query('SELECT user_id FROM team_members WHERE email = $1', [email]);
+        if (teamResult.rows.length > 0 && teamResult.rows[0].user_id) {
+          userId = teamResult.rows[0].user_id;
         }
       } catch (err) {
         console.error('Error querying team_members table:', err);
@@ -108,16 +108,19 @@ googleRouter.get('/oauth/google/callback', async (req: any, res) => {
 
     if (!userId) {
       console.error('OAuth callback failure: Email not recognized', { email, query: req.query });
-      return res.status(400).send(`Email ${email} not recognized in this workspace. Please contact your administrator.`);
+      const origin = `${req.protocol}://${req.headers.host}`;
+      return res.redirect(303, `${origin}/my-tasks?calendar=error`);
     }
 
     const scopes = (tokens.scope as string) || 'https://www.googleapis.com/auth/calendar.events openid email profile';
     await saveTokens(db, userId, tokens, scopes);
 
-    res.send('Google Calendar connected. You can close this window.');
+    const origin = `${req.protocol}://${req.headers.host}`;
+    return res.redirect(303, `${origin}/my-tasks?calendar=connected`);
   } catch (e: any) {
     console.error('OAuth callback failure', { query: req.query, err: e?.message });
-    res.status(500).send('OAuth error occurred. Please try again or contact support.');
+    const origin = `${req.protocol}://${req.headers.host}`;
+    return res.redirect(303, `${origin}/my-tasks?calendar=error`);
   }
 });
 
@@ -137,7 +140,8 @@ googleRouter.get('/api/oauth/google/callback', async (req: any, res) => {
 
     if (!email) {
       console.error('OAuth callback failure: No email in Google profile', { query: req.query });
-      return res.status(400).send('Unable to retrieve email from Google profile. Please try again.');
+      const origin = `${req.protocol}://${req.headers.host}`;
+      return res.redirect(303, `${origin}/my-tasks?calendar=error`);
     }
 
     // Find user ID by email in our database
@@ -154,13 +158,12 @@ googleRouter.get('/api/oauth/google/callback', async (req: any, res) => {
       console.error('Error querying users table:', err);
     }
 
-    // If not found in users, try team_members table
+    // If not found in users, try to resolve via team_members.user_id
     if (!userId) {
       try {
-        const teamResult = await db.query('SELECT id FROM team_members WHERE email = $1', [email]);
-        if (teamResult.rows.length > 0) {
-          // For team members, we'll use their team_member ID as the userId for tokens
-          userId = teamResult.rows[0].id;
+        const teamResult = await db.query('SELECT user_id FROM team_members WHERE email = $1', [email]);
+        if (teamResult.rows.length > 0 && teamResult.rows[0].user_id) {
+          userId = teamResult.rows[0].user_id;
         }
       } catch (err) {
         console.error('Error querying team_members table:', err);
@@ -169,16 +172,19 @@ googleRouter.get('/api/oauth/google/callback', async (req: any, res) => {
 
     if (!userId) {
       console.error('OAuth callback failure: Email not recognized', { email, query: req.query });
-      return res.status(400).send(`Email ${email} not recognized in this workspace. Please contact your administrator.`);
+      const origin = `${req.protocol}://${req.headers.host}`;
+      return res.redirect(303, `${origin}/my-tasks?calendar=error`);
     }
 
     const scopes = (tokens.scope as string) || 'https://www.googleapis.com/auth/calendar.events openid email profile';
     await saveTokens(db, userId, tokens, scopes);
 
-    res.send('Google Calendar connected. You can close this window.');
+    const origin = `${req.protocol}://${req.headers.host}`;
+    return res.redirect(303, `${origin}/my-tasks?calendar=connected`);
   } catch (e: any) {
     console.error('OAuth callback failure', { query: req.query, err: e?.message });
-    res.status(500).send('OAuth error occurred. Please try again or contact support.');
+    const origin = `${req.protocol}://${req.headers.host}`;
+    return res.redirect(303, `${origin}/my-tasks?calendar=error`);
   }
 });
 
