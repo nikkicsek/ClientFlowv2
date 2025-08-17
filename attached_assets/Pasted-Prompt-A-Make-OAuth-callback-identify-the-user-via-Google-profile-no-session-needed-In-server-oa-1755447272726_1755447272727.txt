@@ -1,0 +1,50 @@
+Prompt A — Make OAuth callback identify the user via Google profile (no session needed)
+In server/oauth/googleRoutes.ts, update the OAuth flow so we can save tokens without relying on req.user or cookies.
+
+1) In GET /oauth/google/connect:
+   - Change the scope to include OpenID profile info:
+     const scope = [
+       'openid', 'email', 'profile',
+       'https://www.googleapis.com/auth/calendar.events'
+     ];
+   - Keep access_type:'offline' and prompt:'consent'.
+   - You can keep state for debugging, but success must NOT depend on it.
+
+2) In GET /oauth/google/callback:
+   - After getting tokens, set credentials on the client:
+       const { tokens } = await client.getToken(req.query.code as string);
+       client.setCredentials(tokens);
+   - Use Google OAuth2 API to fetch profile:
+       const oauth2 = google.oauth2({ version: 'v2', auth: client });
+       const { data: profile } = await oauth2.userinfo.get();
+       const email = profile.email;  // required
+       const googleSub = profile.id; // optional
+
+   - Map profile.email to our local user:
+       Try: find userId by email in our DB (users table). If not found, try team members table or whatever we use for people records.
+       Create a helper in storage.ts if needed:
+         - getUserIdByEmail(email:string): Promise<string | null>
+         - getUserIdByTeamMemberEmail(email:string): Promise<string | null>
+       Choose the first non-null as userId.
+
+   - If userId still not found, return 400 with a helpful message ("Email not recognized in this workspace").
+
+   - Save tokens to oauth_tokens for that userId (upsert). Keep refresh_token if Google doesn't send a new one.
+     (Reuse our existing saveTokens/upsert logic.)
+
+   - On success: res.send('Google Calendar connected. You can close this window.');
+
+3) Add robust error logging:
+     console.error('OAuth callback failure', { query: req.query, err: e?.message });
+   And return a friendly 500 text.
+
+4) Show me the DIFF of server/oauth/googleRoutes.ts and any storage.ts changes, then restart the server.
+
+Prompt B — Ensure the Connect button does a full navigation (if not already)
+Find the "Connect Google Calendar" button (client/src/pages/my-tasks.tsx or client/src/components/CalendarSettings.tsx).
+
+Replace any <Link to="/oauth/google/connect"> or client-side navigate() with a FULL NAV:
+  <a href="/oauth/google/connect" className="btn btn-primary">Connect Google Calendar</a>
+(or use window.location.assign('/oauth/google/connect')).
+
+Show me the DIFF.
