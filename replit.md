@@ -113,19 +113,30 @@ UI preferences: Clean, functional interfaces without promotional or instructiona
 - **Debug System Overhaul (August 17, 2025)**: Complete debugging infrastructure with routing fixes, emergency kill-switch, and idempotent calendar events
   - **EMERGENCY RESPONSE**: Successfully stopped runaway loop creating duplicate test tasks with immediate kill-switch
   - **Routing Fixed**: Debug routes properly isolated to `/debug` without interfering with main app at `/` - confirmed via curl tests
+  - **OAuth State Preservation**: Enhanced OAuth flow to preserve `?as=email` impersonation parameters through callback state
+    - OAuth connect: `/oauth/google/connect?as=email` preserves impersonation in Google's state parameter
+    - OAuth callback: `/oauth/google/callback` extracts and restores impersonation from state
+    - Canonical user ID resolution: All token storage normalized by userId as source of truth
+  - **Debug Endpoints Streamlined**: Simplified debug endpoints to use canonical user ID approach
+    - `/debug/calendar-status` returns single token record with keyType indicators ("session"|"impersonated")
+    - `/debug/tokens/dump` shows redacted token information for canonical user only
+    - All debug endpoints support `?as=email` parameter for sessionless testing
   - **Kill-Switch Implemented**: Emergency calendar sync controls with `CALENDAR_SYNC_ENABLED` environment variable and runtime POST endpoints
     - `POST /debug/sync/disable` - Instant calendar write prevention (tested working)
     - `POST /debug/sync/enable` - Re-enable calendar operations (tested working)
-  - **Idempotent Task Creation**: Implemented duplicate prevention logic that checks for existing test tasks within 10-minute window
-    - Returns `wasExisting: true/false` to indicate if task was found vs created
-    - Prevents runaway loops by reusing existing tasks instead of creating duplicates
-  - **Idempotent Calendar Events**: Enhanced calendar hooks with proper upsert logic using `calendarEventId` column
-    - Insert new events or update existing ones based on stored event IDs
-    - Prevents duplicate calendar events through proper database event ID tracking
-  - **Cleanup Infrastructure**: Added `/debug/cleanup-test-tasks` endpoint with configurable time windows (tested: deleted 23 items successfully)
-  - **Enhanced Logging**: Comprehensive calendar operation logging with task/user/assignment IDs and action types
-  - **User Impersonation**: All debug endpoints support `?as=email` parameter for testing without sessions (tested working)
-  - **Database Schema**: Confirmed `calendarEventId` column exists in `task_assignments` table for event tracking
+  - **GoogleCalendarService Enhanced**: Added `getClientForUser()` method with email/userId normalization
+    - Accepts either userId or email, resolves to canonical user ID internally
+    - Direct oauth_tokens table queries for reliable token fetching
+    - Proper token refresh handling with database updates
+  - **Idempotent Calendar Hooks**: Enhanced calendar sync hooks with comprehensive sync control
+    - All hooks respect `SYNC_ENABLED` flag - early return when disabled
+    - Calendar events use `calendarEventId` for proper create vs update logic
+    - Prevents duplicate calendar events through database event ID tracking
+    - Enhanced logging with task/user/assignment IDs and action types
+  - **Database Integration**: Direct raw SQL queries via pool connection for oauth_tokens operations
+    - User ID normalization through users and team_members tables
+    - Token refresh updates stored directly in oauth_tokens table
+    - Canonical userId as single source of truth for all token operations
 
 ### Potential Integrations
 - **Analytics Platforms**: Designed to integrate with marketing tools and analytics services

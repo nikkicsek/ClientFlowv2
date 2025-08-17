@@ -1,7 +1,11 @@
-import { googleCalendarService } from '../googleCalendar';
+import { googleCalendarService, SYNC_ENABLED } from '../googleCalendar';
 import { storage } from '../storage';
 
 export const onTaskCreatedOrUpdated = async (taskId: string) => {
+  if (!SYNC_ENABLED) { 
+    console.log('Calendar sync disabled - onTaskCreatedOrUpdated skipped'); 
+    return; 
+  }
   try {
     console.log('Calendar hook', { taskId, action: 'task_created_or_updated' });
     
@@ -34,6 +38,10 @@ export const onTaskDeleted = async (taskId: string) => {
 };
 
 export const onAssignmentCreated = async (assignmentId: string) => {
+  if (!SYNC_ENABLED) { 
+    console.log('Calendar sync disabled - onAssignmentCreated skipped'); 
+    return; 
+  }
   try {
     // Get the assignment to find the userId
     const assignment = await storage.getTaskAssignment(assignmentId);
@@ -61,6 +69,10 @@ export const onAssignmentDeleted = async (assignmentId: string) => {
 
 // Idempotent calendar event sync for task assignments
 async function syncAssignmentCalendarEvent(assignmentId: string) {
+  if (!SYNC_ENABLED) { 
+    console.log('Calendar sync disabled - syncAssignmentCalendarEvent skipped'); 
+    return; 
+  }
   try {
     const assignment = await storage.getTaskAssignment(assignmentId);
     if (!assignment) {
@@ -74,6 +86,12 @@ async function syncAssignmentCalendarEvent(assignmentId: string) {
       return;
     }
 
+    // Only process tasks with date+time - skip tasks without proper due dates
+    if (!task.dueDate || (!task.dueTime && !task.dueDate.includes('T') && !task.dueDate.includes(' '))) {
+      console.log('Calendar sync skipped - task lacks date+time:', { taskId: task.id, dueDate: task.dueDate, dueTime: task.dueTime });
+      return;
+    }
+
     // Find user by email
     const user = await storage.getUserByEmail(assignment.teamMember.email);
     if (!user) {
@@ -81,17 +99,18 @@ async function syncAssignmentCalendarEvent(assignmentId: string) {
       return;
     }
 
-    // Check if we already have a calendar event ID
+    // IDEMPOTENCY: Check if we already have a calendar event ID
     const existingEventId = assignment.calendarEventId;
     
     let eventId;
     if (existingEventId) {
-      // Update existing event
-      console.log('Calendar upsert', { taskId: task.id, userId: user.id, hadEventId: true, action: 'update' });
+      // Update existing event (idempotent)
+      console.log('Calendar upsert', { taskId: task.id, userId: user.id, assignmentId, hadEventId: true, action: 'update' });
       const success = await googleCalendarService.updateTaskEvent(user.id, existingEventId, {
         title: task.title,
         description: task.description,
         dueDate: task.dueDate,
+        dueTime: task.dueTime,
         status: task.status,
         priority: task.priority
       });
@@ -99,19 +118,21 @@ async function syncAssignmentCalendarEvent(assignmentId: string) {
         eventId = existingEventId;
       }
     } else {
-      // Create new event
-      console.log('Calendar upsert', { taskId: task.id, userId: user.id, hadEventId: false, action: 'insert' });
+      // Create new event only if no existing event ID
+      console.log('Calendar upsert', { taskId: task.id, userId: user.id, assignmentId, hadEventId: false, action: 'insert' });
       eventId = await googleCalendarService.createTaskEvent(user.id, {
         title: task.title,
         description: task.description,
         dueDate: task.dueDate,
+        dueTime: task.dueTime,
         status: task.status,
         priority: task.priority
       });
       
-      // Store the event ID in the assignment
+      // Store the event ID in the assignment for future idempotency
       if (eventId) {
         await storage.updateTaskAssignment(assignmentId, { calendarEventId: eventId });
+        console.log('Calendar event ID saved:', { assignmentId, eventId });
       }
     }
   } catch (error) {
