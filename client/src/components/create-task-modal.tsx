@@ -65,6 +65,7 @@ export default function CreateTaskModal({ isOpen, onClose, onSuccess, projectId 
       
       queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "tasks"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/task-assignments"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/tasks"] });
       
       onSuccess();
       setFormData({
