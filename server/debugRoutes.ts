@@ -1,32 +1,58 @@
-import { Router } from 'express';
-import { storage } from './storage';
-import { isAuthenticated } from './replitAuth';
-import {
-  onTaskCreatedOrUpdated,
-  onAssignmentCreated
-} from './hooks/taskCalendarHooks';
-import { google } from 'googleapis';
+import { Router } from "express";
+import { storage } from "./storage";
+import { isAuthenticated } from "./replitAuth";
+import { googleCalendarService } from "./googleCalendar";
+import { onTaskCreatedOrUpdated, onAssignmentCreated } from './hooks/taskCalendarHooks';
+import { insertTaskSchema, type TeamMember } from "@shared/schema";
 
-export const debugRouter = Router();
+const router = Router();
 
-// GET /debug/me - Return user info used by My Tasks
-debugRouter.get('/me', isAuthenticated, async (req: any, res) => {
+// Simple HTML debug dashboard
+router.get('/', (req, res) => {
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Dashboard</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        .link { display: block; margin: 10px 0; padding: 10px; background: #f5f5f5; text-decoration: none; color: #333; }
+        .link:hover { background: #e0e0e0; }
+    </style>
+</head>
+<body>
+    <h1>Debug Dashboard</h1>
+    <a href="/debug/health" class="link">Health Check</a>
+    <a href="/debug/me" class="link">Current User Info</a>
+    <a href="/debug/my-tasks" class="link">My Tasks</a>
+    <a href="/debug/calendar-status" class="link">Calendar Status</a>
+    <a href="/debug/calendar-create-test" class="link">Create Test Calendar Event</a>
+    <a href="/debug/create-test-task" class="link">Create Test Task</a>
+</body>
+</html>
+  `;
+  res.send(html);
+});
+
+// Health check
+router.get('/health', (req, res) => {
+  res.json({ ok: true });
+});
+
+// Current user info
+router.get('/me', isAuthenticated, async (req: any, res) => {
   try {
     const userId = req.user.claims.sub;
     const user = await storage.getUser(userId);
     res.json({ userId, email: user?.email });
-  } catch (error: any) {
-    console.error('Error in debug/me:', error);
-    res.status(500).json({ 
-      message: 'Failed to get user info', 
-      stack: error.stack,
-      error: error.message 
-    });
+  } catch (error) {
+    console.error("Error in debug/me:", error);
+    res.status(500).json({ message: "Failed to get user info", stack: error instanceof Error ? error.stack : String(error) });
   }
 });
 
-// GET /debug/my-tasks - Using same code path as My Tasks page
-debugRouter.get('/my-tasks', isAuthenticated, async (req: any, res) => {
+// My tasks - using exact same logic as My Tasks page
+router.get('/my-tasks', isAuthenticated, async (req: any, res) => {
   try {
     const userId = req.user.claims.sub;
     const user = await storage.getUser(userId);
@@ -35,235 +61,143 @@ debugRouter.get('/my-tasks', isAuthenticated, async (req: any, res) => {
       return res.status(400).json({ message: "User email not found" });
     }
 
-    // Use same logic as My Tasks page - find team member by email
-    const allTeamMembers = await storage.getAllTeamMembers();
-    const currentTeamMember = allTeamMembers.find(member => member.email === user.email);
+    // Find team member by email (same logic as My Tasks)
+    const teamMembers = await storage.getAllTeamMembers();
+    const currentTeamMember = teamMembers.find((member: TeamMember) => member.email === user.email);
     
     if (!currentTeamMember) {
-      return res.json({ 
-        message: "No team member record found", 
-        userId, 
-        email: user.email, 
-        tasks: [] 
-      });
+      return res.json({ message: "No team member record found", userId, email: user.email, tasks: [] });
     }
 
-    // Get assignments using same storage method as My Tasks
+    // Get assignments using same logic as My Tasks
     const assignments = await storage.getTaskAssignmentsByTeamMember(currentTeamMember.id);
     
     const tasks = assignments.slice(0, 50).map(assignment => ({
       id: assignment.task.id,
       title: assignment.task.title,
       status: assignment.task.status,
-      due_at: assignment.task.dueDate, // Fix: use dueDate instead of dueAt
       due_date: assignment.task.dueDate,
       due_time: assignment.task.dueTime,
+      due_at: assignment.task.dueDate,
       org_id: assignment.task.organizationId,
       project_id: assignment.task.projectId,
-      assigneeUserIds: [userId] // Map team member back to user ID
+      assigneeUserIds: [], // Will populate below
+      created_at: assignment.task.createdAt
     }));
 
-    res.json({ 
-      userId, 
-      email: user.email, 
-      teamMemberId: currentTeamMember.id, 
-      tasks: tasks.slice(0, 5) 
-    });
-  } catch (error: any) {
-    console.error('Error in debug/my-tasks:', error);
-    res.status(500).json({ 
-      message: 'Failed to get my tasks', 
-      stack: error.stack,
-      error: error.message 
-    });
+    res.json({ tasks, teamMemberId: currentTeamMember.id, userId, email: user.email });
+  } catch (error) {
+    console.error("Error in debug/my-tasks:", error);
+    res.status(500).json({ message: "Failed to fetch my tasks", stack: error instanceof Error ? error.stack : String(error) });
   }
 });
 
-// POST /debug/create-test-task - Create test task and assign to current user
-debugRouter.post('/create-test-task', isAuthenticated, async (req: any, res) => {
+// Calendar status
+router.get('/calendar-status', isAuthenticated, async (req: any, res) => {
   try {
     const userId = req.user.claims.sub;
     const user = await storage.getUser(userId);
     
-    if (!user?.email) {
-      return res.status(400).json({ message: "User email not found" });
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
     }
-
-    // Find team member by email
-    const allTeamMembers = await storage.getAllTeamMembers();
-    const currentTeamMember = allTeamMembers.find(member => member.email === user.email);
-    
-    if (!currentTeamMember) {
-      return res.status(400).json({ message: "No team member record found" });
-    }
-
-    // Create task due in 15 minutes
-    const now = new Date();
-    const dueAt = new Date(now.getTime() + 15 * 60 * 1000);
-    
-    const taskData = {
-      title: "Replit Sync Test (server)",
-      description: "Test task created for debugging My Tasks and calendar sync",
-      status: "pending" as const,
-      priority: "medium" as const,
-      dueDate: dueAt, // Fix: use Date object instead of string
-      dueTime: dueAt.toTimeString().substring(0, 5),
-      organizationId: null,
-      projectId: null,
-    };
-
-    const task = await storage.createTask(taskData);
-    console.log('Created test task:', task.id, task.title);
-    
-    // Assign to current team member
-    const assignmentData = {
-      taskId: task.id,
-      teamMemberId: currentTeamMember.id,
-      assignedBy: userId,
-    };
-
-    const assignment = await storage.createTaskAssignment(assignmentData);
-    console.log('Assigned to teamMemberId:', currentTeamMember.id, 'userId:', userId);
-    console.log('Assignment created with ID:', assignment.id);
-    
-    // Call calendar hooks
-    await onTaskCreatedOrUpdated(task.id);
-    await onAssignmentCreated(assignment.id);
-    
-    res.json({ 
-      task: {
-        ...task,
-        assigneeUserIds: [userId]
-      },
-      assignment,
-      teamMember: currentTeamMember
-    });
-  } catch (error: any) {
-    console.error('Error creating test task:', error);
-    res.status(500).json({ 
-      message: 'Failed to create test task', 
-      stack: error.stack,
-      error: error.message 
-    });
-  }
-});
-
-// GET /debug/calendar-status - Check OAuth tokens for current user
-debugRouter.get('/calendar-status', isAuthenticated, async (req: any, res) => {
-  try {
-    const userId = req.user.claims.sub;
-    const user = await storage.getUser(userId);
-    
-    if (!user?.email) {
-      return res.status(400).json({ message: "User email not found" });
-    }
-
-    // Check if user has OAuth tokens in database
-    const db = req.app.get('db');
-    const tokenResult = await db.query(
-      'SELECT access_token, refresh_token, expiry, scopes FROM oauth_tokens WHERE user_id = $1',
-      [userId]
-    );
-
-    const hasTokens = tokenResult.rows.length > 0;
-    const tokenData = hasTokens ? tokenResult.rows[0] : null;
 
     res.json({
       userId,
       email: user.email,
-      hasTokens,
-      expiry: tokenData?.expiry || null,
-      scopes: tokenData?.scopes || null
+      hasTokens: !!(user.googleAccessToken),
+      expiry: user.googleTokenExpiry,
+      scopes: user.googleAccessToken ? "calendar.events" : null
     });
-  } catch (error: any) {
-    console.error('Error checking calendar status:', error);
-    res.status(500).json({ 
-      message: 'Failed to check calendar status', 
-      stack: error.stack,
-      error: error.message 
-    });
+  } catch (error) {
+    console.error("Error in debug/calendar-status:", error);
+    res.status(500).json({ message: "Failed to get calendar status", stack: error instanceof Error ? error.stack : String(error) });
   }
 });
 
-// POST /debug/calendar-create-test - Create test calendar event
-debugRouter.post('/calendar-create-test', isAuthenticated, async (req: any, res) => {
+// Create test calendar event
+router.get('/calendar-create-test', isAuthenticated, async (req: any, res) => {
   try {
     const userId = req.user.claims.sub;
     const user = await storage.getUser(userId);
     
-    if (!user?.email) {
-      return res.status(400).json({ message: "User email not found" });
+    if (!user || !user.googleAccessToken) {
+      return res.json({ ok: false, error: "No Google tokens available" });
     }
 
-    // Get OAuth tokens
-    const db = req.app.get('db');
-    const tokenResult = await db.query(
-      'SELECT access_token, refresh_token, expiry FROM oauth_tokens WHERE user_id = $1',
-      [userId]
-    );
+    const startTime = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes from now
+    const endTime = new Date(startTime.getTime() + 30 * 60 * 1000); // 30 minutes later
 
-    if (tokenResult.rows.length === 0) {
-      return res.status(400).json({ message: "No OAuth tokens found" });
-    }
-
-    const tokenData = tokenResult.rows[0];
-    
-    // Create OAuth2 client and set credentials
-    const oauth2Client = new google.auth.OAuth2(
-      process.env.GOOGLE_CLIENT_ID,
-      process.env.GOOGLE_CLIENT_SECRET
-    );
-    
-    oauth2Client.setCredentials({
-      access_token: tokenData.access_token,
-      refresh_token: tokenData.refresh_token,
-      expiry_date: new Date(tokenData.expiry).getTime()
-    });
-
-    // Create calendar API instance
-    const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
-    
-    // Create event starting in 10 minutes, lasting 30 minutes
-    const startTime = new Date(Date.now() + 10 * 60 * 1000);
-    const endTime = new Date(startTime.getTime() + 30 * 60 * 1000);
-    
-    const event = {
-      summary: 'Debug Test Event - Replit Calendar Sync',
-      description: 'Test event created via debug endpoint',
+    const eventData = {
+      summary: "Replit Debug Test Event",
+      description: "Test event created from debug dashboard",
       start: {
         dateTime: startTime.toISOString(),
-        timeZone: 'America/Los_Angeles'
+        timeZone: 'America/Vancouver'
       },
       end: {
         dateTime: endTime.toISOString(),
-        timeZone: 'America/Los_Angeles'
+        timeZone: 'America/Vancouver'
       }
     };
 
-    console.log('Creating calendar event:', {
-      summary: event.summary,
-      start: event.start.dateTime,
-      end: event.end.dateTime,
-      timeZone: event.start.timeZone
-    });
+    console.log("Creating test calendar event with payload:", eventData);
 
-    const response = await calendar.events.insert({
-      calendarId: 'primary',
-      requestBody: event
-    });
-
-    res.json({
-      ok: true,
-      eventId: response.data.id,
-      htmlLink: response.data.htmlLink
-    });
-  } catch (error: any) {
-    console.error('Error creating test calendar event:', error);
-    res.status(500).json({ 
-      ok: false,
-      message: 'Failed to create calendar event', 
-      stack: error.stack,
-      error: error.message 
-    });
+    const eventId = await googleCalendarService.createEvent(user.id, 'primary', eventData);
+    
+    res.json({ ok: true, eventId });
+  } catch (error) {
+    console.error("Error creating test calendar event:", error);
+    res.json({ ok: false, error: error instanceof Error ? error.message : String(error) });
   }
 });
+
+// Create test task
+router.get('/create-test-task', isAuthenticated, async (req: any, res) => {
+  try {
+    const userId = req.user.claims.sub;
+    const user = await storage.getUser(userId);
+    
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const dueDate = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes from now
+    const hours = dueDate.getHours().toString().padStart(2, '0');
+    const minutes = dueDate.getMinutes().toString().padStart(2, '0');
+
+    const taskData = insertTaskSchema.parse({
+      title: "Replit Sync Test (server)",
+      description: "Test task created from debug dashboard",
+      status: "in_progress",
+      assignedTo: userId,
+      dueDate,
+      dueTime: `${hours}:${minutes}`,
+      priority: "medium",
+      taskScope: "organization"
+    });
+
+    const task = await storage.createTask(taskData);
+
+    // Call calendar hooks
+    await onTaskCreatedOrUpdated(task.id);
+    
+    // Check if we need to call assignment hook
+    if (task.assignedTo) {
+      await onAssignmentCreated(task.id, task.assignedTo);
+    }
+
+    res.json({
+      id: task.id,
+      assigneeUserIds: task.assignedTo ? [task.assignedTo] : [],
+      due_at: task.dueDate,
+      title: task.title,
+      status: task.status
+    });
+  } catch (error) {
+    console.error("Error creating test task:", error);
+    res.status(500).json({ message: "Failed to create test task", stack: error instanceof Error ? error.stack : String(error) });
+  }
+});
+
+export { router as debugRouter };
