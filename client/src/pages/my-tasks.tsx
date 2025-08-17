@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { TeamMemberTasks } from '@/components/team-member-tasks';
 import { CalendarSyncDialog } from '@/components/calendar-sync-dialog';
+import { CalendarSettings } from '@/components/CalendarSettings';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { User, AlertCircle, Calendar } from 'lucide-react';
@@ -117,10 +118,13 @@ export function MyTasksPage() {
           </Button>
         </div>
         
-        <TeamMemberTasks 
-          teamMemberId={currentTeamMember.id} 
-          teamMemberName={currentTeamMember.name}
-        />
+        <div className="grid gap-6">
+          <CalendarSettings user={user} />
+          <TeamMemberTasks 
+            teamMemberId={currentTeamMember.id} 
+            teamMemberName={currentTeamMember.name}
+          />
+        </div>
         
         <CalendarSyncDialog
           isOpen={showCalendarDialog}

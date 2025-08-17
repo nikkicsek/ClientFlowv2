@@ -9,6 +9,12 @@ import { googleCalendarService } from "./googleCalendar";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import {
+  onTaskCreatedOrUpdated,
+  onTaskDeleted,
+  onAssignmentCreated,
+  onAssignmentDeleted
+} from './hooks/taskCalendarHooks';
 
 // Configure multer for file uploads
 const uploadDir = path.join(process.cwd(), "uploads");
@@ -311,6 +317,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      // Calendar hook: Task created
+      await onTaskCreatedOrUpdated(task.id);
+
       res.status(201).json(task);
     } catch (error) {
       console.error("Error creating task:", error);
@@ -372,6 +381,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.error("Failed to send task assignment email:", emailError);
         }
       }
+
+      // Calendar hook: Task updated
+      await onTaskCreatedOrUpdated(req.params.id);
 
       res.json(task);
     } catch (error) {
@@ -516,6 +528,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.error("Failed to send task assignment email:", emailError);
       }
 
+      // Calendar hook: Assignment created
+      await onAssignmentCreated(assignment.id);
+
       res.status(201).json(assignment);
     } catch (error) {
       console.error("Error creating task assignment:", error);
@@ -595,6 +610,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Only admins can delete task assignments" });
       }
 
+      // Calendar hook: Assignment deleted
+      await onAssignmentDeleted(req.params.id);
+      
       await storage.deleteTaskAssignment(req.params.id);
       res.status(204).send();
     } catch (error) {
