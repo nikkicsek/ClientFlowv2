@@ -13,7 +13,7 @@ import InvitationPage from "@/pages/invitation-page";
 import { MyTasksPage } from "@/pages/my-tasks";
 
 function Router() {
-  const { user, isAuthenticated, isLoading } = useAuth();
+  const { user, isAuthenticated, isLoading, authStatus } = useAuth();
 
   if (isLoading) {
     return <Landing />;
@@ -27,7 +27,7 @@ function Router() {
       {!isAuthenticated ? (
         <>
           <Route path="/" component={Landing} />
-          <Route path="/my-tasks" component={Landing} />
+          <Route path="/my-tasks" component={MyTasksPage} />
           <Route path="*" component={Landing} />
         </>
       ) : (

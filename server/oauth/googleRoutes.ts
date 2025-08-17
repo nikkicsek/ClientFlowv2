@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { google } from 'googleapis';
 import { Pool } from 'pg';
+import { storage } from '../storage';
 
 export const googleRouter = Router();
 
@@ -42,13 +43,23 @@ googleRouter.get('/oauth/google/connect', async (req: any, res) => {
     'https://www.googleapis.com/auth/calendar.events'
   ];
   
-  // Preserve state including ?as=<email> for impersonation
+  // Preserve state including ?as=<email> for impersonation and returnTo
   let state = '';
+  const stateParams = [];
+  
   if (req.query.as) {
-    state = `as=${encodeURIComponent(req.query.as)}`;
+    stateParams.push(`as=${encodeURIComponent(req.query.as)}`);
   } else if (req.user?.claims?.sub || req.user?.id) {
-    state = `user=${encodeURIComponent((req.user?.claims?.sub as string) || (req.user?.id as string))}`;
+    stateParams.push(`user=${encodeURIComponent((req.user?.claims?.sub as string) || (req.user?.id as string))}`);
   }
+  
+  // Preserve returnTo for redirect after login
+  if (req.query.returnTo || (req.session as any)?.returnTo) {
+    const returnTo = req.query.returnTo || (req.session as any).returnTo;
+    stateParams.push(`returnTo=${encodeURIComponent(returnTo as string)}`);
+  }
+  
+  state = stateParams.join('&');
   
   const url = client.generateAuthUrl({
     access_type: 'offline',
@@ -129,8 +140,35 @@ googleRouter.get('/oauth/google/callback', async (req: any, res) => {
     const scopes = (tokens.scope as string) || 'https://www.googleapis.com/auth/calendar.events openid email profile';
     await saveTokens(db, canonicalUserId, tokens, scopes);
 
+    // Look up team member ID for the resolved user
+    let teamMemberId = null;
+    try {
+      const teamResult = await db.query('SELECT id FROM team_members WHERE email = $1', [targetEmail]);
+      if (teamResult.rows.length > 0) {
+        teamMemberId = teamResult.rows[0].id;
+      }
+    } catch (err) {
+      console.error('Error querying team_members for session:', err);
+    }
+
+    // Establish user session after successful OAuth
+    (req.session as any).user = {
+      userId: canonicalUserId,
+      email: targetEmail,
+      teamMemberId
+    };
+
+    // Determine redirect location
+    let redirectTo = '/my-tasks';
+    if (state) {
+      const stateParams = new URLSearchParams(state);
+      if (stateParams.get('returnTo')) {
+        redirectTo = stateParams.get('returnTo') as string;
+      }
+    }
+
     const origin = `${req.protocol}://${req.headers.host}`;
-    return res.redirect(303, `${origin}/my-tasks?calendar=connected`);
+    return res.redirect(303, `${origin}${redirectTo}?calendar=connected`);
   } catch (e: any) {
     const redirect = `${req.protocol}://${req.headers.host}/oauth/google/callback`;
     console.error('OAuth callback failure', { 
@@ -143,6 +181,46 @@ googleRouter.get('/oauth/google/callback', async (req: any, res) => {
     return res.redirect(303, `${origin}/my-tasks?calendar=error`);
   }
 });
+
+// Auth routes for session management
+googleRouter.get('/auth/status', (req: any, res) => {
+  const sessionUser = (req.session as any)?.user;
+  
+  res.json({
+    sessionExists: !!sessionUser,
+    user: sessionUser || null
+  });
+});
+
+googleRouter.get('/auth/logout', (req: any, res) => {
+  // Clear session
+  req.session.destroy((err: any) => {
+    if (err) {
+      console.error('Error destroying session:', err);
+    }
+    // Clear the session cookie
+    res.clearCookie('connect.sid');
+    res.redirect('/');
+  });
+});
+
+googleRouter.get('/auth/login', (req: any, res) => {
+  // Store returnTo in session for after OAuth callback
+  if (req.query.returnTo) {
+    (req.session as any).returnTo = req.query.returnTo;
+  }
+  
+  // Redirect to OAuth connect
+  const returnToParam = req.query.returnTo ? `&returnTo=${encodeURIComponent(req.query.returnTo as string)}` : '';
+  res.redirect(`/oauth/google/connect?_t=${Date.now()}${returnToParam}`);
+});
+
+// Alias for backward compatibility
+googleRouter.get('/auth/google/callback', (req, res, next) => {
+  // Forward to the main OAuth callback
+  req.url = '/oauth/google/callback';
+  next();
+}, googleRouter);
 
 
 

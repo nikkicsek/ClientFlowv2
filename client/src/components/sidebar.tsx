@@ -32,7 +32,7 @@ const navigation = [
 
 export default function Sidebar({ activeSection, setActiveSection, collapsed, user }: SidebarProps) {
   const handleLogout = () => {
-    window.location.href = "/api/logout";
+    window.location.href = "/auth/logout";
   };
 
   return (

@@ -9,7 +9,7 @@ export function LoginPage() {
 
   const handleLogin = () => {
     setIsLoading(true);
-    window.location.href = "/api/login";
+    window.location.href = "/auth/login?returnTo=/my-tasks";
   };
 
   const features = [
