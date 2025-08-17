@@ -93,7 +93,9 @@ export interface IStorage {
   deleteService(id: string): Promise<void>;
   
   // Task operations
+  getTask(id: string): Promise<Task | undefined>;
   getTasksByProject(projectId: string): Promise<Task[]>;
+  getProjectTasks(projectId: string): Promise<Task[]>; // Alias for getTasksByProject for calendar integration
   getTasksByProjectWithDetails(projectId: string): Promise<(Task & { service?: Service })[]>;
   getAllTasksWithDetails(): Promise<(Task & { service?: Service; project?: Project })[]>;
   createTask(task: InsertTask): Promise<Task>;
@@ -370,6 +372,18 @@ export class DatabaseStorage implements IStorage {
       service: service || undefined,
       project: project || undefined,
     }));
+  }
+
+  async getTask(id: string): Promise<Task | undefined> {
+    const [task] = await db
+      .select()
+      .from(tasks)
+      .where(and(eq(tasks.id, id), isNull(tasks.deletedAt)));
+    return task;
+  }
+
+  async getProjectTasks(projectId: string): Promise<Task[]> {
+    return this.getTasksByProject(projectId);
   }
 
   async createTask(task: InsertTask): Promise<Task> {
@@ -778,13 +792,7 @@ export class DatabaseStorage implements IStorage {
     }));
   }
 
-  async getTeamMember(id: string): Promise<TeamMember | undefined> {
-    const [member] = await db
-      .select()
-      .from(teamMembers)
-      .where(and(eq(teamMembers.id, id), eq(teamMembers.isActive, true)));
-    return member;
-  }
+
 
   async createTaskAssignment(assignment: InsertTaskAssignment): Promise<TaskAssignment> {
     const [newAssignment] = await db.insert(taskAssignments).values(assignment).returning();
