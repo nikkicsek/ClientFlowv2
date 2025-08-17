@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { TeamMemberTasks } from '@/components/team-member-tasks';
@@ -6,9 +6,36 @@ import { CalendarSyncDialog } from '@/components/calendar-sync-dialog';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { User, AlertCircle, Calendar } from 'lucide-react';
+import { useToast } from "@/hooks/use-toast";
+import { useLocation } from "wouter";
 
 export function MyTasksPage() {
   const [showCalendarDialog, setShowCalendarDialog] = useState(false);
+  const [location] = useLocation();
+  const { toast } = useToast();
+
+  // Check for calendar connection status from URL params
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const calendarStatus = urlParams.get('calendar');
+    
+    if (calendarStatus === 'connected') {
+      toast({
+        title: "Calendar Connected!",
+        description: "Your Google Calendar has been successfully connected. You can now sync tasks.",
+      });
+      // Clean up URL
+      window.history.replaceState({}, '', '/my-tasks');
+    } else if (calendarStatus === 'error') {
+      toast({
+        title: "Calendar Connection Failed",
+        description: "There was an error connecting your Google Calendar. Please try again.",
+        variant: "destructive",
+      });
+      // Clean up URL
+      window.history.replaceState({}, '', '/my-tasks');
+    }
+  }, [location, toast]);
 
   // Get current user info
   const { data: user, isLoading: userLoading } = useQuery({
