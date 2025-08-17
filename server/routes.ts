@@ -264,10 +264,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Only admins can create tasks" });
       }
 
-      // Convert date string to Date object if present
+      // Convert date string to Date object and extract time if present
       const bodyData = { ...req.body };
       if (bodyData.dueDate) {
-        bodyData.dueDate = new Date(bodyData.dueDate);
+        const dueDateTime = new Date(bodyData.dueDate);
+        bodyData.dueDate = dueDateTime;
+        
+        // Extract time component for the separate dueTime field
+        if (!isNaN(dueDateTime.getTime())) {
+          const hours = dueDateTime.getHours().toString().padStart(2, '0');
+          const minutes = dueDateTime.getMinutes().toString().padStart(2, '0');
+          bodyData.dueTime = `${hours}:${minutes}`;
+        }
       }
       
       const taskData = insertTaskSchema.parse({
@@ -323,7 +331,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Only admins can update tasks" });
       }
 
-      const updates = req.body;
+      const updates = { ...req.body };
+      
+      // Convert date string to Date object and extract time if present
+      if (updates.dueDate) {
+        const dueDateTime = new Date(updates.dueDate);
+        updates.dueDate = dueDateTime;
+        
+        // Extract time component for the separate dueTime field
+        if (!isNaN(dueDateTime.getTime())) {
+          const hours = dueDateTime.getHours().toString().padStart(2, '0');
+          const minutes = dueDateTime.getMinutes().toString().padStart(2, '0');
+          updates.dueTime = `${hours}:${minutes}`;
+        }
+      }
+      
       const task = await storage.updateTask(req.params.id, updates);
 
       // Send email notification if team member assignment changed
