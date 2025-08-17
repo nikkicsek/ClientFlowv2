@@ -22,13 +22,13 @@ app.use('/debug', debugRouter);
 
 // Add routes introspection endpoint for debugging
 app.get('/debug/express-routes', (_req, res) => {
-  const routes = [];
-  const stack = app._router?.stack || [];
-  stack.forEach((m) => {
+  const routes: Array<{ method: string; path: string }> = [];
+  const stack = (app as any)._router?.stack || [];
+  stack.forEach((m: any) => {
     if (m.route?.path) {
       routes.push({ method: Object.keys(m.route.methods)[0], path: m.route.path });
     } else if (m.name === 'router' && m.handle?.stack) {
-      m.handle.stack.forEach((h) => {
+      m.handle.stack.forEach((h: any) => {
         if (h.route?.path) {
           routes.push({ method: Object.keys(h.route.methods)[0], path: h.route.path });
         }
