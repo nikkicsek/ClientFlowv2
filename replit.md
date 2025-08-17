@@ -111,13 +111,21 @@ UI preferences: Clean, functional interfaces without promotional or instructiona
 - **Enhanced Edit Task Modal**: Fixed time field display issues and improved date/time parsing for accurate task editing
 - **Task Assignment Display**: Resolved assignment visibility with proper team member assignment fetching and visual indicators
 - **Debug System Overhaul (August 17, 2025)**: Complete debugging infrastructure with routing fixes, emergency kill-switch, and idempotent calendar events
-  - Fixed routing hijack issue - debug routes properly isolated to `/debug` without interfering with main app at `/`
-  - Implemented emergency kill-switch with `CALENDAR_SYNC_ENABLED` environment variable and runtime controls
-  - Added debug sync control buttons: POST `/debug/sync/disable` and POST `/debug/sync/enable` 
-  - Implemented idempotent calendar events using `calendarEventId` column - prevents duplicate events by updating existing events instead of creating new ones
-  - Enhanced calendar hooks with proper upsert logic: insert new events or update existing ones based on stored event IDs
-  - Added comprehensive logging for calendar operations with task/user/assignment IDs and action types
-  - Fixed database schema issues and ensured all debug endpoints work with user impersonation via `?as=email` parameter
+  - **EMERGENCY RESPONSE**: Successfully stopped runaway loop creating duplicate test tasks with immediate kill-switch
+  - **Routing Fixed**: Debug routes properly isolated to `/debug` without interfering with main app at `/` - confirmed via curl tests
+  - **Kill-Switch Implemented**: Emergency calendar sync controls with `CALENDAR_SYNC_ENABLED` environment variable and runtime POST endpoints
+    - `POST /debug/sync/disable` - Instant calendar write prevention (tested working)
+    - `POST /debug/sync/enable` - Re-enable calendar operations (tested working)
+  - **Idempotent Task Creation**: Implemented duplicate prevention logic that checks for existing test tasks within 10-minute window
+    - Returns `wasExisting: true/false` to indicate if task was found vs created
+    - Prevents runaway loops by reusing existing tasks instead of creating duplicates
+  - **Idempotent Calendar Events**: Enhanced calendar hooks with proper upsert logic using `calendarEventId` column
+    - Insert new events or update existing ones based on stored event IDs
+    - Prevents duplicate calendar events through proper database event ID tracking
+  - **Cleanup Infrastructure**: Added `/debug/cleanup-test-tasks` endpoint with configurable time windows (tested: deleted 23 items successfully)
+  - **Enhanced Logging**: Comprehensive calendar operation logging with task/user/assignment IDs and action types
+  - **User Impersonation**: All debug endpoints support `?as=email` parameter for testing without sessions (tested working)
+  - **Database Schema**: Confirmed `calendarEventId` column exists in `task_assignments` table for event tracking
 
 ### Potential Integrations
 - **Analytics Platforms**: Designed to integrate with marketing tools and analytics services
