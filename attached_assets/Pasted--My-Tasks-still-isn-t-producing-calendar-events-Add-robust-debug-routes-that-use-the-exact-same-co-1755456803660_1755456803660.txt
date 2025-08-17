@@ -1,0 +1,44 @@
+“My Tasks” still isn’t producing calendar events. Add robust debug routes that use the exact same code-paths as the app, then fix whatever breaks.
+
+Create a new router: server/debugRoutes.ts and mount it EARLY in server/index.ts as:
+  import { debugRouter } from './debugRoutes';
+  app.use('/debug', debugRouter);
+
+Implement these endpoints (and please include try/catch with res.status(500).json({message, stack}) so I can see errors):
+
+1) GET /debug/me
+   - Return the same user info used by My Tasks:
+     { userId, email }
+
+2) GET /debug/my-tasks
+   - Using the *same storage/service method the My Tasks page calls* (no rewrites),
+     fetch tasks for the CURRENT user (no org/project filter, limit 50).
+   - Return an array of objects with at least:
+     { id, title, status, due_at, due_date, due_time, org_id, project_id, assigneeUserIds }
+   - On error, include the error message + stack in JSON.
+
+3) POST /debug/create-test-task
+   - Create a task titled "Replit Sync Test (server)" due 15 minutes from now.
+   - Assign to the CURRENT user (use the same users.id that /debug/me returns).
+   - Persist, then call the calendar hooks:
+       await onTaskCreatedOrUpdated(task.id)
+       await onAssignmentCreated(assignment.id)   // if assignment is a separate row
+   - Return the created task { id, assigneeUserIds, due_at }.
+
+4) GET /debug/calendar-status
+   - For CURRENT userId, look up oauth_tokens (by users.id, not team_members.id).
+   - Return: { userId, email, hasTokens, expiry, scopes }
+
+5) POST /debug/calendar-create-test
+   - Using CURRENT user’s tokens, create a 30-min event starting 10 minutes from now on 'primary'.
+   - Payload should log: summary, start/end ISO, timeZone.
+   - Return { ok: true, eventId } or { ok: false, error }.
+
+6) Make sure My Tasks server query actually keys off users.id.
+   - If assignments are stored under team_members.id anywhere, map to users.id consistently during reads/writes.
+
+7) Restart and give me:
+   - JSON from GET /debug/my-tasks (first 5).
+   - JSON from GET /debug/calendar-status.
+   - Result of POST /debug/create-test-task.
+   - If any endpoint returns 500, paste its JSON (message + stack).
