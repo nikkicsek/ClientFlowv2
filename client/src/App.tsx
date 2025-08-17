@@ -25,7 +25,10 @@ function Router() {
       <Route path="/invite/:token" component={InvitationPage} />
       
       {!isAuthenticated ? (
-        <Route path="/" component={Landing} />
+        <>
+          <Route path="/" component={Landing} />
+          <Route path="*" component={Landing} />
+        </>
       ) : (
         <>
           <Route path="/client-view" component={ClientView} />
