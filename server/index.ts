@@ -80,14 +80,14 @@ process.on('uncaughtException', (e) => {
 (async () => {
   const server = await registerRoutes(app);
 
-  // Global error handler at the end - returns JSON with stack trace
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+  // Global error handler at the end - returns JSON with stack trace  
+  app.use((err: any, req: Request, res: Response, next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
     const stack = err.stack || 'No stack trace available';
 
-    console.error('Express error handler:', { status, message, stack });
-    res.status(status).json({ message, stack });
+    console.error('API ERROR', err);
+    res.status(status).json({ message: err?.message || 'Server error', stack: String(err?.stack || err) });
     throw err;
   });
 
