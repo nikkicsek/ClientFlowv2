@@ -1,0 +1,54 @@
+The app still shows envRedirect ending with /auth/google/callback. Please force the redirect URI at runtime and prove it works, regardless of the current Secret.
+
+FILES: server/oauth/googleRoutes.ts, server/index.ts (only for logging), client button if needed
+
+1) Compute redirect at runtime (authoritative):
+   const redirect = `${req.protocol}://${req.headers.host}/oauth/google/callback`;
+
+2) In GET '/oauth/google/connect':
+   - Generate the auth URL with an explicit redirect_uri:
+       const url = client.generateAuthUrl({
+         access_type: 'offline',
+         prompt: 'consent',
+         scope,
+         redirect_uri: redirect,   // << force correct path
+         state,                    // keep state if present
+       });
+   - Log: console.log('AUTH redirect_uri =', redirect);
+
+3) In GET '/oauth/google/callback':
+   - Exchange the code using the SAME redirect_uri:
+       const { tokens } = await client.getToken({
+         code: req.query.code as string,
+         redirect_uri: redirect,   // << must match the value used above
+       });
+   - Then client.setCredentials(tokens) and continue as before.
+
+4) Keep the compatibility alias:
+   - '/auth/google/callback' -> 307 redirect to '/oauth/google/callback' with query preserved
+   - '/api/auth/google/callback' -> 307 redirect to '/api/oauth/google/callback' with query preserved
+
+5) Add/keep the debug endpoint '/debug/oauth-info' but extend it to return:
+   {
+     envRedirect: process.env.GOOGLE_REDIRECT_URI || null,
+     computedRedirect: `${req.protocol}://${req.headers.host}/oauth/google/callback`,
+     hasConnect: true,
+     hasCallback: true,
+     compatAuthAlias: true
+   }
+
+6) Ensure the Connect button does a TOP-LEVEL navigation to the ROOT route (no SPA):
+   <a
+     href={`${window.location.origin}/oauth/google/connect`}
+     target="_top"
+     rel="noopener noreferrer external"
+     className="btn btn-primary"
+   >
+     Connect Google Calendar
+   </a>
+
+7) Restart the server and show me:
+   - The Console log line "AUTH redirect_uri = ..."
+   - JSON from GET /debug/oauth-info (must include computedRedirect with /oauth/...).
+   - I will then click Connect in a NEW tab, complete consent, and expect to land on /my-tasks?calendar=connected.
+   - After that, I’ll create a test task and confirm an event appears on my Google Calendar.
