@@ -2,6 +2,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { googleRouter } from './oauth/googleRoutes';
+import { debugRouter } from './debugRoutes';
 import { pool } from './db';
 
 const app = express();
@@ -14,9 +15,10 @@ app.set('db', pool);
 // Debug startup logging
 console.log('REDIRECT_URI =', process.env.GOOGLE_REDIRECT_URI);
 
-// CRITICAL: Mount Google OAuth routes EARLY under BOTH root and /api BEFORE any other routes
+// CRITICAL: Mount routes EARLY BEFORE any other routes
 app.use(googleRouter);
 app.use('/api', googleRouter);
+app.use('/debug', debugRouter);
 
 // Add routes introspection endpoint for debugging
 app.get('/debug/express-routes', (_req, res) => {

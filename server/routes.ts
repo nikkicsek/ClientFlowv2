@@ -85,7 +85,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         teamMemberFound: !!currentTeamMember,
         teamMemberId: currentTeamMember?.id
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error in debug/current-user-check:", error);
       res.json({ authenticated: false, error: error.message });
     }
@@ -101,8 +101,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Find team member by email (same logic as My Tasks)
-      const teamMembers = await storage.getTeamMembers();
-      const currentTeamMember = teamMembers.find(member => member.email === user.email);
+      const teamMembers = await storage.getAllTeamMembers();
+      const currentTeamMember = teamMembers.find((member: any) => member.email === user.email);
       
       if (!currentTeamMember) {
         return res.json({ message: "No team member record found", userId, email: user.email, tasks: [] });
@@ -117,7 +117,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status: assignment.task.status,
         due_date: assignment.task.dueDate,
         due_time: assignment.task.dueTime,
-        due_at: assignment.task.dueAt,
+        due_at: assignment.task.dueDate,
         org_id: assignment.task.organizationId,
         project_id: assignment.task.projectId,
         assigneeUserIds: [], // Will populate below
@@ -141,8 +141,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Find team member by email
-      const teamMembers = await storage.getTeamMembers();
-      const currentTeamMember = teamMembers.find(member => member.email === user.email);
+      const teamMembers = await storage.getAllTeamMembers();
+      const currentTeamMember = teamMembers.find((member: any) => member.email === user.email);
       
       if (!currentTeamMember) {
         return res.status(400).json({ message: "No team member record found" });
@@ -157,9 +157,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         description: "Test task created for debugging My Tasks and calendar sync",
         status: "pending" as const,
         priority: "medium" as const,
-        dueDate: dueAt.toISOString().split('T')[0],
+        dueDate: dueAt,
         dueTime: dueAt.toTimeString().substring(0, 5),
-        dueAt: dueAt.toISOString(),
         organizationId: null,
         projectId: null,
       };
