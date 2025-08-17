@@ -4,11 +4,11 @@ import { Pool } from 'pg';
 
 export const googleRouter = Router();
 
-function oauth2() {
+function oauth2(redirectUri?: string) {
   return new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,
-    process.env.GOOGLE_REDIRECT_URI
+    redirectUri || process.env.GOOGLE_REDIRECT_URI
   );
 }
 
@@ -28,22 +28,23 @@ async function saveTokens(db: Pool, userId: string, tokens: any, scopes: string)
 
 googleRouter.get('/oauth/google/connect', async (req: any, res) => {
   console.log('>> HIT', req.path, req.query);
-  const client = oauth2();
+  
+  // Compute redirect at runtime (authoritative)
+  const redirect = `${req.protocol}://${req.headers.host}/oauth/google/callback`;
+  console.log('AUTH redirect_uri =', redirect);
+  
+  // Create OAuth2 client with computed redirect
+  const client = oauth2(redirect);
   const scope = [
     'openid', 'email', 'profile',
     'https://www.googleapis.com/auth/calendar.events'
   ];
   const state = (req.user?.claims?.sub as string) || (req.user?.id as string) || '';
   
-  // Compute redirect at runtime (authoritative)
-  const redirect = `${req.protocol}://${req.headers.host}/oauth/google/callback`;
-  console.log('AUTH redirect_uri =', redirect);
-  
   const url = client.generateAuthUrl({
     access_type: 'offline',
     prompt: 'consent',
     scope,
-    redirect_uri: redirect,
     state,
   });
   res.redirect(url);
@@ -54,15 +55,13 @@ googleRouter.get('/oauth/google/connect', async (req: any, res) => {
 googleRouter.get('/oauth/google/callback', async (req: any, res) => {
   console.log('>> HIT', req.path, req.query);
   try {
-    const client = oauth2();
-    
     // Compute redirect at runtime (must match the value used in connect)
     const redirect = `${req.protocol}://${req.headers.host}/oauth/google/callback`;
     
-    const { tokens } = await client.getToken({
-      code: req.query.code as string,
-      redirect_uri: redirect,
-    });
+    // Create OAuth2 client with the same computed redirect
+    const client = oauth2(redirect);
+    
+    const { tokens } = await client.getToken(req.query.code as string);
     client.setCredentials(tokens);
 
     // Get user profile from Google
@@ -115,7 +114,13 @@ googleRouter.get('/oauth/google/callback', async (req: any, res) => {
     const origin = `${req.protocol}://${req.headers.host}`;
     return res.redirect(303, `${origin}/my-tasks?calendar=connected`);
   } catch (e: any) {
-    console.error('OAuth callback failure', { query: req.query, err: e?.message });
+    const redirect = `${req.protocol}://${req.headers.host}/oauth/google/callback`;
+    console.error('OAuth callback failure', { 
+      query: req.query, 
+      err: e?.message,
+      computedRedirect: redirect,
+      envRedirect: process.env.GOOGLE_REDIRECT_URI 
+    });
     const origin = `${req.protocol}://${req.headers.host}`;
     return res.redirect(303, `${origin}/my-tasks?calendar=error`);
   }
@@ -155,21 +160,21 @@ googleRouter.get('/debug/oauth-info', (req, res) => {
 
 // Debug endpoint for OAuth auth URL
 googleRouter.get('/debug/oauth-authurl', (req, res) => {
-  const client = oauth2();
+  // Compute redirect at runtime (same as connect handler)
+  const redirect = `${req.protocol}://${req.headers.host}/oauth/google/callback`;
+  
+  // Create OAuth2 client with computed redirect
+  const client = oauth2(redirect);
   const scope = [
     'openid', 'email', 'profile',
     'https://www.googleapis.com/auth/calendar.events'
   ];
   const state = (req.user?.claims?.sub as string) || (req.user?.id as string) || '';
   
-  // Compute redirect at runtime (same as connect handler)
-  const redirect = `${req.protocol}://${req.headers.host}/oauth/google/callback`;
-  
   const url = client.generateAuthUrl({
     access_type: 'offline',
     prompt: 'consent',
     scope,
-    redirect_uri: redirect,
     state,
   });
   

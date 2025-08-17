@@ -47,6 +47,154 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Debug endpoints
+  app.get('/debug/me', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      res.json({ userId, email: user?.email });
+    } catch (error) {
+      console.error("Error in debug/me:", error);
+      res.status(500).json({ message: "Failed to get user info" });
+    }
+  });
+
+  // Add non-authenticated debug endpoint for testing
+  app.get('/debug/current-user-check', async (req: any, res) => {
+    try {
+      // Check session state
+      const sessionUserId = req.user?.claims?.sub;
+      if (!sessionUserId) {
+        return res.json({ authenticated: false, message: "No session found" });
+      }
+      
+      const user = await storage.getUser(sessionUserId);
+      if (!user?.email) {
+        return res.json({ authenticated: true, userFound: false, userId: sessionUserId });
+      }
+
+      // Find team member by email
+      const teamMembers = await storage.getTeamMembers();
+      const currentTeamMember = teamMembers.find(member => member.email === user.email);
+      
+      res.json({ 
+        authenticated: true, 
+        userFound: true,
+        userId: sessionUserId,
+        email: user.email,
+        teamMemberFound: !!currentTeamMember,
+        teamMemberId: currentTeamMember?.id
+      });
+    } catch (error) {
+      console.error("Error in debug/current-user-check:", error);
+      res.json({ authenticated: false, error: error.message });
+    }
+  });
+
+  app.get('/debug/my-tasks', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (!user?.email) {
+        return res.status(400).json({ message: "User email not found" });
+      }
+
+      // Find team member by email (same logic as My Tasks)
+      const teamMembers = await storage.getTeamMembers();
+      const currentTeamMember = teamMembers.find(member => member.email === user.email);
+      
+      if (!currentTeamMember) {
+        return res.json({ message: "No team member record found", userId, email: user.email, tasks: [] });
+      }
+
+      // Get assignments using same logic as My Tasks
+      const assignments = await storage.getTaskAssignmentsByTeamMember(currentTeamMember.id);
+      
+      const tasks = assignments.map(assignment => ({
+        id: assignment.task.id,
+        title: assignment.task.title,
+        status: assignment.task.status,
+        due_date: assignment.task.dueDate,
+        due_time: assignment.task.dueTime,
+        due_at: assignment.task.dueAt,
+        org_id: assignment.task.organizationId,
+        project_id: assignment.task.projectId,
+        assigneeUserIds: [], // Will populate below
+        created_at: assignment.task.createdAt
+      }));
+
+      res.json({ userId, email: user.email, teamMemberId: currentTeamMember.id, tasks: tasks.slice(0, 5) });
+    } catch (error) {
+      console.error("Error in debug/my-tasks:", error);
+      res.status(500).json({ message: "Failed to get my tasks" });
+    }
+  });
+
+  app.post('/debug/create-test-task', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (!user?.email) {
+        return res.status(400).json({ message: "User email not found" });
+      }
+
+      // Find team member by email
+      const teamMembers = await storage.getTeamMembers();
+      const currentTeamMember = teamMembers.find(member => member.email === user.email);
+      
+      if (!currentTeamMember) {
+        return res.status(400).json({ message: "No team member record found" });
+      }
+
+      // Create task due in 15 minutes
+      const now = new Date();
+      const dueAt = new Date(now.getTime() + 15 * 60 * 1000);
+      
+      const taskData = {
+        title: "Replit Sync Test (server)",
+        description: "Test task created for debugging My Tasks and calendar sync",
+        status: "pending" as const,
+        priority: "medium" as const,
+        dueDate: dueAt.toISOString().split('T')[0],
+        dueTime: dueAt.toTimeString().substring(0, 5),
+        dueAt: dueAt.toISOString(),
+        organizationId: null,
+        projectId: null,
+      };
+
+      const task = await storage.createTask(taskData);
+      console.log('Created test task:', task.id, task.title);
+      
+      // Assign to current team member
+      const assignmentData = {
+        taskId: task.id,
+        teamMemberId: currentTeamMember.id,
+        assignedBy: userId,
+      };
+
+      const assignment = await storage.createTaskAssignment(assignmentData);
+      console.log('Assigned to teamMemberId:', currentTeamMember.id, 'userId:', userId);
+      
+      // Call calendar hook
+      await onTaskCreatedOrUpdated(task.id);
+      await onAssignmentCreated(assignment.id);
+      
+      res.json({ 
+        task: {
+          ...task,
+          assigneeUserIds: [userId]
+        },
+        assignment,
+        teamMember: currentTeamMember
+      });
+    } catch (error) {
+      console.error("Error creating test task:", error);
+      res.status(500).json({ message: "Failed to create test task" });
+    }
+  });
+
   // Temporary route to upgrade current user to admin (for development)
   app.post('/api/auth/upgrade-to-admin', isAuthenticated, async (req: any, res) => {
     try {
