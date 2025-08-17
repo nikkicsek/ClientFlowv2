@@ -84,23 +84,14 @@ export function CalendarSettings({ user }: CalendarSettingsProps) {
             <p className="text-sm text-muted-foreground">
               Connect your Google Calendar to automatically create calendar events for your assigned tasks.
             </p>
-            <Button 
-              onClick={handleConnectGoogle}
-              disabled={isConnecting}
-              className="w-full"
+            <a 
+              href="/oauth/google/connect" 
+              className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2 w-full"
+              rel="external"
             >
-              {isConnecting ? (
-                <>
-                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                  Connecting...
-                </>
-              ) : (
-                <>
-                  <ExternalLink className="h-4 w-4 mr-2" />
-                  Connect Google Calendar
-                </>
-              )}
-            </Button>
+              <ExternalLink className="h-4 w-4 mr-2" />
+              Connect Google Calendar
+            </a>
           </div>
         ) : (
           <div className="space-y-3">

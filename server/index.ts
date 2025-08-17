@@ -62,6 +62,9 @@ app.use((req, res, next) => {
   next();
 });
 
+  // Also mount Google OAuth routes under /api for compatibility
+  app.use('/api', googleRouter);
+
 (async () => {
   const server = await registerRoutes(app);
 
