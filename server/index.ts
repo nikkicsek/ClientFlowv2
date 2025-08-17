@@ -11,8 +11,8 @@ app.use(express.urlencoded({ extended: false }));
 // Attach database pool to app for Google OAuth
 app.set('db', pool);
 
-// CRITICAL: Mount Google OAuth routes BEFORE any static/SPA routes
-app.use(googleRouter);
+// CRITICAL: Mount Google OAuth routes under /api BEFORE any other routes
+app.use('/api', googleRouter);
 
 // Add routes introspection endpoint for debugging
 app.get('/debug/express-routes', (_req, res) => {
@@ -62,8 +62,7 @@ app.use((req, res, next) => {
   next();
 });
 
-  // Also mount Google OAuth routes under /api for compatibility
-  app.use('/api', googleRouter);
+
 
 (async () => {
   const server = await registerRoutes(app);

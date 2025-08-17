@@ -1,0 +1,51 @@
+We’re still hitting a SPA 404. Please move our Google OAuth endpoints under /api and wire everything end-to-end.
+
+FILES: server/index.ts, server/oauth/googleRoutes.ts, client/src/components/CalendarSettings.tsx (or wherever the Connect button lives)
+
+1) SERVER ROUTES
+- In server/index.ts, make sure we mount the OAuth router like this (and it appears BEFORE any SPA/static/catch-all):
+    import { googleRouter } from './oauth/googleRoutes';  // adjust path if needed
+    app.use('/api', googleRouter);   // mount under /api
+- Keep any root mounts you previously added, but /api must exist.
+
+2) ROUTE PATHS
+- In server/oauth/googleRoutes.ts, ensure the handlers are declared WITHOUT /api in their definitions (the mount adds it):
+    googleRouter.get('/oauth/ping', ...)
+    googleRouter.get('/oauth/google/connect', ...)
+    googleRouter.get('/oauth/google/callback', ...)
+- Add simple log lines at the top of each: console.log('>> HIT', req.path, req.query);
+
+3) REDIRECT AFTER SUCCESS/ERROR
+- In both '/oauth/google/callback' handlers, on success:
+    const origin = `${req.protocol}://${req.headers.host}`;
+    return res.redirect(303, `${origin}/my-tasks?calendar=connected`);
+- On error:
+    const origin = `${req.protocol}://${req.headers.host}`;
+    return res.redirect(303, `${origin}/my-tasks?calendar=error`);
+
+4) FRONTEND BUTTON
+- Change the Connect button to force a TOP-LEVEL navigation to the /api path:
+    <a
+      href={`${window.location.origin}/api/oauth/google/connect`}
+      target="_top"
+      rel="noopener noreferrer external"
+      className="btn btn-primary"
+    >
+      Connect Google Calendar
+    </a>
+  (No React Router <Link>, no navigate().)
+
+5) GOOGLE SETTINGS (IMPORTANT)
+- Update Replit Secrets and Google Cloud to use the /api callback:
+    GOOGLE_REDIRECT_URI = https://<your-repl-domain>/api/oauth/google/callback
+- In Google Cloud Console → Credentials → OAuth client → Authorized redirect URIs:
+    add https://<your-repl-domain>/api/oauth/google/callback
+  (Keep the old one temporarily if present.)
+
+6) PROOF
+- Restart the server.
+- Open in a NEW browser tab (not the preview iframe):
+    a) GET /api/oauth/ping → should return "pong" and log ">> HIT /oauth/ping".
+    b) GET /api/oauth/google/connect → should 302 to accounts.google.com and log ">> HIT /oauth/google/connect".
+    c) After consenting, you should land at /my-tasks?calendar=connected and logs should show ">> HIT /oauth/google/callback".
+- Show me the DIFFs for the files you changed.
