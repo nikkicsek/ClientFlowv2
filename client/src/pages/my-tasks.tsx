@@ -81,7 +81,7 @@ export function MyTasksPage() {
               <h3 className="text-lg font-medium text-gray-900 mb-2">Sign In Required</h3>
               <p className="text-gray-600 mb-6">Sign in with Google to view your tasks and manage your calendar sync.</p>
               <Button 
-                onClick={() => window.location.href = `/auth/login?returnTo=${encodeURIComponent('/my-tasks')}`}
+                onClick={() => window.location.href = `/api/login?returnTo=${encodeURIComponent('/my-tasks')}`}
                 className="bg-blue-600 hover:bg-blue-700"
               >
                 <LogIn className="h-4 w-4 mr-2" />
