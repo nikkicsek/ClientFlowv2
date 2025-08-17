@@ -27,7 +27,7 @@ async function saveTokens(db: Pool, userId: string, tokens: any, scopes: string)
 }
 
 googleRouter.get('/oauth/google/connect', async (req: any, res) => {
-  console.log('>> HIT /oauth/google/connect');
+  console.log('>> HIT', req.path, req.query);
   const client = oauth2();
   const scope = [
     'openid', 'email', 'profile',
@@ -43,26 +43,10 @@ googleRouter.get('/oauth/google/connect', async (req: any, res) => {
   res.redirect(url);
 });
 
-// Also mount under /api path for compatibility
-googleRouter.get('/api/oauth/google/connect', async (req: any, res) => {
-  console.log('>> HIT /api/oauth/google/connect');
-  const client = oauth2();
-  const scope = [
-    'openid', 'email', 'profile',
-    'https://www.googleapis.com/auth/calendar.events'
-  ];
-  const state = (req.user?.claims?.sub as string) || (req.user?.id as string) || '';
-  const url = client.generateAuthUrl({
-    access_type: 'offline',
-    prompt: 'consent',
-    scope,
-    state,
-  });
-  res.redirect(url);
-});
+
 
 googleRouter.get('/oauth/google/callback', async (req: any, res) => {
-  console.log('>> HIT /oauth/google/callback', req.query);
+  console.log('>> HIT', req.path, req.query);
   try {
     const client = oauth2();
     const { tokens } = await client.getToken(req.query.code as string);
@@ -124,73 +108,11 @@ googleRouter.get('/oauth/google/callback', async (req: any, res) => {
   }
 });
 
-// Also mount callback under /api path for compatibility
-googleRouter.get('/api/oauth/google/callback', async (req: any, res) => {
-  console.log('>> HIT /api/oauth/google/callback', req.query);
-  try {
-    const client = oauth2();
-    const { tokens } = await client.getToken(req.query.code as string);
-    client.setCredentials(tokens);
 
-    // Get user profile from Google
-    const oauth2Api = google.oauth2({ version: 'v2', auth: client });
-    const { data: profile } = await oauth2Api.userinfo.get();
-    const email = profile.email;
-    const googleSub = profile.id;
-
-    if (!email) {
-      console.error('OAuth callback failure: No email in Google profile', { query: req.query });
-      const origin = `${req.protocol}://${req.headers.host}`;
-      return res.redirect(303, `${origin}/my-tasks?calendar=error`);
-    }
-
-    // Find user ID by email in our database
-    const db = req.app.get('db') as Pool;
-    let userId: string | null = null;
-
-    // Try users table first
-    try {
-      const userResult = await db.query('SELECT id FROM users WHERE email = $1', [email]);
-      if (userResult.rows.length > 0) {
-        userId = userResult.rows[0].id;
-      }
-    } catch (err) {
-      console.error('Error querying users table:', err);
-    }
-
-    // If not found in users, try to resolve via team_members.user_id
-    if (!userId) {
-      try {
-        const teamResult = await db.query('SELECT user_id FROM team_members WHERE email = $1', [email]);
-        if (teamResult.rows.length > 0 && teamResult.rows[0].user_id) {
-          userId = teamResult.rows[0].user_id;
-        }
-      } catch (err) {
-        console.error('Error querying team_members table:', err);
-      }
-    }
-
-    if (!userId) {
-      console.error('OAuth callback failure: Email not recognized', { email, query: req.query });
-      const origin = `${req.protocol}://${req.headers.host}`;
-      return res.redirect(303, `${origin}/my-tasks?calendar=error`);
-    }
-
-    const scopes = (tokens.scope as string) || 'https://www.googleapis.com/auth/calendar.events openid email profile';
-    await saveTokens(db, userId, tokens, scopes);
-
-    const origin = `${req.protocol}://${req.headers.host}`;
-    return res.redirect(303, `${origin}/my-tasks?calendar=connected`);
-  } catch (e: any) {
-    console.error('OAuth callback failure', { query: req.query, err: e?.message });
-    const origin = `${req.protocol}://${req.headers.host}`;
-    return res.redirect(303, `${origin}/my-tasks?calendar=error`);
-  }
-});
 
 // Hard test route to confirm Express routing
-googleRouter.get('/oauth/ping', (_req, res) => {
-  console.log('>> HIT /oauth/ping');
+googleRouter.get('/oauth/ping', (req, res) => {
+  console.log('>> HIT', req.path, req.query);
   res.type('text').send('pong');
 });
 
