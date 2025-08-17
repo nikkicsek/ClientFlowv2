@@ -28,6 +28,7 @@ import { WelcomeVideoModal } from "@/components/welcome-video-modal";
 import { EditClientModal } from "@/components/edit-client-modal";
 import { AgencyTasksModal } from "@/components/agency-tasks-modal";
 import { EnhancedTaskCard } from "@/components/enhanced-task-card";
+import { EditTaskModal } from "@/components/edit-task-modal";
 import { EditOrganizationModal } from "@/components/edit-organization-modal";
 import { OrganizationContactsModal } from "@/components/organization-contacts-modal";
 import { OrganizationTasksModal } from "@/components/organization-tasks-modal";
@@ -50,6 +51,7 @@ export default function AdminDashboard() {
   const [editingService, setEditingService] = useState<Service | null>(null);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [editingClient, setEditingClient] = useState<User | null>(null);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [showAgencyTasks, setShowAgencyTasks] = useState(false);
   const [selectedProjectForTasks, setSelectedProjectForTasks] = useState<Project | null>(null);
   const [showTeamManagement, setShowTeamManagement] = useState(false);
@@ -743,6 +745,10 @@ export default function AdminDashboard() {
                                   task={task}
                                   assignments={getTaskAssignments(task.id)}
                                   showProjectName={true}
+                                  onEdit={(taskId) => {
+                                    const taskToEdit = allTasks.find(t => t.id === taskId);
+                                    if (taskToEdit) setEditingTask(taskToEdit);
+                                  }}
                                 />
                               );
                             })}
@@ -1276,6 +1282,12 @@ export default function AdminDashboard() {
         isOpen={!!viewingOrgTasks}
         onClose={() => setViewingOrgTasks(null)}
         services={services || []}
+      />
+
+      <EditTaskModal
+        isOpen={!!editingTask}
+        task={editingTask}
+        onClose={() => setEditingTask(null)}
       />
 
       <DeleteConfirmationDialog

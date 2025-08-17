@@ -121,6 +121,7 @@ export function EnhancedTaskCard({ task, assignments = [], showProjectName = fal
                 size="sm"
                 onClick={() => onEdit(task.id)}
                 className="flex-shrink-0 ml-2"
+                title="Edit Task"
               >
                 <Edit3 className="h-4 w-4" />
               </Button>
