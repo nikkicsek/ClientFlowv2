@@ -16,8 +16,8 @@ export function CalendarSettings({ user }: CalendarSettingsProps) {
 
   const handleConnectGoogle = () => {
     setIsConnecting(true);
-    // Full page navigation to OAuth route
-    window.location.assign('/oauth/google/connect');
+    // Full page navigation to OAuth route with explicit origin
+    window.location.assign(`${window.location.origin}/oauth/google/connect`);
   };
 
   const handleManualSync = async () => {
