@@ -85,7 +85,7 @@ export function CalendarSettings({ user }: CalendarSettingsProps) {
               Connect your Google Calendar to automatically create calendar events for your assigned tasks.
             </p>
             <a 
-              href={`${window.location.origin}/api/oauth/google/connect`}
+              href={`${window.location.origin}/oauth/google/connect`}
               target="_top"
               rel="noopener noreferrer external"
               className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2 w-full"

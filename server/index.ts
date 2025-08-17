@@ -14,7 +14,8 @@ app.set('db', pool);
 // Debug startup logging
 console.log('REDIRECT_URI =', process.env.GOOGLE_REDIRECT_URI);
 
-// CRITICAL: Mount Google OAuth routes under /api BEFORE any other routes
+// CRITICAL: Mount Google OAuth routes EARLY under BOTH root and /api BEFORE any other routes
+app.use(googleRouter);
 app.use('/api', googleRouter);
 
 // Add routes introspection endpoint for debugging

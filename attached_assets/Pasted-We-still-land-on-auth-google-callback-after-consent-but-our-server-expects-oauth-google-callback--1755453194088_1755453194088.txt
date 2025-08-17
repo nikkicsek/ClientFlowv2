@@ -1,0 +1,66 @@
+We still land on /auth/google/callback after consent, but our server expects /oauth/google/callback. Please fix this end-to-end, add a compatibility alias, and give me debug output.
+
+FILES: server/index.ts, server/oauth/googleRoutes.ts, client/src/components/CalendarSettings.tsx (or wherever the Connect button is)
+
+1) ROUTER MOUNT ORDER
+- In server/index.ts mount the google router EARLY and under BOTH root and /api:
+    import { googleRouter } from './oauth/googleRoutes'; // adjust path if needed
+    app.use(googleRouter);
+    app.use('/api', googleRouter);
+- Ensure these are BEFORE any static serving and BEFORE any SPA catch-all (e.g., app.get('*', ...)).
+
+2) OAUTH CLIENT MUST USE ENV REDIRECT
+- In server/oauth/googleRoutes.ts, ensure:
+    const client = new google.auth.OAuth2(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET,
+      process.env.GOOGLE_REDIRECT_URI
+    );
+  Do NOT pass an explicit redirect_uri inside generateAuthUrl (let the client’s redirect be used).
+- Log the redirect for visibility at server startup:
+    console.log('REDIRECT_URI =', process.env.GOOGLE_REDIRECT_URI);
+
+3) ADD COMPATIBILITY ALIAS (permanent safety net)
+- Add routes that catch the wrong path and bounce to the right one while preserving the query string:
+    googleRouter.get('/auth/google/callback', (req, res) => {
+      const qs = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
+      return res.redirect(307, '/oauth/google/callback' + qs);
+    });
+    googleRouter.get('/api/auth/google/callback', (req, res) => {
+      const qs = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
+      return res.redirect(307, '/api/oauth/google/callback' + qs);
+    });
+
+4) KEEP THE REAL HANDLERS (no /api in the path definitions — the mount adds it):
+    googleRouter.get('/oauth/google/connect', ...existing connect handler...);
+    googleRouter.get('/oauth/google/callback', ...existing callback handler...);
+
+5) DEBUG ENDPOINT (so I don’t need server console)
+- Add:
+    googleRouter.get('/debug/oauth-info', (_req, res) => {
+      res.json({
+        envRedirect: process.env.GOOGLE_REDIRECT_URI,
+        hasConnect: true,
+        hasCallback: true,
+        compatAuthAlias: true
+      });
+    });
+
+6) FRONTEND BUTTON = TOP-LEVEL NAVIGATION
+- Replace any <Link> / navigate() with a full navigation anchor:
+    <a
+      href={`${window.location.origin}/oauth/google/connect`}
+      target="_top"
+      rel="noopener noreferrer external"
+      className="btn btn-primary"
+    >
+      Connect Google Calendar
+    </a>
+
+7) PROOF
+- Restart the server.
+- Paste the line printed at startup showing REDIRECT_URI.
+- Open /debug/oauth-info and paste the JSON.
+- Then I’ll click /oauth/google/connect and after consent confirm the URL now hits /oauth/google/callback (or the alias bounces it there) and finishes at /my-tasks?calendar=connected.
+
+Show me the DIFFs for the files you changed.
