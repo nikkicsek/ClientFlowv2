@@ -31,8 +31,9 @@ export function CalendarSyncDialog({ isOpen, onClose }: CalendarSyncDialogProps)
 
   const connectMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest("/api/auth/google/calendar");
-      return response.authUrl;
+      const response = await apiRequest("GET", "/api/auth/google/calendar");
+      const data = await response.json();
+      return data.authUrl;
     },
     onSuccess: (authUrl) => {
       window.open(authUrl, "_blank");
@@ -53,10 +54,7 @@ export function CalendarSyncDialog({ isOpen, onClose }: CalendarSyncDialogProps)
 
   const toggleSyncMutation = useMutation({
     mutationFn: async (enabled: boolean) => {
-      return apiRequest("/api/user/calendar-sync", {
-        method: "POST",
-        body: { enabled },
-      });
+      return apiRequest("POST", "/api/user/calendar-sync", { enabled });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/user/calendar-status"] });
@@ -76,9 +74,7 @@ export function CalendarSyncDialog({ isOpen, onClose }: CalendarSyncDialogProps)
 
   const disconnectMutation = useMutation({
     mutationFn: async () => {
-      return apiRequest("/api/user/calendar-access", {
-        method: "DELETE",
-      });
+      return apiRequest("DELETE", "/api/user/calendar-access");
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/user/calendar-status"] });
