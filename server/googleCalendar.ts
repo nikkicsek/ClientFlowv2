@@ -1,6 +1,13 @@
 import { google } from 'googleapis';
 import { storage } from './storage';
 
+// Emergency kill-switch for calendar sync
+export let SYNC_ENABLED = process.env.CALENDAR_SYNC_ENABLED !== 'false';
+export function setSyncEnabled(v: boolean) { 
+  SYNC_ENABLED = v;
+  console.log('Calendar sync', v ? 'ENABLED' : 'DISABLED');
+}
+
 class GoogleCalendarService {
   private oauth2Client: any;
 
@@ -105,6 +112,10 @@ class GoogleCalendarService {
   }
 
   async createTaskEvent(userId: string, task: any): Promise<string | null> {
+    if (!SYNC_ENABLED) { 
+      console.warn('Calendar sync disabled - createTaskEvent skipped'); 
+      return null; 
+    }
     try {
       const calendar = await this.getAuthenticatedClient(userId);
       
@@ -155,6 +166,10 @@ class GoogleCalendarService {
   }
 
   async updateTaskEvent(userId: string, eventId: string, task: any): Promise<boolean> {
+    if (!SYNC_ENABLED) { 
+      console.warn('Calendar sync disabled - updateTaskEvent skipped'); 
+      return false; 
+    }
     try {
       const calendar = await this.getAuthenticatedClient(userId);
       
@@ -199,6 +214,10 @@ class GoogleCalendarService {
   }
 
   async deleteTaskEvent(userId: string, eventId: string): Promise<boolean> {
+    if (!SYNC_ENABLED) { 
+      console.warn('Calendar sync disabled - deleteTaskEvent skipped'); 
+      return false; 
+    }
     try {
       const calendar = await this.getAuthenticatedClient(userId);
       

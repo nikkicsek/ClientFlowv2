@@ -110,6 +110,14 @@ UI preferences: Clean, functional interfaces without promotional or instructiona
 - **Modern Task UI**: Implemented gold-standard task card design following 2025 UI/UX best practices with card-based layouts, visual hierarchy, and improved information architecture
 - **Enhanced Edit Task Modal**: Fixed time field display issues and improved date/time parsing for accurate task editing
 - **Task Assignment Display**: Resolved assignment visibility with proper team member assignment fetching and visual indicators
+- **Debug System Overhaul (August 17, 2025)**: Complete debugging infrastructure with routing fixes, emergency kill-switch, and idempotent calendar events
+  - Fixed routing hijack issue - debug routes properly isolated to `/debug` without interfering with main app at `/`
+  - Implemented emergency kill-switch with `CALENDAR_SYNC_ENABLED` environment variable and runtime controls
+  - Added debug sync control buttons: POST `/debug/sync/disable` and POST `/debug/sync/enable` 
+  - Implemented idempotent calendar events using `calendarEventId` column - prevents duplicate events by updating existing events instead of creating new ones
+  - Enhanced calendar hooks with proper upsert logic: insert new events or update existing ones based on stored event IDs
+  - Added comprehensive logging for calendar operations with task/user/assignment IDs and action types
+  - Fixed database schema issues and ensured all debug endpoints work with user impersonation via `?as=email` parameter
 
 ### Potential Integrations
 - **Analytics Platforms**: Designed to integrate with marketing tools and analytics services

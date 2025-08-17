@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { storage } from "./storage";
-import { googleCalendarService } from "./googleCalendar";
+import { googleCalendarService, setSyncEnabled, SYNC_ENABLED } from "./googleCalendar";
 import { onTaskCreatedOrUpdated, onAssignmentCreated } from './hooks/taskCalendarHooks';
 import { insertTaskSchema, type TeamMember } from "@shared/schema";
 
@@ -80,6 +80,13 @@ router.get('/', (req, res) => {
         <a href="/debug/create-test-task${asParam}" class="link testing">
           🟡 Create Test Task <span class="status">(Creates task + triggers hooks)</span>
         </a>
+        
+        <div style="margin: 20px 0; padding: 15px; background: #f8f9fa; border-radius: 5px;">
+          <strong>Calendar Sync Control</strong><br>
+          <button onclick="fetch('/debug/sync/disable', {method:'POST'}).then(r=>r.json()).then(console.log)" style="margin: 5px; padding: 8px 12px; background: #dc3545; color: white; border: none; border-radius: 3px; cursor: pointer;">🛑 DISABLE SYNC</button>
+          <button onclick="fetch('/debug/sync/enable', {method:'POST'}).then(r=>r.json()).then(console.log)" style="margin: 5px; padding: 8px 12px; background: #28a745; color: white; border: none; border-radius: 3px; cursor: pointer;">▶️ ENABLE SYNC</button>
+          <br><small>Current status: ${SYNC_ENABLED ? 'ENABLED' : 'DISABLED'}</small>
+        </div>
         
         ${process.env.NODE_ENV === 'production' ? '' : '<p><small>Add ?as=email@example.com to impersonate a user</small></p>'}
       </div>
@@ -308,6 +315,25 @@ router.get('/create-test-task', async (req: any, res) => {
   } catch (error) {
     console.error("Error creating test task:", error);
     res.status(500).json({ message: "Failed to create test task", stack: error instanceof Error ? error.stack : String(error) });
+  }
+});
+
+// Sync control endpoints
+router.post('/sync/disable', (req, res) => {
+  try {
+    setSyncEnabled(false);
+    res.json({ ok: true, message: 'Calendar sync DISABLED' });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+router.post('/sync/enable', (req, res) => {
+  try {
+    setSyncEnabled(true);
+    res.json({ ok: true, message: 'Calendar sync ENABLED' });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error instanceof Error ? error.message : String(error) });
   }
 });
 
