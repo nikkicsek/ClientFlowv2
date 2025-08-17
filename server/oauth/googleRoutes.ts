@@ -29,18 +29,26 @@ async function saveTokens(db: Pool, userId: string, tokens: any, scopes: string)
 googleRouter.get('/oauth/google/connect', async (req: any, res) => {
   const client = oauth2();
   const scope = ['https://www.googleapis.com/auth/calendar.events'];
+  const state = (req.user?.claims?.sub as string) || (req.user?.id as string) || '';
   const url = client.generateAuthUrl({
     access_type: 'offline',
     prompt: 'consent',
     scope,
+    state,
   });
   res.redirect(url);
 });
 
 googleRouter.get('/oauth/google/callback', async (req: any, res) => {
   try {
-    if (!req.user?.claims?.sub) return res.status(401).send('Not signed in');
-    const userId = req.user.claims.sub;
+    const userId =
+      (req.user?.claims?.sub as string) ||
+      (req.user?.id as string) ||
+      (typeof req.query.state === 'string' ? req.query.state : undefined);
+    
+    if (!userId) {
+      return res.status(400).send('Missing user identification. Please try connecting again from the application.');
+    }
 
     const client = oauth2();
     const { tokens } = await client.getToken(req.query.code as string);

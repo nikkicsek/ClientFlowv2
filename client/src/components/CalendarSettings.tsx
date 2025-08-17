@@ -14,19 +14,10 @@ export function CalendarSettings({ user }: CalendarSettingsProps) {
   const [isSyncing, setIsSyncing] = useState(false);
   const { toast } = useToast();
 
-  const handleConnectGoogle = async () => {
+  const handleConnectGoogle = () => {
     setIsConnecting(true);
-    try {
-      // Trigger Google OAuth flow
-      window.location.href = `/oauth/google/authorize?userId=${user.id}`;
-    } catch (error) {
-      toast({
-        title: "Connection Failed",
-        description: "Failed to start Google Calendar connection.",
-        variant: "destructive",
-      });
-      setIsConnecting(false);
-    }
+    // Full page navigation to OAuth route
+    window.location.assign('/oauth/google/connect');
   };
 
   const handleManualSync = async () => {
