@@ -11,6 +11,9 @@ app.use(express.urlencoded({ extended: false }));
 // Attach database pool to app for Google OAuth
 app.set('db', pool);
 
+// Debug startup logging
+console.log('REDIRECT_URI =', process.env.GOOGLE_REDIRECT_URI);
+
 // CRITICAL: Mount Google OAuth routes under /api BEFORE any other routes
 app.use('/api', googleRouter);
 
