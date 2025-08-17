@@ -197,6 +197,10 @@ export interface IStorage {
   }): Promise<User>;
   updateUserCalendarSync(userId: string, enabled: boolean): Promise<User>;
   updateTaskCalendarEvent(taskId: string, eventId: string | null): Promise<Task>;
+  
+  // Helper methods for OAuth user identification
+  getUserIdByEmail(email: string): Promise<string | null>;
+  getUserIdByTeamMemberEmail(email: string): Promise<string | null>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -869,6 +873,17 @@ export class DatabaseStorage implements IStorage {
         updatedAt: new Date()
       })
       .where(eq(taskAssignments.id, assignmentId));
+  }
+
+  // Helper methods for OAuth user identification
+  async getUserIdByEmail(email: string): Promise<string | null> {
+    const [user] = await db.select({ id: users.id }).from(users).where(eq(users.email, email));
+    return user?.id || null;
+  }
+
+  async getUserIdByTeamMemberEmail(email: string): Promise<string | null> {
+    const [teamMember] = await db.select({ id: teamMembers.id }).from(teamMembers).where(eq(teamMembers.email, email));
+    return teamMember?.id || null;
   }
 
   async deleteTaskAssignments(taskId: string): Promise<void> {
