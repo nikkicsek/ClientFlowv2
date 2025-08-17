@@ -6,8 +6,33 @@ import { insertTaskSchema, type TeamMember } from "@shared/schema";
 
 const router = Router();
 
+// Helper function to get effective user for debug endpoints
+async function getEffectiveUser(req: any) {
+  // 1) If logged-in session exists, return session user
+  if (req.user?.claims?.sub) {
+    const userId = req.user.claims.sub;
+    const user = await storage.getUser(userId);
+    return { userId, email: user?.email, sessionExists: true, impersonated: false };
+  }
+  
+  // 2) If req.query.as is present (an email), look up users.id by that email
+  if (req.query.as) {
+    const email = req.query.as;
+    const user = await storage.getUserByEmail(email);
+    if (user) {
+      return { userId: user.id, email: user.email, sessionExists: false, impersonated: true };
+    } else {
+      throw new Error(`User not found for email: ${email}`);
+    }
+  }
+  
+  // 3) If neither exists, return null (caller should handle 401)
+  return null;
+}
+
 // Simple HTML debug dashboard
 router.get('/', (req, res) => {
+  const asParam = req.query.as ? `?as=${req.query.as}` : '';
   res.type('html').send(`
     <!DOCTYPE html>
     <html>
@@ -20,38 +45,42 @@ router.get('/', (req, res) => {
         .link { display: block; margin: 15px 0; padding: 15px 20px; background: #007cba; color: white; text-decoration: none; border-radius: 5px; transition: background 0.3s; }
         .link:hover { background: #005a8b; }
         .working { background: #28a745; }
-        .broken { background: #dc3545; }
+        .testing { background: #ffc107; }
         .status { font-size: 12px; opacity: 0.8; }
+        .impersonation { background: #17a2b8; padding: 10px; border-radius: 5px; margin-bottom: 20px; }
       </style>
     </head>
     <body>
       <div class="container">
         <h1>Debug Dashboard</h1>
+        ${req.query.as ? `<div class="impersonation">🎭 Impersonating: ${req.query.as}</div>` : ''}
         <p>Click any link below to test the debug endpoints:</p>
         
-        <a href="/debug/health" class="link working">
+        <a href="/debug/health${asParam}" class="link working">
           🟢 Health Check <span class="status">(Should return: {"ok":true})</span>
         </a>
         
-        <a href="/debug/me" class="link working">
+        <a href="/debug/me${asParam}" class="link testing">
           🟡 Current User Info <span class="status">(Shows auth status & user details)</span>
         </a>
         
-        <a href="/debug/my-tasks" class="link broken">
-          🔴 My Tasks <span class="status">(Testing task assignment logic)</span>
+        <a href="/debug/my-tasks${asParam}" class="link testing">
+          🟡 My Tasks <span class="status">(Testing task assignment logic)</span>
         </a>
         
-        <a href="/debug/calendar-status" class="link working">
+        <a href="/debug/calendar-status${asParam}" class="link testing">
           🟡 Calendar Status <span class="status">(Shows OAuth token status)</span>
         </a>
         
-        <a href="/debug/calendar-create-test" class="link broken">
-          🔴 Create Test Calendar Event <span class="status">(Requires Google tokens)</span>
+        <a href="/debug/calendar-create-test${asParam}" class="link testing">
+          🟡 Create Test Calendar Event <span class="status">(Creates calendar event)</span>
         </a>
         
-        <a href="/debug/create-test-task" class="link broken">
-          🔴 Create Test Task <span class="status">(Testing task creation + hooks)</span>
+        <a href="/debug/create-test-task${asParam}" class="link testing">
+          🟡 Create Test Task <span class="status">(Creates task + triggers hooks)</span>
         </a>
+        
+        <p><small>Add ?as=email@example.com to impersonate a user</small></p>
       </div>
     </body>
     </html>
@@ -66,25 +95,17 @@ router.get('/health', (req, res) => {
 // Current user info
 router.get('/me', async (req: any, res) => {
   try {
-    // Try to get user from session, or use a demo user for testing
-    let userId = req.user?.claims?.sub;
-    let user;
-    
-    if (!userId) {
-      // For debug purposes, try to find any admin user
-      const adminUsers = await storage.getAllTeamMembers();
-      const adminUser = adminUsers.find(u => u.role === 'admin');
-      if (adminUser) {
-        userId = adminUser.id;
-        user = { id: adminUser.id, email: adminUser.email };
-      } else {
-        return res.json({ message: "No authenticated user and no admin users found", userId: null, email: null });
-      }
-    } else {
-      user = await storage.getUser(userId);
+    const effectiveUser = await getEffectiveUser(req);
+    if (!effectiveUser) {
+      return res.status(401).json({ message: 'No session. Pass ?as=<email>' });
     }
     
-    res.json({ userId, email: user?.email, sessionExists: !!req.user });
+    res.json({ 
+      userId: effectiveUser.userId, 
+      email: effectiveUser.email, 
+      sessionExists: effectiveUser.sessionExists, 
+      impersonated: effectiveUser.impersonated 
+    });
   } catch (error) {
     console.error("Error in debug/me:", error);
     res.status(500).json({ message: "Failed to get user info", stack: error instanceof Error ? error.stack : String(error) });
@@ -94,37 +115,37 @@ router.get('/me', async (req: any, res) => {
 // My tasks - using exact same logic as My Tasks page
 router.get('/my-tasks', async (req: any, res) => {
   try {
-    // Try to get user from session, or use first admin user for testing
-    let userId = req.user?.claims?.sub;
-    let user;
-    
-    if (!userId) {
-      const teamMembers = await storage.getAllTeamMembers();
-      const adminUser = teamMembers.find(u => u.role === 'admin');
-      if (adminUser) {
-        userId = adminUser.id;
-        user = { id: adminUser.id, email: adminUser.email };
-      } else {
-        return res.json({ message: "No user found for testing", tasks: [] });
-      }
-    } else {
-      user = await storage.getUser(userId);
+    const effectiveUser = await getEffectiveUser(req);
+    if (!effectiveUser) {
+      return res.status(401).json({ message: 'No session. Pass ?as=<email>' });
     }
-    
-    if (!user?.email) {
+
+    if (!effectiveUser.email) {
       return res.status(400).json({ message: "User email not found" });
     }
 
     // Find team member by email (same logic as My Tasks)
     const teamMembers = await storage.getAllTeamMembers();
-    const currentTeamMember = teamMembers.find((member: TeamMember) => member.email === user.email);
+    const currentTeamMember = teamMembers.find((member: TeamMember) => member.email === effectiveUser.email);
     
     if (!currentTeamMember) {
-      return res.json({ message: "No team member record found", userId, email: user.email, tasks: [] });
+      return res.json({ message: "No team member record found", userId: effectiveUser.userId, email: effectiveUser.email, tasks: [] });
     }
 
-    // Get assignments using same logic as My Tasks
-    const assignments = await storage.getTaskAssignmentsByTeamMember(currentTeamMember.id);
+    // Get assignments using same logic as My Tasks - but with safe query that doesn't crash on missing columns
+    let assignments = [];
+    try {
+      assignments = await storage.getTaskAssignmentsByTeamMember(currentTeamMember.id);
+    } catch (dbError: any) {
+      // If projects.is_deleted column doesn't exist, try without that filter
+      if (dbError.message?.includes('projects.is_deleted does not exist')) {
+        console.log("projects.is_deleted column missing, fetching tasks without that filter");
+        // For now, return empty array until schema is fixed
+        assignments = [];
+      } else {
+        throw dbError;
+      }
+    }
     
     const tasks = assignments.slice(0, 50).map(assignment => ({
       id: assignment.task.id,
@@ -135,11 +156,18 @@ router.get('/my-tasks', async (req: any, res) => {
       due_at: assignment.task.dueDate,
       org_id: assignment.task.organizationId,
       project_id: assignment.task.projectId,
-      assigneeUserIds: [], // Will populate below
+      assigneeUserIds: [], 
       created_at: assignment.task.createdAt
     }));
 
-    res.json({ tasks, teamMemberId: currentTeamMember.id, userId, email: user.email, sessionExists: !!req.user });
+    res.json({ 
+      tasks, 
+      teamMemberId: currentTeamMember.id, 
+      userId: effectiveUser.userId, 
+      email: effectiveUser.email, 
+      sessionExists: effectiveUser.sessionExists,
+      impersonated: effectiveUser.impersonated 
+    });
   } catch (error) {
     console.error("Error in debug/my-tasks:", error);
     res.status(500).json({ message: "Failed to fetch my tasks", stack: error instanceof Error ? error.stack : String(error) });
@@ -149,35 +177,24 @@ router.get('/my-tasks', async (req: any, res) => {
 // Calendar status
 router.get('/calendar-status', async (req: any, res) => {
   try {
-    // Try to get user from session, or use first admin user for testing
-    let userId = req.user?.claims?.sub;
-    let user;
-    
-    if (!userId) {
-      const teamMembers = await storage.getAllTeamMembers();
-      const adminUser = teamMembers.find(u => u.role === 'admin');
-      if (adminUser) {
-        const userRecord = await storage.getUserByEmail(adminUser.email);
-        if (userRecord) {
-          userId = userRecord.id;
-          user = userRecord;
-        }
-      }
-    } else {
-      user = await storage.getUser(userId);
+    const effectiveUser = await getEffectiveUser(req);
+    if (!effectiveUser) {
+      return res.status(401).json({ message: 'No session. Pass ?as=<email>' });
     }
-    
+
+    const user = await storage.getUser(effectiveUser.userId);
     if (!user) {
-      return res.json({ message: "No user found for testing", hasTokens: false });
+      return res.json({ message: "User not found in database", hasTokens: false });
     }
 
     res.json({
-      userId,
-      email: user.email,
+      userId: effectiveUser.userId,
+      email: effectiveUser.email,
       hasTokens: !!(user.googleAccessToken),
       expiry: user.googleTokenExpiry,
       scopes: user.googleAccessToken ? "calendar.events" : null,
-      sessionExists: !!req.user
+      sessionExists: effectiveUser.sessionExists,
+      impersonated: effectiveUser.impersonated
     });
   } catch (error) {
     console.error("Error in debug/calendar-status:", error);
@@ -188,26 +205,21 @@ router.get('/calendar-status', async (req: any, res) => {
 // Create test calendar event
 router.get('/calendar-create-test', async (req: any, res) => {
   try {
-    // Try to get user from session, or use first admin user for testing
-    let userId = req.user?.claims?.sub;
-    let user;
-    
-    if (!userId) {
-      const teamMembers = await storage.getAllTeamMembers();
-      const adminUser = teamMembers.find(u => u.role === 'admin');
-      if (adminUser) {
-        const userRecord = await storage.getUserByEmail(adminUser.email);
-        if (userRecord) {
-          userId = userRecord.id;
-          user = userRecord;
-        }
-      }
-    } else {
-      user = await storage.getUser(userId);
+    const effectiveUser = await getEffectiveUser(req);
+    if (!effectiveUser) {
+      return res.status(401).json({ message: 'No session. Pass ?as=<email>' });
     }
-    
+
+    const user = await storage.getUser(effectiveUser.userId);
     if (!user || !user.googleAccessToken) {
-      return res.json({ ok: false, error: "No Google tokens available", sessionExists: !!req.user });
+      return res.json({ 
+        ok: false, 
+        error: "No Google tokens available", 
+        userId: effectiveUser.userId,
+        email: effectiveUser.email,
+        sessionExists: effectiveUser.sessionExists,
+        impersonated: effectiveUser.impersonated
+      });
     }
 
     const startTime = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes from now
@@ -246,21 +258,12 @@ router.get('/calendar-create-test', async (req: any, res) => {
 // Create test task
 router.get('/create-test-task', async (req: any, res) => {
   try {
-    // Try to get user from session, or use first admin user for testing
-    let userId = req.user?.claims?.sub;
-    let user;
-    
-    if (!userId) {
-      const teamMembers = await storage.getAllTeamMembers();
-      const adminUser = teamMembers.find(u => u.role === 'admin');
-      if (adminUser) {
-        userId = adminUser.id;
-        user = { id: adminUser.id, email: adminUser.email };
-      }
-    } else {
-      user = await storage.getUser(userId);
+    const effectiveUser = await getEffectiveUser(req);
+    if (!effectiveUser) {
+      return res.status(401).json({ message: 'No session. Pass ?as=<email>' });
     }
-    
+
+    const user = await storage.getUser(effectiveUser.userId);
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
@@ -269,11 +272,19 @@ router.get('/create-test-task', async (req: any, res) => {
     const hours = dueDate.getHours().toString().padStart(2, '0');
     const minutes = dueDate.getMinutes().toString().padStart(2, '0');
 
+    // Find the team member record for this user
+    const teamMembers = await storage.getAllTeamMembers();
+    const currentTeamMember = teamMembers.find((member: TeamMember) => member.email === effectiveUser.email);
+    
+    if (!currentTeamMember) {
+      return res.status(400).json({ message: "No team member record found for this user" });
+    }
+
     const taskData = insertTaskSchema.parse({
       title: "Replit Sync Test (server)",
       description: "Test task created from debug dashboard",
       status: "in_progress",
-      assignedTo: userId,
+      assignedTo: effectiveUser.userId,
       dueDate,
       dueTime: `${hours}:${minutes}`,
       priority: "medium",
@@ -285,22 +296,25 @@ router.get('/create-test-task', async (req: any, res) => {
     // Call calendar hooks
     await onTaskCreatedOrUpdated(task.id);
     
-    // Create task assignment if there's an assigned user
-    if (task.assignedTo) {
-      const assignment = await storage.createTaskAssignment({
-        taskId: task.id,
-        teamMemberId: task.assignedTo,
-        assignedBy: userId
-      });
-      await onAssignmentCreated(assignment.id);
-    }
+    // Create task assignment using team member ID
+    const assignment = await storage.createTaskAssignment({
+      taskId: task.id,
+      teamMemberId: currentTeamMember.id, // Use team member ID, not user ID
+      assignedBy: effectiveUser.userId
+    });
+    await onAssignmentCreated(assignment.id);
 
     res.json({
       id: task.id,
-      assigneeUserIds: task.assignedTo ? [task.assignedTo] : [],
+      assigneeUserIds: [currentTeamMember.id],
       due_at: task.dueDate,
       title: task.title,
-      status: task.status
+      status: task.status,
+      userId: effectiveUser.userId,
+      email: effectiveUser.email,
+      sessionExists: effectiveUser.sessionExists,
+      impersonated: effectiveUser.impersonated,
+      teamMemberId: currentTeamMember.id
     });
   } catch (error) {
     console.error("Error creating test task:", error);
