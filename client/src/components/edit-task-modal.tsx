@@ -37,10 +37,21 @@ export function EditTaskModal({ isOpen, onClose, task }: EditTaskModalProps) {
       let timeValue = "";
       
       if (task.dueDate) {
+        // Handle both ISO format and PostgreSQL timestamp format
         const dueDate = new Date(task.dueDate);
         if (!isNaN(dueDate.getTime())) {
           dateValue = dueDate.toISOString().split('T')[0];
-          timeValue = dueDate.toISOString().split('T')[1].slice(0, 5);
+          // For PostgreSQL timestamps, we need to preserve the original time
+          if (task.dueDate.includes(' ')) {
+            // PostgreSQL format: "2025-08-29 13:00:00"
+            const timePart = task.dueDate.split(' ')[1];
+            if (timePart) {
+              timeValue = timePart.slice(0, 5); // "13:00"
+            }
+          } else {
+            // ISO format
+            timeValue = dueDate.toISOString().split('T')[1].slice(0, 5);
+          }
         }
       }
       
