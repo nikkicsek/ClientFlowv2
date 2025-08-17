@@ -2454,21 +2454,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { code, state: userId } = req.query;
       
       if (!code || !userId) {
-        return res.status(400).json({ message: 'Missing authorization code or user ID' });
+        console.log('Missing authorization code or user ID:', { code: !!code, userId: !!userId });
+        return res.redirect('/?calendar=error&reason=missing_params');
       }
 
+      console.log('Processing Google Calendar callback for user:', userId);
       const success = await googleCalendarService.handleCallback(code as string, userId as string);
       
       if (success) {
         // Enable calendar sync for the user
         await storage.updateUserCalendarSync(userId as string, true);
-        res.redirect('/my-tasks?calendar=connected');
+        console.log('Calendar sync enabled for user:', userId);
+        res.redirect('/?calendar=connected');
       } else {
-        res.redirect('/my-tasks?calendar=error');
+        console.log('Calendar callback failed for user:', userId);
+        res.redirect('/?calendar=error&reason=callback_failed');
       }
     } catch (error) {
       console.error('Error handling Google OAuth callback:', error);
-      res.redirect('/my-tasks?calendar=error');
+      res.redirect('/?calendar=error&reason=server_error');
     }
   });
 

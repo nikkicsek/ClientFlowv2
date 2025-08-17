@@ -2,8 +2,42 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { BarChart3 } from "lucide-react";
 import { DebugAuthStatus } from "@/components/debug-auth-status";
+import { useToast } from "@/hooks/use-toast";
+import { useEffect } from "react";
 
 export default function Landing() {
+  const { toast } = useToast();
+
+  // Check for calendar connection status from URL params
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const calendarStatus = urlParams.get('calendar');
+    
+    if (calendarStatus === 'connected') {
+      toast({
+        title: "Calendar Connected!",
+        description: "Your Google Calendar has been successfully connected. Sign in to manage your tasks.",
+      });
+      // Clean up URL
+      window.history.replaceState({}, '', '/');
+    } else if (calendarStatus === 'error') {
+      const reason = urlParams.get('reason');
+      let description = "There was an error connecting your Google Calendar. Please try again after signing in.";
+      if (reason === 'missing_params') {
+        description = "Missing authorization parameters. Please try the calendar connection again.";
+      } else if (reason === 'callback_failed') {
+        description = "Calendar authorization failed. Please check your Google account permissions.";
+      }
+      toast({
+        title: "Calendar Connection Failed",
+        description,
+        variant: "destructive",
+      });
+      // Clean up URL
+      window.history.replaceState({}, '', '/');
+    }
+  }, [toast]);
+
   const handleSignIn = () => {
     window.location.href = "/api/login";
   };
