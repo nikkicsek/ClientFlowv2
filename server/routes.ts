@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
-import { insertProjectSchema, insertTaskSchema, insertMessageSchema, insertAnalyticsSchema, insertTeamMemberSchema, insertTaskAssignmentSchema, insertProposalSchema, insertProposalItemSchema } from "@shared/schema";
+import { insertProjectSchema, insertTaskSchema, insertMessageSchema, insertAnalyticsSchema, insertTeamMemberSchema, insertTaskAssignmentSchema, insertProposalSchema, insertProposalItemSchema, type TeamMember } from "@shared/schema";
 import { emailService } from "./emailService";
 import { nangoService } from "./nangoService";
 import { googleCalendarService } from "./googleCalendar";
@@ -74,8 +74,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Find team member by email
-      const teamMembers = await storage.getTeamMembers();
-      const currentTeamMember = teamMembers.find(member => member.email === user.email);
+      const teamMembers = await storage.getAllTeamMembers();
+      const currentTeamMember = teamMembers.find((member: TeamMember) => member.email === user.email);
       
       res.json({ 
         authenticated: true, 
@@ -415,7 +415,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (task.assignedToMember) {
         try {
           const teamMember = await storage.getTeamMember(task.assignedToMember);
-          const project = await storage.getProject(req.params.projectId);
+          const project = await storage.getProject(req.params.projectId!);
           
           if (teamMember && project) {
             await emailService.sendTaskAssignmentNotification(
