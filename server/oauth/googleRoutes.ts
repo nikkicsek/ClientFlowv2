@@ -12,8 +12,10 @@ function oauth2(redirectUri?: string) {
   );
 }
 
-async function saveTokens(db: Pool, userId: string, tokens: any, scopes: string) {
+async function saveTokens(db: Pool, userId: string, tokens: any, scopes: string, teamMemberId?: string) {
   const expiry = tokens.expiry_date ? new Date(tokens.expiry_date) : new Date(Date.now() + 55 * 60 * 1000);
+  
+  // Always upsert by canonical userId
   await db.query(`
     INSERT INTO oauth_tokens (user_id, access_token, refresh_token, expiry, scopes, created_at, updated_at)
     VALUES ($1,$2,$3,$4,$5, now(), now())
@@ -24,6 +26,20 @@ async function saveTokens(db: Pool, userId: string, tokens: any, scopes: string)
       scopes = EXCLUDED.scopes,
       updated_at = now()
   `, [userId, tokens.access_token, tokens.refresh_token || null, expiry, scopes]);
+  
+  // Also upsert by teamMemberId for backward compatibility if it exists
+  if (teamMemberId) {
+    await db.query(`
+      INSERT INTO oauth_tokens (user_id, access_token, refresh_token, expiry, scopes, created_at, updated_at)
+      VALUES ($1,$2,$3,$4,$5, now(), now())
+      ON CONFLICT (user_id) DO UPDATE SET
+        access_token = EXCLUDED.access_token,
+        refresh_token = COALESCE(EXCLUDED.refresh_token, oauth_tokens.refresh_token),
+        expiry = EXCLUDED.expiry,
+        scopes = EXCLUDED.scopes,
+        updated_at = now()
+    `, [teamMemberId, tokens.access_token, tokens.refresh_token || null, expiry, scopes]);
+  }
 }
 
 googleRouter.get('/oauth/google/connect', async (req: any, res) => {
@@ -76,9 +92,10 @@ googleRouter.get('/oauth/google/callback', async (req: any, res) => {
       return res.redirect(303, `${origin}/my-tasks?calendar=error`);
     }
 
-    // Find user ID by email in our database
+    // Find user ID and team member ID by email in our database
     const db = req.app.get('db') as Pool;
     let userId: string | null = null;
+    let teamMemberId: string | null = null;
 
     // Try users table first
     try {
@@ -90,16 +107,17 @@ googleRouter.get('/oauth/google/callback', async (req: any, res) => {
       console.error('Error querying users table:', err);
     }
 
-    // If not found in users, try to resolve via team_members.user_id
-    if (!userId) {
-      try {
-        const teamResult = await db.query('SELECT user_id FROM team_members WHERE email = $1', [email]);
-        if (teamResult.rows.length > 0 && teamResult.rows[0].user_id) {
+    // Also check team_members table to get teamMemberId and potentially resolve userId
+    try {
+      const teamResult = await db.query('SELECT id, user_id FROM team_members WHERE email = $1', [email]);
+      if (teamResult.rows.length > 0) {
+        teamMemberId = teamResult.rows[0].id;
+        if (!userId && teamResult.rows[0].user_id) {
           userId = teamResult.rows[0].user_id;
         }
-      } catch (err) {
-        console.error('Error querying team_members table:', err);
       }
+    } catch (err) {
+      console.error('Error querying team_members table:', err);
     }
 
     if (!userId) {
@@ -109,7 +127,7 @@ googleRouter.get('/oauth/google/callback', async (req: any, res) => {
     }
 
     const scopes = (tokens.scope as string) || 'https://www.googleapis.com/auth/calendar.events openid email profile';
-    await saveTokens(db, userId, tokens, scopes);
+    await saveTokens(db, userId, tokens, scopes, teamMemberId || undefined);
 
     const origin = `${req.protocol}://${req.headers.host}`;
     return res.redirect(303, `${origin}/my-tasks?calendar=connected`);

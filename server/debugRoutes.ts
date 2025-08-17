@@ -214,7 +214,7 @@ router.get('/my-tasks', async (req: any, res) => {
   }
 });
 
-// Calendar status
+// Calendar status - updated to check both userId and teamMemberId tokens
 router.get('/calendar-status', async (req: any, res) => {
   try {
     const effectiveUser = await getEffectiveUser(req);
@@ -222,23 +222,135 @@ router.get('/calendar-status', async (req: any, res) => {
       return res.status(401).json({ message: 'No session. Pass ?as=<email>' });
     }
 
-    const user = await storage.getUser(effectiveUser.userId);
-    if (!user) {
-      return res.json({ message: "User not found in database", hasTokens: false });
+    // Get database connection for direct oauth_tokens queries
+    const db = req.app?.get?.('db') as any;
+    if (!db) {
+      return res.status(500).json({ message: "Database connection not available" });
+    }
+
+    // Find team member ID for this user
+    const teamMembers = await storage.getAllTeamMembers();
+    const teamMember = teamMembers.find(member => member.email === effectiveUser.email);
+    
+    let hasTokens = false;
+    let keyType: string | null = null;
+    let tokenData: any = null;
+
+    // Try userId first (canonical)
+    try {
+      const userTokenResult = await db.query('SELECT * FROM oauth_tokens WHERE user_id = $1', [effectiveUser.userId]);
+      if (userTokenResult.rows.length > 0) {
+        hasTokens = true;
+        keyType = 'userId';
+        tokenData = userTokenResult.rows[0];
+      }
+    } catch (err) {
+      console.error('Error querying oauth_tokens by userId:', err);
+    }
+
+    // If not found by userId, try teamMemberId
+    if (!hasTokens && teamMember?.id) {
+      try {
+        const teamTokenResult = await db.query('SELECT * FROM oauth_tokens WHERE user_id = $1', [teamMember.id]);
+        if (teamTokenResult.rows.length > 0) {
+          hasTokens = true;
+          keyType = 'teamMemberId';
+          tokenData = teamTokenResult.rows[0];
+        }
+      } catch (err) {
+        console.error('Error querying oauth_tokens by teamMemberId:', err);
+      }
     }
 
     res.json({
       userId: effectiveUser.userId,
+      teamMemberId: teamMember?.id || null,
       email: effectiveUser.email,
-      hasTokens: !!(user.googleAccessToken),
-      expiry: user.googleTokenExpiry,
-      scopes: user.googleAccessToken ? "calendar.events" : null,
+      hasTokens,
+      keyType,
+      expiry: tokenData?.expiry || null,
+      scopes: tokenData?.scopes || null,
       sessionExists: effectiveUser.sessionExists,
       impersonated: effectiveUser.impersonated
     });
   } catch (error) {
     console.error("Error in debug/calendar-status:", error);
     res.status(500).json({ message: "Failed to get calendar status", stack: error instanceof Error ? error.stack : String(error) });
+  }
+});
+
+// Debug tokens - show token records for current user (with redacted secrets)
+router.get('/tokens/dump', async (req: any, res) => {
+  try {
+    const effectiveUser = await getEffectiveUser(req);
+    if (!effectiveUser) {
+      return res.status(401).json({ message: 'No session. Pass ?as=<email>' });
+    }
+
+    // Get database connection for direct oauth_tokens queries
+    const db = req.app?.get?.('db') as any;
+    if (!db) {
+      return res.status(500).json({ message: "Database connection not available" });
+    }
+
+    // Find team member ID for this user
+    const teamMembers = await storage.getAllTeamMembers();
+    const teamMember = teamMembers.find(member => member.email === effectiveUser.email);
+    
+    const tokenRecords = [];
+
+    // Query by userId
+    try {
+      const userTokenResult = await db.query('SELECT user_id, expiry, scopes, created_at, updated_at, access_token, refresh_token FROM oauth_tokens WHERE user_id = $1', [effectiveUser.userId]);
+      for (const row of userTokenResult.rows) {
+        tokenRecords.push({
+          keyType: 'userId',
+          user_id: row.user_id,
+          expiry: row.expiry,
+          scopes: row.scopes,
+          created_at: row.created_at,
+          updated_at: row.updated_at,
+          access_token: row.access_token ? `${row.access_token.slice(0, 10)}...` : null,
+          refresh_token: row.refresh_token ? `${row.refresh_token.slice(0, 10)}...` : null
+        });
+      }
+    } catch (err) {
+      console.error('Error querying oauth_tokens by userId:', err);
+    }
+
+    // Query by teamMemberId if it exists
+    if (teamMember?.id) {
+      try {
+        const teamTokenResult = await db.query('SELECT user_id, expiry, scopes, created_at, updated_at, access_token, refresh_token FROM oauth_tokens WHERE user_id = $1', [teamMember.id]);
+        for (const row of teamTokenResult.rows) {
+          tokenRecords.push({
+            keyType: 'teamMemberId',
+            user_id: row.user_id,
+            expiry: row.expiry,
+            scopes: row.scopes,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            access_token: row.access_token ? `${row.access_token.slice(0, 10)}...` : null,
+            refresh_token: row.refresh_token ? `${row.refresh_token.slice(0, 10)}...` : null
+          });
+        }
+      } catch (err) {
+        console.error('Error querying oauth_tokens by teamMemberId:', err);
+      }
+    }
+
+    res.json({
+      userId: effectiveUser.userId,
+      teamMemberId: teamMember?.id || null,
+      email: effectiveUser.email,
+      tokenRecords,
+      recordCount: tokenRecords.length,
+      sessionExists: effectiveUser.sessionExists,
+      impersonated: effectiveUser.impersonated
+    });
+  } catch (error) {
+    console.error("Error in debug/tokens/dump:", error);
+    res.status(500).json({ message: "Failed to dump token records", stack: error instanceof Error ? error.stack : String(error) });
   }
 });
 
