@@ -1,0 +1,65 @@
+Prompt 1 — Ensure OAuth routes are mounted BEFORE SPA/static and add route debug
+We’re seeing a SPA 404 at /oauth/google/callback. Please fix the Express routing order and show all mounted routes.
+
+File: server/index.ts (or the main Express bootstrap)
+1) Ensure the OAuth router is mounted BEFORE any static serving or SPA catch-all (e.g., before app.use(express.static(...)) and before any app.get('*', ...) fallback):
+   import { googleRouter } from './oauth/googleRoutes'; // or './server/oauth/googleRoutes' if needed
+   app.use(googleRouter);
+
+2) If there is an API base path like app.use('/api', apiRouter), then ALSO mount the googleRouter at root (as above). Do not only mount under /api.
+
+3) Add a routes introspection endpoint so we can see what Express has registered:
+   app.get('/debug/express-routes', (_req, res) => {
+     const routes = [];
+     const stack = app._router?.stack || [];
+     stack.forEach((m) => {
+       if (m.route?.path) {
+         routes.push({ method: Object.keys(m.route.methods)[0], path: m.route.path });
+       } else if (m.name === 'router' && m.handle?.stack) {
+         m.handle.stack.forEach((h) => {
+           if (h.route?.path) {
+             routes.push({ method: Object.keys(h.route.methods)[0], path: h.route.path });
+           }
+         });
+       }
+     });
+     res.json(routes);
+   });
+
+4) Restart the server and paste the JSON from GET /debug/express-routes so I can verify that /oauth/google/connect and /oauth/google/callback are present, and that any SPA catch-all is listed AFTER them.
+
+Show me the DIFFs you made.
+
+Prompt 2 — Log when the handlers run (to prove the callback hits server)
+In server/oauth/googleRoutes.ts:
+- At the top of GET '/oauth/google/connect', log: console.log('>> HIT /oauth/google/connect');
+- At the top of GET '/oauth/google/callback', log: console.log('>> HIT /oauth/google/callback', req.query);
+
+Restart and test again. I should see those logs when I open /oauth/google/connect and after I finish Google consent (for the callback).
+Show me the DIFF and the console output.
+
+Prompt 3 — Make the button do a full navigation to the exact working URL
+Find the "Connect Google Calendar" button (client/src/pages/my-tasks.tsx or client/src/components/CalendarSettings.tsx).
+Replace any React Router <Link> or navigate() with a FULL navigation:
+
+<a
+  href={`${window.location.origin}/oauth/google/connect`}
+  className="btn btn-primary"
+  rel="external"
+>
+  Connect Google Calendar
+</a>
+
+This ensures we hit the server route at the root and not the SPA.
+Show me the DIFF.
+
+Prompt 4 — (If needed) Add explicit aliases and keep SPA from catching OAuth
+In server/oauth/googleRoutes.ts, add duplicate aliases so both root and /api paths work:
+
+googleRouter.get('/api/oauth/google/connect', sameHandlerAsConnect);
+googleRouter.get('/api/oauth/google/callback', sameHandlerAsCallback);
+
+In the main server file, ensure ANY catch-all like:
+  app.get('*', ...)
+is placed AFTER app.use(googleRouter).
+Show me the DIFF and confirm the order.

@@ -11,8 +11,26 @@ app.use(express.urlencoded({ extended: false }));
 // Attach database pool to app for Google OAuth
 app.set('db', pool);
 
-// Mount Google OAuth routes
+// CRITICAL: Mount Google OAuth routes BEFORE any static/SPA routes
 app.use(googleRouter);
+
+// Add routes introspection endpoint for debugging
+app.get('/debug/express-routes', (_req, res) => {
+  const routes = [];
+  const stack = app._router?.stack || [];
+  stack.forEach((m) => {
+    if (m.route?.path) {
+      routes.push({ method: Object.keys(m.route.methods)[0], path: m.route.path });
+    } else if (m.name === 'router' && m.handle?.stack) {
+      m.handle.stack.forEach((h) => {
+        if (h.route?.path) {
+          routes.push({ method: Object.keys(h.route.methods)[0], path: h.route.path });
+        }
+      });
+    }
+  });
+  res.json(routes);
+});
 
 app.use((req, res, next) => {
   const start = Date.now();
