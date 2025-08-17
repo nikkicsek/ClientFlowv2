@@ -9,15 +9,52 @@ const router = Router();
 // Simple HTML debug dashboard
 router.get('/', (req, res) => {
   res.type('html').send(`
-    <h1>Debug Dashboard</h1>
-    <ul>
-      <li><a href="/debug/health" target="_top">Health Check</a></li>
-      <li><a href="/debug/me" target="_top">Current User Info</a></li>
-      <li><a href="/debug/my-tasks" target="_top">My Tasks</a></li>
-      <li><a href="/debug/calendar-status" target="_top">Calendar Status</a></li>
-      <li><a href="/debug/calendar-create-test" target="_top">Create Test Calendar Event</a></li>
-      <li><a href="/debug/create-test-task" target="_top">Create Test Task</a></li>
-    </ul>
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Debug Dashboard</title>
+      <style>
+        body { font-family: Arial, sans-serif; margin: 40px; background: #f5f5f5; }
+        .container { max-width: 600px; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h1 { color: #333; margin-bottom: 30px; }
+        .link { display: block; margin: 15px 0; padding: 15px 20px; background: #007cba; color: white; text-decoration: none; border-radius: 5px; transition: background 0.3s; }
+        .link:hover { background: #005a8b; }
+        .working { background: #28a745; }
+        .broken { background: #dc3545; }
+        .status { font-size: 12px; opacity: 0.8; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <h1>Debug Dashboard</h1>
+        <p>Click any link below to test the debug endpoints:</p>
+        
+        <a href="/debug/health" class="link working">
+          🟢 Health Check <span class="status">(Should return: {"ok":true})</span>
+        </a>
+        
+        <a href="/debug/me" class="link working">
+          🟡 Current User Info <span class="status">(Shows auth status & user details)</span>
+        </a>
+        
+        <a href="/debug/my-tasks" class="link broken">
+          🔴 My Tasks <span class="status">(Testing task assignment logic)</span>
+        </a>
+        
+        <a href="/debug/calendar-status" class="link working">
+          🟡 Calendar Status <span class="status">(Shows OAuth token status)</span>
+        </a>
+        
+        <a href="/debug/calendar-create-test" class="link broken">
+          🔴 Create Test Calendar Event <span class="status">(Requires Google tokens)</span>
+        </a>
+        
+        <a href="/debug/create-test-task" class="link broken">
+          🔴 Create Test Task <span class="status">(Testing task creation + hooks)</span>
+        </a>
+      </div>
+    </body>
+    </html>
   `);
 });
 
