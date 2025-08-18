@@ -587,6 +587,15 @@ router.post('/sync/enable', (req, res) => {
   res.json({ enabled: true });
 });
 
+// Sync logs endpoint for diagnostics
+router.get('/sync/logs', (req, res) => {
+  // For now, return a simple status since we need to implement proper logging
+  res.json({ 
+    message: "Sync logs endpoint - logging implemented in console",
+    note: "Check workflow console logs for detailed sync activity"
+  });
+});
+
 // Helper function to find existing debug task (idempotency check)
 async function findExistingDebugTask(userId: string, teamMemberId: string) {
   try {
@@ -716,10 +725,10 @@ router.get('/create-test-task', async (req, res) => {
     );
     console.log('Assignment verification:', verifyQuery.rows[0]);
 
-    // Fire calendar hook
-    const { onTaskCreatedOrUpdated } = require('./hooks/taskCalendarHooks');
+    // Fire assignment creation hook (proper way)
+    const { onAssignmentCreated } = require('./hooks/taskCalendarHooks');
     try {
-      await onTaskCreatedOrUpdated(task.id);
+      await onAssignmentCreated(assignment.id);
     } catch (calendarError) {
       console.error('Calendar hook error in debug:', calendarError);
     }

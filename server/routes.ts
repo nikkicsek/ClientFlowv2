@@ -492,13 +492,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
 
-        // Calendar hook: Task created (only if task has due date and assignments)
-        if (task.dueDate && assignments.length > 0) {
-          console.log('Firing calendar hook for task:', task.id);
+        // Fire assignment creation hooks for each assignment (idempotent)
+        for (const assignment of assignments) {
           try {
-            await onTaskCreatedOrUpdated(task.id);
+            await onAssignmentCreated(assignment.id);
           } catch (calendarError) {
-            console.error('Calendar hook error:', calendarError);
+            console.error('Calendar hook error for assignment:', assignment.id, calendarError);
             // Don't fail task creation if calendar sync fails
           }
         }
