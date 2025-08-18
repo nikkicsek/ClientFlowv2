@@ -659,7 +659,7 @@ router.get('/create-test-task', async (req, res) => {
 
     // Create test task with due time ~10 minutes from now
     const now = new Date();
-    const dueAt = new Date(now.getTime() + 10 * 60 * 1000); // 10 minutes from now
+    const dueDateTime = new Date(now.getTime() + 10 * 60 * 1000); // 10 minutes from now
     
     const taskData = {
       title: `Test Task ${now.getTime()}`,
@@ -667,9 +667,8 @@ router.get('/create-test-task', async (req, res) => {
       projectId,
       status: 'in_progress',
       priority: 'medium',
-      dueAt,
-      dueDate: dueAt,
-      dueTime: `${dueAt.getHours().toString().padStart(2, '0')}:${dueAt.getMinutes().toString().padStart(2, '0')}`,
+      dueDate: dueDateTime,
+      dueTime: `${dueDateTime.getHours().toString().padStart(2, '0')}:${dueDateTime.getMinutes().toString().padStart(2, '0')}`,
     };
 
     // Create task using storage
@@ -696,7 +695,8 @@ router.get('/create-test-task', async (req, res) => {
       task: {
         id: task.id,
         title: task.title,
-        dueAt: task.dueAt,
+        dueDate: task.dueDate,
+        dueTime: task.dueTime,
         projectId: task.projectId,
       },
       assignments: [{
@@ -708,7 +708,7 @@ router.get('/create-test-task', async (req, res) => {
         teamMemberEmail: asEmail,
         teamMemberId,
         projectId,
-        dueAtFormatted: dueAt.toISOString(),
+        dueAtFormatted: dueDateTime.toISOString(),
       }
     });
 
