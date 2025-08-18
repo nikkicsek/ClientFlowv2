@@ -1,0 +1,48 @@
+Fix task assignments so "My Tasks" sees them and calendar hooks fire.
+
+Symptoms:
+- /debug/create-test-task returns assigneeUserIds with my teamMemberId.
+- /debug/my-tasks shows those same tasks but assigneeUserIds is [].
+- Therefore the assignment rows aren’t being joined/read correctly.
+
+Do the following:
+
+1) Write assignments with team_member_id
+   - In the task creation paths (including /debug/create-test-task and the Projects “Add Task” API), insert into task_assignments using team_member_id (FK to team_members.id). Do not use users.id here.
+   - Verify by selecting from task_assignments RIGHT AFTER insert and logging the row(s).
+
+2) Make the reader robust
+   - In the storage method used by /debug/my-tasks (and the My Tasks API), build assigneeUserIds with a proper aggregate:
+     SELECT t.*,
+            COALESCE(json_agg(DISTINCT ta.team_member_id) FILTER (WHERE ta.team_member_id IS NOT NULL), '[]') AS assigneeUserIds
+     FROM tasks t
+     LEFT JOIN task_assignments ta ON ta.task_id = t.id
+     ...
+     GROUP BY t.id;
+   - Filter “my tasks” by team_member_id:
+     WHERE EXISTS (
+       SELECT 1 FROM task_assignments ta
+       WHERE ta.task_id = t.id
+         AND ta.team_member_id = $teamMemberId
+     )
+
+3) Backfill any legacy rows
+   - If task_assignments has old rows with user_id populated but team_member_id NULL, backfill:
+     UPDATE task_assignments ta
+     SET team_member_id = tm.id
+     FROM team_members tm
+     WHERE ta.team_member_id IS NULL
+       AND ta.user_id = tm.user_id;
+   - Keep user_id for backward-compat, but readers must prefer team_member_id.
+
+4) Calendar hook correctness (idempotent)
+   - Hooks must upsert per-assignment using task_assignments.calendar_event_id.
+   - On create: if no calendar_event_id -> create and save; on update: update; on unassign: delete & clear.
+   - Respect the SYNC toggle.
+
+5) Prove it
+   - Call /debug/create-test-task?as=nikki@csekcreative.com → response includes my teamMemberId.
+   - Then /debug/my-tasks?as=nikki@csekcreative.com shows that task with assigneeUserIds containing my teamMemberId (not []).
+   - With SYNC enabled and tokens present, creating a timed task assigned to me creates exactly one calendar event.
+
+Please implement, restart, and post the touched files.
