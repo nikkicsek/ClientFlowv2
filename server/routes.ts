@@ -521,60 +521,90 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.claims.sub;
       const user = await storage.getUser(userId);
+      const taskId = req.params.id;
       
-      if (user?.role !== 'admin') {
-        return res.status(403).json({ message: "Only admins can update tasks" });
+      // Check if user has permission to edit this task (admin or assigned to task)
+      const existingTask = await storage.getTask(taskId);
+      if (!existingTask) {
+        return res.status(404).json({ message: 'Task not found' });
+      }
+      
+      // Get task assignments to check if user is assigned
+      const assignments = await storage.getTaskAssignments(taskId);
+      const isAssigned = assignments.some(assignment => {
+        // Check if user is assigned through team member
+        return assignment.teamMember?.email === user.email;
+      });
+      
+      if (user.role !== 'admin' && !isAssigned) {
+        return res.status(403).json({ message: 'Not authorized to edit this task' });
       }
 
-      const updates = { ...req.body };
+      // Parse and validate the request body
+      const { title, description, status, priority, dueDate, dueTime, assigneeUserIds } = req.body;
       
-      // Convert date string to Date object and extract time if present
-      if (updates.dueDate) {
-        const dueDateTime = new Date(updates.dueDate);
-        updates.dueDate = dueDateTime;
+      const updateData: any = {
+        title,
+        description,
+        status,
+        priority,
+        dueDate: dueDate ? new Date(dueDate) : undefined,
+        dueTime
+      };
+      
+      // Remove undefined values
+      Object.keys(updateData).forEach(key => {
+        if (updateData[key] === undefined) {
+          delete updateData[key];
+        }
+      });
+
+      // Update the task
+      const updatedTask = await storage.updateTask(taskId, updateData);
+
+      // Handle assignment changes if provided
+      if (assigneeUserIds && Array.isArray(assigneeUserIds)) {
+        // Get current assignments
+        const currentAssignments = await storage.getTaskAssignments(taskId);
+        const currentTeamMemberIds = currentAssignments.map(a => a.teamMemberId);
         
-        // Extract time component for the separate dueTime field
-        if (!isNaN(dueDateTime.getTime())) {
-          const hours = dueDateTime.getHours().toString().padStart(2, '0');
-          const minutes = dueDateTime.getMinutes().toString().padStart(2, '0');
-          updates.dueTime = `${hours}:${minutes}`;
-        }
-      }
-      
-      const task = await storage.updateTask(req.params.id, updates);
-
-      // Send email notification if team member assignment changed
-      if (updates.assignedToMember) {
-        try {
-          const teamMember = await storage.getTeamMember(updates.assignedToMember);
-          const project = await storage.getProject(task.projectId);
-          
-          if (teamMember && project) {
-            await emailService.sendTaskAssignmentNotification(
-              teamMember.email,
-              teamMember.name,
-              task.title,
-              project.name,
-              {
-                priority: task.priority ?? undefined,
-                assignedBy: `${user.firstName ?? ''} ${user.lastName ?? ''}`,
-                dueDate: task.dueDate ? new Date(task.dueDate).toLocaleDateString() : undefined,
-                notes: task.notes ?? undefined,
-              }
-            );
+        // Determine assignments to add and remove
+        const toAdd = assigneeUserIds.filter(id => !currentTeamMemberIds.includes(id));
+        const toRemove = currentTeamMemberIds.filter(id => !assigneeUserIds.includes(id));
+        
+        // Remove old assignments
+        for (const assignment of currentAssignments) {
+          if (toRemove.includes(assignment.teamMemberId)) {
+            await storage.deleteTaskAssignment(assignment.id);
+            // Fire calendar hook for removal
+            const { onAssignmentDeleted } = await import('./hooks/taskCalendarHooks');
+            await onAssignmentDeleted(assignment.id);
           }
-        } catch (emailError) {
-          console.error("Failed to send task assignment email:", emailError);
+        }
+        
+        // Add new assignments
+        for (const teamMemberId of toAdd) {
+          const newAssignment = await storage.createTaskAssignment({
+            taskId,
+            teamMemberId,
+            assignedBy: userId,
+          });
+          // Fire calendar hook for new assignment
+          const { onAssignmentCreated } = await import('./hooks/taskCalendarHooks');
+          await onAssignmentCreated(newAssignment.id);
         }
       }
 
-      // Calendar hook: Task updated
-      await onTaskCreatedOrUpdated(req.params.id);
+      // Fire calendar hook for task update if due date/time changed
+      if (updateData.dueDate || updateData.dueTime) {
+        const { onTaskUpdated } = await import('./hooks/taskCalendarHooks');
+        await onTaskUpdated(taskId);
+      }
 
-      res.json(task);
+      res.json({ task: updatedTask });
     } catch (error) {
-      console.error("Error updating task:", error);
-      res.status(500).json({ message: "Failed to update task" });
+      console.error('Error updating task:', error);
+      res.status(500).json({ message: 'Failed to update task' });
     }
   });
 

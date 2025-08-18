@@ -596,6 +596,56 @@ router.get('/sync/logs', (req, res) => {
   });
 });
 
+// Debug task endpoint
+router.get('/task/:id', async (req: any, res: Response) => {
+  try {
+    const taskId = req.params.id;
+    const { storage } = await import('./storage');
+    
+    const task = await storage.getTask(taskId);
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+
+    const assignments = await storage.getTaskAssignments(taskId);
+    
+    res.json({
+      task: {
+        id: task.id,
+        title: task.title,
+        description: task.description,
+        status: task.status,
+        priority: task.priority,
+        dueDate: task.dueDate,
+        dueTime: task.dueTime,
+        dueAt: task.dueAt,
+        googleEventId: task.googleEventId,
+        googleCalendarEventId: task.googleCalendarEventId,
+      },
+      assignments: assignments.map(a => ({
+        id: a.id,
+        teamMemberId: a.teamMemberId,
+        calendarEventId: a.calendarEventId
+      })),
+      googlePayloadPreview: {
+        summary: task.title,
+        description: task.description || '',
+        start: task.dueDate && task.dueTime ? {
+          dateTime: `${task.dueDate.toISOString().split('T')[0]}T${task.dueTime}:00`,
+          timeZone: 'America/Vancouver'
+        } : null,
+        end: task.dueDate && task.dueTime ? {
+          dateTime: `${task.dueDate.toISOString().split('T')[0]}T${task.dueTime}:00`,
+          timeZone: 'America/Vancouver'
+        } : null
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching debug task:', error);
+    res.status(500).json({ error: 'Failed to fetch task' });
+  }
+});
+
 // Helper function to find existing debug task (idempotency check)
 async function findExistingDebugTask(userId: string, teamMemberId: string) {
   try {

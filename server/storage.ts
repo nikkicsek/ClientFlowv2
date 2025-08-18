@@ -540,13 +540,37 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(tasks.createdAt));
   }
 
-  async updateTask(id: string, updates: Partial<InsertTask>): Promise<Task> {
+  async updateTask(id: string, updates: Partial<InsertTask> & { dueAt?: string | Date }): Promise<Task> {
+    // Normalize dueAt to due_date + due_time and compute UTC due_at
+    const updateData = { ...updates, updatedAt: new Date() };
+    
+    if (updates.dueDate || updates.dueTime || (updates as any).dueAt) {
+      const dueDate = updates.dueDate instanceof Date ? updates.dueDate : 
+                     updates.dueDate ? new Date(updates.dueDate) : null;
+      const dueTime = updates.dueTime || '09:00';
+      
+      if (dueDate) {
+        // Compute UTC due_at from local date/time
+        const localDateTime = new Date(`${dueDate.toISOString().split('T')[0]}T${dueTime}:00`);
+        // Assume America/Vancouver timezone for now
+        const utcDateTime = new Date(localDateTime.getTime() + (8 * 60 * 60 * 1000)); // UTC+8 offset approximation
+        (updateData as any).dueAt = utcDateTime;
+      }
+    }
+    
     const [updatedTask] = await db
       .update(tasks)
-      .set({ ...updates, updatedAt: new Date() })
+      .set(updateData)
       .where(eq(tasks.id, id))
       .returning();
     return updatedTask;
+  }
+
+  async setTaskGoogleEventId(taskId: string, eventId: string): Promise<void> {
+    await db
+      .update(tasks)
+      .set({ googleEventId: eventId })
+      .where(eq(tasks.id, taskId));
   }
 
   // File operations

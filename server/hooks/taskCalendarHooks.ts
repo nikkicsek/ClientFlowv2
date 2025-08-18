@@ -59,11 +59,33 @@ export const onAssignmentCreated = async (assignmentId: string) => {
 };
 
 export const onAssignmentDeleted = async (assignmentId: string) => {
+  if (!SYNC_ENABLED) { 
+    console.log('Calendar sync disabled - onAssignmentDeleted skipped'); 
+    return; 
+  }
   try {
     console.log('Calendar hook', { assignmentId, action: 'assignment_deleted' });
     await deleteAssignmentCalendarEvent(assignmentId);
   } catch (error) {
     console.error('Error in onAssignmentDeleted:', error);
+  }
+};
+
+export const onTaskUpdated = async (taskId: string) => {
+  if (!SYNC_ENABLED) { 
+    console.log('Calendar sync disabled - onTaskUpdated skipped'); 
+    return; 
+  }
+  try {
+    console.log('Calendar hook', { taskId, action: 'task_updated' });
+    
+    // Get all assignments for this task and sync their calendar events
+    const assignments = await storage.getTaskAssignments(taskId);
+    for (const assignment of assignments) {
+      await syncAssignmentCalendarEvent(assignment.id);
+    }
+  } catch (error) {
+    console.error('Error in onTaskUpdated:', error);
   }
 };
 

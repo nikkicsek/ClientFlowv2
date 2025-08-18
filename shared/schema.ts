@@ -127,6 +127,8 @@ export const tasks = pgTable("tasks", {
   assignedToMember: varchar("assigned_to_member"), // Specific team member name assignment
   clientVisible: boolean("client_visible").default(true), // Whether client can see this task
   googleCalendarEventId: varchar("google_calendar_event_id"), // Google Calendar event ID for synced tasks
+  dueAt: timestamp("due_at", { withTimezone: true }), // Canonical UTC timestamp
+  googleEventId: text("google_event_id"), // New field for Google Calendar event ID
   deletedAt: timestamp("deleted_at"),
   deletedBy: varchar("deleted_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),

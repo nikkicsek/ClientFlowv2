@@ -18,10 +18,23 @@ interface CreateTaskModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
-  projectId: string;
+  projectId?: string;
+  organizationId?: string;
+  mode?: 'create' | 'edit';
+  task?: any;
+  onTaskUpdated?: () => void;
 }
 
-export default function CreateTaskModal({ isOpen, onClose, onSuccess, projectId }: CreateTaskModalProps) {
+export default function CreateTaskModal({ 
+  isOpen, 
+  onClose, 
+  onSuccess, 
+  projectId, 
+  organizationId, 
+  mode = 'create', 
+  task, 
+  onTaskUpdated 
+}: CreateTaskModalProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
@@ -37,43 +50,81 @@ export default function CreateTaskModal({ isOpen, onClose, onSuccess, projectId 
   
   const [selectedTeamMembers, setSelectedTeamMembers] = useState<string[]>([]);
 
+  // Initialize form with task data in edit mode
+  useState(() => {
+    if (mode === 'edit' && task) {
+      setFormData({
+        title: task.title || "",
+        description: task.description || "",
+        status: task.status || "in_progress",
+        priority: task.priority || "medium",
+        dueDate: task.dueDate ? new Date(task.dueDate).toISOString().split('T')[0] : "",
+        dueTime: task.dueTime || "",
+        googleDriveLink: task.googleDriveLink || "",
+      });
+      setSelectedTeamMembers(task.assigneeUserIds || []);
+    }
+  }, [mode, task]);
+
   // Fetch team members for assignment
   const { data: teamMembers = [] } = useQuery<TeamMember[]>({
     queryKey: ["/api/team-members"],
     enabled: isOpen,
   });
 
-  const createTaskMutation = useMutation({
+  const taskMutation = useMutation({
     mutationFn: async (data: any) => {
-      // Include selectedTeamMembers in the payload so server handles assignments in transaction
       const payload = {
         ...data,
-        selectedTeamMembers,
+        assigneeUserIds: selectedTeamMembers, // Changed from selectedTeamMembers to match API
       };
-      const response = await apiRequest("POST", `/api/projects/${projectId}/tasks`, payload);
-      return response.json();
+      
+      if (mode === 'edit' && task) {
+        const response = await apiRequest("PUT", `/api/tasks/${task.id}`, payload);
+        return response.json();
+      } else {
+        const endpoint = projectId 
+          ? `/api/projects/${projectId}/tasks`
+          : `/api/organizations/${organizationId}/tasks`;
+        const response = await apiRequest("POST", endpoint, { ...payload, selectedTeamMembers });
+        return response.json();
+      }
     },
     onSuccess: async (result) => {
-      // Task and assignments are created in server transaction, no need for separate API calls
-      
-      queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "tasks"] });
+      // Invalidate relevant queries
+      if (projectId) {
+        queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "tasks"] });
+      }
+      if (organizationId) {
+        queryClient.invalidateQueries({ queryKey: ["/api/organizations", organizationId, "tasks"] });
+      }
       queryClient.invalidateQueries({ queryKey: ["/api/admin/task-assignments"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/tasks"] });
       
-      onSuccess();
-      setFormData({
-        title: "",
-        description: "",
-        status: "in_progress",
-        priority: "medium",
-        dueDate: "",
-        dueTime: "",
-        googleDriveLink: "",
-      });
-      setSelectedTeamMembers([]);
+      // Call appropriate callback
+      if (mode === 'edit' && onTaskUpdated) {
+        onTaskUpdated();
+      } else {
+        onSuccess();
+      }
+      
+      // Reset form only in create mode
+      if (mode === 'create') {
+        setFormData({
+          title: "",
+          description: "",
+          status: "in_progress",
+          priority: "medium",
+          dueDate: "",
+          dueTime: "",
+          googleDriveLink: "",
+        });
+        setSelectedTeamMembers([]);
+      }
+      
       toast({
-        title: "Task Created",
-        description: "Project task created successfully",
+        title: mode === 'edit' ? "Task Updated" : "Task Created",
+        description: mode === 'edit' ? "Task updated successfully" : "Task created successfully",
       });
     },
     onError: (error: Error) => {
@@ -89,8 +140,8 @@ export default function CreateTaskModal({ isOpen, onClose, onSuccess, projectId 
         return;
       }
       toast({
-        title: "Creation Failed",
-        description: "Unable to create task. Please try again.",
+        title: mode === 'edit' ? "Update Failed" : "Creation Failed",
+        description: mode === 'edit' ? "Unable to update task. Please try again." : "Unable to create task. Please try again.",
         variant: "destructive",
       });
     },
@@ -119,8 +170,8 @@ export default function CreateTaskModal({ isOpen, onClose, onSuccess, projectId 
       googleDriveLink: formData.googleDriveLink || null,
     };
 
-    console.log("Creating task with data:", taskData);
-    createTaskMutation.mutate(taskData);
+    console.log(`${mode === 'edit' ? 'Updating' : 'Creating'} task with data:`, taskData);
+    taskMutation.mutate(taskData);
   };
 
   const handleInputChange = (field: string, value: string) => {
@@ -131,7 +182,7 @@ export default function CreateTaskModal({ isOpen, onClose, onSuccess, projectId 
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
         <DialogHeader>
-          <DialogTitle>Add New Task</DialogTitle>
+          <DialogTitle>{mode === 'edit' ? 'Edit Task' : 'Add New Task'}</DialogTitle>
         </DialogHeader>
         
         <form onSubmit={handleSubmit} className="flex flex-col h-full">
@@ -296,10 +347,13 @@ export default function CreateTaskModal({ isOpen, onClose, onSuccess, projectId 
             </Button>
             <Button 
               type="submit"
-              disabled={createTaskMutation.isPending}
+              disabled={taskMutation.isPending}
               className="flex-1 bg-blue-600 hover:bg-blue-700"
             >
-              {createTaskMutation.isPending ? 'Creating...' : 'Create Task'}
+              {taskMutation.isPending 
+                ? (mode === 'edit' ? 'Updating...' : 'Creating...')
+                : (mode === 'edit' ? 'Update Task' : 'Create Task')
+              }
             </Button>
           </div>
         </form>
