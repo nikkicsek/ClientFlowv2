@@ -450,6 +450,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
           assignments.push(assignment);
           console.log('Created task assignment:', { assignmentId: assignment.id, taskId: task.id, teamMemberId });
+          
+          // Verify assignment was created correctly
+          const { pool } = await import('./db');
+          const verifyQuery = await pool.query(
+            'SELECT * FROM task_assignments WHERE id = $1',
+            [assignment.id]
+          );
+          console.log('Assignment verification:', verifyQuery.rows[0]);
         }
         
         console.log('Task creation summary:', { 

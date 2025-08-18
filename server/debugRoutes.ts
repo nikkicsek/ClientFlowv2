@@ -248,18 +248,36 @@ router.get('/my-tasks', async (req: any, res) => {
     // Get assignments using the new userId-based method that handles schema issues
     const assignments = await storage.getTaskAssignmentsByUserId(effectiveUser.userId);
     
-    const tasks = assignments.slice(0, 50).map(assignment => ({
-      id: assignment.task.id,
-      title: assignment.task.title,
-      status: assignment.task.status,
-      due_date: assignment.task.dueDate,
-      due_time: assignment.task.dueTime,
-      due_at: assignment.task.dueDate,
-      org_id: assignment.task.organizationId,
-      project_id: assignment.task.projectId,
-      assigneeUserIds: [], 
-      created_at: assignment.task.createdAt
-    }));
+    // Get tasks with proper assigneeUserIds aggregation
+    const taskIds = assignments.slice(0, 50).map(a => a.taskId);
+    let tasks = [];
+    
+    if (taskIds.length > 0) {
+      const tasksResult = await pool.query(`
+        SELECT 
+          t.id,
+          t.title,
+          t.status,
+          t.due_date,
+          t.due_time,
+          (t.due_date::timestamp + COALESCE(t.due_time::interval, interval '00:00')) AT TIME ZONE 'UTC' AS due_at,
+          t.organization_id AS org_id,
+          t.project_id,
+          t.created_at,
+          COALESCE(
+            ARRAY_AGG(DISTINCT ta.team_member_id) FILTER (WHERE ta.team_member_id IS NOT NULL),
+            ARRAY[]::text[]
+          ) AS "assigneeUserIds"
+        FROM tasks t
+        LEFT JOIN task_assignments ta ON ta.task_id = t.id
+        WHERE t.id = ANY($1)
+          AND t.deleted_at IS NULL
+        GROUP BY t.id
+        ORDER BY t.created_at DESC
+      `, [taskIds]);
+      
+      tasks = tasksResult.rows;
+    }
 
     res.json({ 
       tasks, 
@@ -684,6 +702,19 @@ router.get('/create-test-task', async (req, res) => {
       teamMemberId: teamMemberId,
       assignedBy: 'debug-system',
     });
+
+    console.log(`Created assignment:`, { 
+      assignmentId: assignment.id,
+      taskId: task.id, 
+      teamMemberId,
+    });
+
+    // Verify assignment was created correctly
+    const verifyQuery = await pool.query(
+      'SELECT * FROM task_assignments WHERE id = $1',
+      [assignment.id]
+    );
+    console.log('Assignment verification:', verifyQuery.rows[0]);
 
     // Fire calendar hook
     const { onTaskCreatedOrUpdated } = require('./hooks/taskCalendarHooks');
