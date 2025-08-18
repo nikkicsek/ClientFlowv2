@@ -1381,7 +1381,7 @@ export function registerDebugRoutes(app: Express) {
     }
   });
 
-  // Debug route: Get raw Google event JSON
+  // Debug route: Get raw Google event JSON (fixed)
   app.get('/debug/sync/get-event', async (req, res) => {
     try {
       const { eventId, as: impersonateAs } = req.query as { eventId?: string; as?: string };
@@ -1422,13 +1422,19 @@ export function registerDebugRoutes(app: Express) {
       
       res.json({
         found: true,
+        event: {
+          id: event.id,
+          summary: event.summary,
+          description: event.description,
+          start: event.start,
+          end: event.end,
+          htmlLink: event.htmlLink,
+          status: event.status,
+          created: event.created,
+          updated: event.updated
+        },
         eventId: event.id,
-        calendarId: 'primary',
-        start: event.start,
-        end: event.end,
-        htmlLink: event.htmlLink,
-        summary: event.summary,
-        description: event.description
+        calendarId: 'primary'
       });
       
     } catch (error) {
@@ -1604,6 +1610,102 @@ export function registerDebugRoutes(app: Express) {
       res.status(500).json({ 
         error: 'Database query failed', 
         details: error.message 
+      });
+    }
+  });
+
+  // Debug route: Check task, mapping, and event status
+  app.get('/debug/sync/check', async (req, res) => {
+    try {
+      const { taskId, as: impersonateAs } = req.query as { taskId?: string; as?: string };
+      
+      if (!taskId) {
+        return res.status(400).json({ error: 'taskId parameter required' });
+      }
+      
+      // Get task basic info
+      const { pool } = await import('../db');
+      const taskResult = await pool.query(`
+        SELECT id, title, status, due_at, due_date, due_time, google_calendar_event_id
+        FROM tasks 
+        WHERE id = $1
+      `, [taskId]);
+      
+      if (taskResult.rows.length === 0) {
+        return res.status(404).json({ error: `Task ${taskId} not found` });
+      }
+      
+      const task = taskResult.rows[0];
+      
+      // Get task assignments and team members
+      const assignmentResult = await pool.query(`
+        SELECT ta.id, ta.team_member_id, tm.email, tm.name
+        FROM task_assignments ta
+        LEFT JOIN team_members tm ON ta.team_member_id = tm.id
+        WHERE ta.task_id = $1
+      `, [taskId]);
+      
+      // Get mapping table entries
+      const mappingResult = await pool.query(`
+        SELECT tge.task_id, tge.user_id, tge.event_id, tge.created_at, tge.updated_at,
+               u.email as user_email
+        FROM task_google_events tge
+        LEFT JOIN users u ON tge.user_id = u.id
+        WHERE tge.task_id = $1
+      `, [taskId]);
+      
+      // Get event details if impersonation provided and event exists
+      let eventDetails = null;
+      if (impersonateAs && mappingResult.rows.length > 0) {
+        try {
+          const eventId = mappingResult.rows[0].event_id;
+          const resolution = await resolveUserAndTokensEnhanced({
+            asEmail: impersonateAs
+          });
+          
+          if (resolution.ok) {
+            const { googleCalendarService } = await import('./googleCalendar');
+            const event = await googleCalendarService.getEvent(resolution.userId, eventId, 'primary');
+            
+            if (event) {
+              eventDetails = {
+                id: event.id,
+                summary: event.summary,
+                start: event.start,
+                end: event.end,
+                htmlLink: event.htmlLink,
+                status: event.status
+              };
+            }
+          }
+        } catch (error) {
+          console.warn('Could not fetch event details:', error);
+        }
+      }
+      
+      res.json({
+        taskId,
+        task: {
+          id: task.id,
+          title: task.title,
+          status: task.status,
+          due_at: task.due_at,
+          due_date: task.due_date,
+          due_time: task.due_time,
+          google_calendar_event_id: task.google_calendar_event_id
+        },
+        assignments: assignmentResult.rows,
+        mappings: mappingResult.rows,
+        mappingCount: mappingResult.rows.length,
+        eventDetails,
+        hasEventInCalendar: !!eventDetails
+      });
+      
+    } catch (error) {
+      console.error('Error checking task sync status:', error);
+      res.status(500).json({ 
+        error: 'Failed to check sync status', 
+        details: error instanceof Error ? error.message : String(error)
       });
     }
   });

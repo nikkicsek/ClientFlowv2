@@ -54,18 +54,78 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Manual sync endpoint for tasks (accessible without session for debugging)
-  app.post('/api/tasks/:id/sync-calendar', async (req: any, res) => {
+  // Lightweight API route for manual sync with UI integration
+  app.post('/api/tasks/:id/sync-calendar', isAuthenticated, async (req: any, res) => {
     try {
       const taskId = req.params.id;
+      const userId = req.user.claims.sub;
       
-      // Trigger the calendar hook to recompute and upsert events
-      await onTaskCreatedOrUpdated(taskId);
+      // Verify user has access to this task
+      const task = await storage.getTask(taskId);
+      if (!task) {
+        return res.status(404).json({ message: "Task not found" });
+      }
       
-      res.json({ success: true, message: "Calendar sync triggered successfully" });
+      // Get assignments to check access
+      const assignments = await storage.getTaskAssignments(taskId);
+      const user = await storage.getUser(userId);
+      const isAssigned = assignments.some(assignment => 
+        assignment.teamMember?.email === user?.email
+      );
+      
+      if (user?.role !== 'admin' && !isAssigned) {
+        return res.status(403).json({ message: "Not authorized to sync this task" });
+      }
+      
+      // Trigger the calendar sync using the unified system
+      await syncAllCalendarEventsForTask(taskId);
+      
+      // Get the first assignment's calendar event for the response
+      let eventId = null;
+      let htmlLink = null;
+      
+      if (assignments.length > 0) {
+        const assignment = assignments[0];
+        if (assignment.teamMember?.email) {
+          // Get user by email and check for calendar event
+          const assigneeUser = await storage.getUserByEmail(assignment.teamMember.email);
+          if (assigneeUser) {
+            const { pool } = await import('./db');
+            const eventResult = await pool.query(
+              'SELECT event_id FROM task_google_events WHERE task_id = $1 AND user_id = $2',
+              [taskId, assigneeUser.id]
+            );
+            
+            if (eventResult.rows.length > 0) {
+              eventId = eventResult.rows[0].event_id;
+              
+              // Try to get the htmlLink from Google Calendar
+              try {
+                const { googleCalendarService } = await import('./googleCalendar');
+                const event = await googleCalendarService.getEvent(assigneeUser.id, eventId);
+                htmlLink = event?.htmlLink || null;
+              } catch (error) {
+                console.warn('Could not fetch event htmlLink:', error);
+              }
+            }
+          }
+        }
+      }
+      
+      res.json({ 
+        ok: true, 
+        success: true, 
+        message: "Calendar sync completed successfully",
+        eventId,
+        htmlLink
+      });
     } catch (error) {
       console.error("Error syncing task calendar:", error);
-      res.status(500).json({ message: "Failed to sync calendar", error: error instanceof Error ? error.message : String(error) });
+      res.status(500).json({ 
+        ok: false,
+        message: "Failed to sync calendar", 
+        error: error instanceof Error ? error.message : String(error) 
+      });
     }
   });
 
