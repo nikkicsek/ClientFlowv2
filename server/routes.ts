@@ -4,6 +4,7 @@ import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { requireAuth, getCurrentUser } from "./middleware/auth";
 import { insertProjectSchema, insertTaskSchema, insertMessageSchema, insertAnalyticsSchema, insertTeamMemberSchema, insertTaskAssignmentSchema, insertProposalSchema, insertProposalItemSchema, type TeamMember } from "@shared/schema";
+import { computeDueAt, backfillDisplayFields } from "./utils/timeHandling";
 import { emailService } from "./emailService";
 import { nangoService } from "./nangoService";
 import { googleCalendarService } from "./googleCalendar";
@@ -412,16 +413,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { selectedTeamMembers = [], ...bodyData } = req.body;
       
-      // Handle date and time parsing - keep as strings for database
+      // Compute due_at from dueDate, dueTime, and timezone (unified time handling)
+      let dueAt = null;
       if (bodyData.dueDate) {
-        // Validate date format but keep as string
-        const dueDateTime = new Date(bodyData.dueDate);
-        if (!isNaN(dueDateTime.getTime())) {
-          // Keep as YYYY-MM-DD format string for database
-          bodyData.dueDate = bodyData.dueDate;
-        } else {
-          bodyData.dueDate = null;
-        }
+        const timezone = bodyData.timezone || "America/Los_Angeles"; // Default timezone for Nikki
+        dueAt = computeDueAt(bodyData.dueDate, bodyData.dueTime, timezone);
       }
       
       const taskData = insertTaskSchema.parse({
@@ -429,13 +425,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         projectId: req.params.projectId,
       });
       
+      // Prepare final task data with computed due_at
+      const finalTaskData = {
+        ...taskData,
+        dueAt: dueAt ? new Date(dueAt) : null,
+        // Keep dueDate as Date for backward compatibility
+        dueDate: taskData.dueDate ? new Date(taskData.dueDate) : null,
+      };
+      
+      // Remove timezone from the final data (not a database field)
+      delete (finalTaskData as any).timezone;
+      
       // Start transaction
       let task: any;
       let assignments: any[] = [];
       
       try {
         // Create the task
-        task = await storage.createTask(taskData);
+        task = await storage.createTask(finalTaskData);
         console.log('Created task:', { taskId: task.id, title: task.title, dueDate: task.dueDate, dueTime: task.dueTime });
         
         // Create task assignments for each selected team member
@@ -538,7 +545,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Parse and validate the request body
-      const { title, description, status, priority, dueDate, dueTime, assigneeUserIds } = req.body;
+      const { title, description, status, priority, dueDate, dueTime, timezone, assigneeUserIds } = req.body;
+      
+      // Compute due_at if dueDate provided (unified time handling)
+      let dueAt = null;
+      if (dueDate) {
+        const tz = timezone || "America/Los_Angeles"; // Default timezone for Nikki
+        dueAt = computeDueAt(dueDate, dueTime, tz);
+      }
       
       const updateData: any = {
         title,
@@ -546,7 +560,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status,
         priority,
         dueDate: dueDate ? new Date(dueDate) : undefined,
-        dueTime
+        dueTime,
+        dueAt: dueAt ? new Date(dueAt) : undefined,
       };
       
       // Remove undefined values
@@ -1713,27 +1728,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Only admins can create organization tasks" });
       }
 
-      console.log("Request body:", req.body);
+      const { selectedTeamMembers = [], ...bodyData } = req.body;
       
-      const taskData = {
-        ...req.body,
+      // Compute due_at from dueDate, dueTime, and timezone (unified time handling)
+      let dueAt = null;
+      if (bodyData.dueDate) {
+        const timezone = bodyData.timezone || "America/Los_Angeles"; // Default timezone for Nikki
+        dueAt = computeDueAt(bodyData.dueDate, bodyData.dueTime, timezone);
+      }
+      
+      const taskData = insertTaskSchema.parse({
+        ...bodyData,
         organizationId: req.params.organizationId,
         taskScope: 'organization',
         projectId: null,
         serviceId: null, // Organization tasks don't require service
-        dueDate: req.body.dueDate ? new Date(req.body.dueDate) : null,
+      });
+      
+      // Prepare final task data with computed due_at
+      const finalTaskData = {
+        ...taskData,
+        dueAt: dueAt ? new Date(dueAt) : null,
+        // Keep dueDate as Date for backward compatibility
+        dueDate: taskData.dueDate ? new Date(taskData.dueDate) : null,
       };
+      
+      // Remove timezone from the final data (not a database field)
+      delete (finalTaskData as any).timezone;
 
-      console.log("Task data for validation:", taskData);
-
-      const validation = insertTaskSchema.safeParse(taskData);
-
-      if (!validation.success) {
-        console.error("Validation error:", JSON.stringify(validation.error, null, 2));
-        return res.status(400).json({ error: validation.error });
-      }
-
-      const task = await storage.createOrganizationTask(validation.data);
+      const task = await storage.createOrganizationTask(finalTaskData);
       res.status(201).json(task);
     } catch (error) {
       console.error("Error creating organization task:", error);

@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Calendar, Clock, Link as LinkIcon, Save } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { getUserTimezone, formatDueAt } from "@/utils/timeFormatting";
 
 interface EditTaskModalProps {
   isOpen: boolean;
@@ -36,12 +37,19 @@ export function EditTaskModal({ isOpen, onClose, task }: EditTaskModalProps) {
       let dateValue = "";
       let timeValue = "";
       
-      if (task.dueDate) {
-        // Handle both ISO format and PostgreSQL timestamp format
+      // Prioritize due_at field over legacy dueDate/dueTime
+      if (task.dueAt) {
+        // Use due_at (unified UTC timestamp) - convert to local timezone for form
+        const dueAtDate = new Date(task.dueAt);
+        if (!isNaN(dueAtDate.getTime())) {
+          dateValue = dueAtDate.toISOString().split('T')[0];
+          timeValue = dueAtDate.toTimeString().slice(0, 5); // Local time for editing
+        }
+      } else if (task.dueDate) {
+        // Fallback to legacy dueDate/dueTime fields
         const dueDate = new Date(task.dueDate);
         if (!isNaN(dueDate.getTime())) {
           dateValue = dueDate.toISOString().split('T')[0];
-          // For PostgreSQL timestamps, we need to preserve the original time
           if (task.dueDate.includes(' ')) {
             // PostgreSQL format: "2025-08-29 13:00:00"
             const timePart = task.dueDate.split(' ')[1];
@@ -69,7 +77,11 @@ export function EditTaskModal({ isOpen, onClose, task }: EditTaskModalProps) {
 
   const updateTaskMutation = useMutation({
     mutationFn: async (taskData: any) => {
-      const response = await apiRequest("PUT", `/api/admin/tasks/${task.id}`, taskData);
+      const dataWithTimezone = {
+        ...taskData,
+        timezone: getUserTimezone() // Include user's timezone for unified time handling
+      };
+      const response = await apiRequest("PUT", `/api/admin/tasks/${task.id}`, dataWithTimezone);
       return response.json();
     },
     onSuccess: () => {

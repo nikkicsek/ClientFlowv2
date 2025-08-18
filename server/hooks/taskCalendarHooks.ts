@@ -1,5 +1,6 @@
 import { googleCalendarService, SYNC_ENABLED } from '../googleCalendar';
 import { storage } from '../storage';
+import { shouldCreateTimedEvent, backfillDisplayFields } from '../utils/timeHandling';
 
 export const onTaskCreatedOrUpdated = async (taskId: string) => {
   if (!SYNC_ENABLED) { 
@@ -108,9 +109,27 @@ async function syncAssignmentCalendarEvent(assignmentId: string) {
       return;
     }
 
-    // Only process tasks with date+time - skip tasks without proper due dates
-    if (!task.dueDate || (!task.dueTime && !task.dueDate.includes('T') && !task.dueDate.includes(' '))) {
-      console.log('Calendar sync skipped - task lacks date+time:', { taskId: task.id, dueDate: task.dueDate, dueTime: task.dueTime });
+    // Use due_at as the canonical time field, fallback to dueDate/dueTime for legacy tasks
+    let taskDueDate, taskDueTime;
+    if (task.dueAt) {
+      // Use unified time handling - backfill display fields from due_at
+      const timezone = "America/Los_Angeles"; // Default timezone for Nikki
+      const display = backfillDisplayFields(task.dueAt.toISOString(), timezone);
+      taskDueDate = display.dueDate;
+      taskDueTime = display.dueTime;
+    } else if (task.dueDate) {
+      // Legacy fallback
+      taskDueDate = task.dueDate instanceof Date ? task.dueDate.toISOString().slice(0, 10) : task.dueDate;
+      taskDueTime = task.dueTime;
+    } else {
+      console.log('Calendar sync skipped - task lacks due date:', { taskId: task.id });
+      return;
+    }
+    
+    // Check if this should be a timed event
+    const isTimedEvent = shouldCreateTimedEvent(task.dueAt?.toISOString() || null, taskDueTime);
+    if (!isTimedEvent && !taskDueTime) {
+      console.log('Calendar sync skipped - all-day task without time:', { taskId: task.id, taskDueDate, taskDueTime });
       return;
     }
 
@@ -131,8 +150,8 @@ async function syncAssignmentCalendarEvent(assignmentId: string) {
       const success = await googleCalendarService.updateTaskEvent(user.id, existingEventId, {
         title: task.title,
         description: task.description,
-        dueDate: task.dueDate,
-        dueTime: task.dueTime,
+        dueDate: taskDueDate,
+        dueTime: taskDueTime,
         status: task.status,
         priority: task.priority
       });
@@ -145,8 +164,8 @@ async function syncAssignmentCalendarEvent(assignmentId: string) {
       eventId = await googleCalendarService.createTaskEvent(user.id, {
         title: task.title,
         description: task.description,
-        dueDate: task.dueDate,
-        dueTime: task.dueTime,
+        dueDate: taskDueDate,
+        dueTime: taskDueTime,
         status: task.status,
         priority: task.priority
       });

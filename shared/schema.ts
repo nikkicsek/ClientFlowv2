@@ -518,6 +518,7 @@ export const insertTaskSchema = createInsertSchema(tasks).omit({
 }).extend({
   dueDate: z.string().nullable().optional(),
   dueTime: z.string().nullable().optional(),
+  timezone: z.string().optional(), // IANA timezone string for computing due_at
 });
 
 export const insertTeamMemberSchema = createInsertSchema(teamMembers).omit({

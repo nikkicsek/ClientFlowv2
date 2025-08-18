@@ -12,6 +12,7 @@ import { isUnauthorizedError } from "@/lib/authUtils";
 import { apiRequest } from "@/lib/queryClient";
 import { Users, X, Calendar, Clock } from "lucide-react";
 import type { TeamMember } from "@shared/schema";
+import { getUserTimezone } from "@/utils/timeFormatting";
 
 
 interface CreateTaskModalProps {
@@ -77,6 +78,7 @@ export default function CreateTaskModal({
       const payload = {
         ...data,
         assigneeUserIds: selectedTeamMembers, // Changed from selectedTeamMembers to match API
+        timezone: getUserTimezone() // Include user's timezone for unified time handling
       };
       
       if (mode === 'edit' && task) {
