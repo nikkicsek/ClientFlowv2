@@ -1,9 +1,11 @@
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { CheckCircle, Clock, Calendar, Target, User, Building2, AlertTriangle } from 'lucide-react';
+import { CheckCircle, Clock, Calendar, Target, User, Building2, AlertTriangle, Edit } from 'lucide-react';
+import CreateTaskModal from './create-task-modal';
 import { useToast } from '@/hooks/use-toast';
 
 interface TeamMemberTasksProps {
@@ -14,6 +16,8 @@ interface TeamMemberTasksProps {
 export function TeamMemberTasks({ teamMemberId, teamMemberName }: TeamMemberTasksProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [editingTask, setEditingTask] = useState<any>(null);
+  const [showEditModal, setShowEditModal] = useState(false);
 
   // Get tasks assigned to this team member
   const { data: assignments = [], isLoading } = useQuery({
@@ -195,14 +199,27 @@ export function TeamMemberTasks({ teamMemberId, teamMemberName }: TeamMemberTask
                           </Badge>
                         </div>
                         
-                        <Button
-                          onClick={() => completeAssignmentMutation.mutate(assignment.id)}
-                          disabled={completeAssignmentMutation.isPending}
-                          className="ml-4"
-                        >
-                          <CheckCircle className="h-4 w-4 mr-2" />
-                          Mark Complete
-                        </Button>
+                        <div className="flex items-center gap-2 ml-4">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setEditingTask(assignment.task);
+                              setShowEditModal(true);
+                            }}
+                            className="flex items-center gap-2"
+                          >
+                            <Edit className="h-3 w-3" />
+                            Edit
+                          </Button>
+                          <Button
+                            onClick={() => completeAssignmentMutation.mutate(assignment.id)}
+                            disabled={completeAssignmentMutation.isPending}
+                          >
+                            <CheckCircle className="h-4 w-4 mr-2" />
+                            Mark Complete
+                          </Button>
+                        </div>
                       </div>
                     </CardContent>
                   </Card>
@@ -260,6 +277,27 @@ export function TeamMemberTasks({ teamMemberId, teamMemberName }: TeamMemberTask
             </div>
           )}
         </>
+      )}
+      
+      {/* Edit Task Modal */}
+      {showEditModal && editingTask && (
+        <CreateTaskModal
+          isOpen={showEditModal}
+          onClose={() => {
+            setShowEditModal(false);
+            setEditingTask(null);
+          }}
+          projectId={editingTask.projectId}
+          organizationId={editingTask.orgId}
+          onSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: ["/api/team-members", teamMemberId, "assignments"] });
+          }}
+          mode="edit"
+          task={editingTask}
+          onTaskUpdated={() => {
+            queryClient.invalidateQueries({ queryKey: ["/api/team-members", teamMemberId, "assignments"] });
+          }}
+        />
       )}
     </div>
   );

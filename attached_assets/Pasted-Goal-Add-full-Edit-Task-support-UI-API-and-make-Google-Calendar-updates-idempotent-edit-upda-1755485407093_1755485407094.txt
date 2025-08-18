@@ -1,0 +1,111 @@
+Goal: Add full “Edit Task” support (UI + API) and make Google Calendar updates idempotent (edit updates the same event instead of creating new ones).
+
+Requirements / Acceptance Criteria
+
+From “My Tasks” each task has an Edit button that opens a modal (reuse the create modal in edit mode).
+
+Editable fields: title, description, status, priority, due date, due time, assignees.
+
+Saving performs a PUT /api/tasks/:id and updates the list without reload (optimistic update with error toast rollback).
+
+Google Calendar:
+
+On create: store the returned eventId with the task.
+
+On edit: if an eventId exists, update that event; if not, create one and store the new eventId.
+
+If sync is disabled or no tokens, skip silently (no errors to the user).
+
+Time handling:
+
+Store a canonical due_at (UTC timestamptz) on the task.
+
+Derive due_date and due_time for display.
+
+Normalize edits from the user’s local TZ → due_at (UTC) on save.
+
+Migrations and backfill:
+
+Ensure tasks.due_at timestamptz exists (create it if missing).
+
+Add tasks.google_event_id text (nullable).
+
+Backfill due_at where missing using existing due_date + due_time (assume 09:00 local if time missing).
+
+No duplicate events: edits must not create a new Google event if google_event_id is present.
+
+Server work
+
+DB migration (Neon/SQL):
+
+Add due_at timestamptz if it doesn’t exist.
+
+Add google_event_id text if it doesn’t exist.
+
+Backfill due_at from due_date + due_time for existing rows.
+
+Storage layer:
+
+Add updateTask(taskId, payload) that updates title, description, status, priority, due_date, due_time and recomputes/stores due_at.
+
+Add setTaskGoogleEventId(taskId, eventId).
+
+API:
+
+Add PUT /api/tasks/:id with validation and authorization (assignee or admin).
+
+On successful DB update, call a new CalendarSync.createOrUpdateEvent(task, tokens):
+
+If task.google_event_id is set → call Google Calendar events.update.
+
+Else → events.insert, then persist google_event_id.
+
+Respect the global sync toggle and token availability; short-circuit if disabled or missing.
+
+Debug:
+
+Keep /debug/calendar-status and /debug/sync/status.
+
+Add /debug/task/:id (read-only) that shows the stored google_event_id, due_at, and what would be sent to Google.
+
+Client work
+
+TaskCard
+
+Add an Edit button (three-dot menu or secondary button).
+
+Open a TaskModal in edit mode with fields prefilled.
+
+TaskModal
+
+Reuse the existing create form but support mode="edit".
+
+On submit, PUT /api/tasks/:id with { title, description, status, priority, dueDate, dueTime, assigneeUserIds }.
+
+Convert local date/time → UTC due_at on the server; send the raw date/time as separate fields.
+
+State
+
+Optimistically update the task list; on server error show toast and rollback.
+
+Calendar details
+
+Build the Google payload from due_at (UTC) + user’s timezone.
+
+Title = task title; Description = task description + link back to the task (if available).
+
+30-minute default duration when only a start time is provided (same as current debug).
+
+Never create a new event if google_event_id exists — always update.
+
+Testing checklist
+
+Create a task → confirm one Google event appears; google_event_id is stored.
+
+Edit title/time/assignees → the same event updates (no new event).
+
+Disable sync → edits do not touch calendar; re-enable sync and edit again → update resumes.
+
+Backfilled tasks (that predate the migration) can be edited and sync as expected.
+
+Please implement the above end-to-end and confirm with me when it’s deployed to the running preview.
