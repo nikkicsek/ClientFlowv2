@@ -166,14 +166,20 @@ class GoogleCalendarService {
     try {
       const calendar = await this.getAuthenticatedClient(userId);
       
-      // Handle PostgreSQL timestamp format properly
+      // Handle PostgreSQL timestamp format properly - support both Date objects and strings
       let startDate;
       if (task.dueDate) {
-        if (task.dueDate.includes(' ') && !task.dueDate.includes('T')) {
-          // PostgreSQL format: "2025-08-29 13:00:00" - treat as local time
-          startDate = new Date(task.dueDate.replace(' ', 'T'));
+        if (task.dueDate instanceof Date) {
+          startDate = task.dueDate;
+        } else if (typeof task.dueDate === 'string') {
+          if (task.dueDate.includes(' ') && !task.dueDate.includes('T')) {
+            // PostgreSQL format: "2025-08-29 13:00:00" - treat as local time
+            startDate = new Date(task.dueDate.replace(' ', 'T'));
+          } else {
+            startDate = new Date(task.dueDate);
+          }
         } else {
-          startDate = new Date(task.dueDate);
+          startDate = new Date();
         }
       } else {
         startDate = new Date();
@@ -220,14 +226,20 @@ class GoogleCalendarService {
     try {
       const calendar = await this.getAuthenticatedClient(userId);
       
-      // Handle PostgreSQL timestamp format properly
+      // Handle PostgreSQL timestamp format properly - support both Date objects and strings
       let startDate;
       if (task.dueDate) {
-        if (task.dueDate.includes(' ') && !task.dueDate.includes('T')) {
-          // PostgreSQL format: "2025-08-29 13:00:00" - treat as local time
-          startDate = new Date(task.dueDate.replace(' ', 'T'));
+        if (task.dueDate instanceof Date) {
+          startDate = task.dueDate;
+        } else if (typeof task.dueDate === 'string') {
+          if (task.dueDate.includes(' ') && !task.dueDate.includes('T')) {
+            // PostgreSQL format: "2025-08-29 13:00:00" - treat as local time
+            startDate = new Date(task.dueDate.replace(' ', 'T'));
+          } else {
+            startDate = new Date(task.dueDate);
+          }
         } else {
-          startDate = new Date(task.dueDate);
+          startDate = new Date();
         }
       } else {
         startDate = new Date();

@@ -410,57 +410,103 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Only admins can create tasks" });
       }
 
-      // Convert date string to Date object and extract time if present
-      const bodyData = { ...req.body };
+      const { selectedTeamMembers = [], ...bodyData } = req.body;
+      
+      // Combine due_date + due_time into due_at (UTC)
+      let dueAt: Date | undefined = undefined;
       if (bodyData.dueDate) {
         const dueDateTime = new Date(bodyData.dueDate);
-        bodyData.dueDate = dueDateTime;
         
-        // Extract time component for the separate dueTime field
+        // If dueTime is provided, combine them
+        if (bodyData.dueTime && typeof bodyData.dueTime === 'string') {
+          const [hours, minutes] = bodyData.dueTime.split(':').map(Number);
+          if (!isNaN(hours) && !isNaN(minutes)) {
+            dueDateTime.setHours(hours, minutes, 0, 0);
+          }
+        }
+        
         if (!isNaN(dueDateTime.getTime())) {
-          const hours = dueDateTime.getHours().toString().padStart(2, '0');
-          const minutes = dueDateTime.getMinutes().toString().padStart(2, '0');
-          bodyData.dueTime = `${hours}:${minutes}`;
+          dueAt = dueDateTime;
+          // Keep legacy fields for backward compatibility
+          bodyData.dueDate = dueDateTime;
+          bodyData.dueTime = bodyData.dueTime || `${dueDateTime.getHours().toString().padStart(2, '0')}:${dueDateTime.getMinutes().toString().padStart(2, '0')}`;
         }
       }
       
       const taskData = insertTaskSchema.parse({
         ...bodyData,
         projectId: req.params.projectId,
+        dueAt, // Add combined due_at field
       });
       
-      const task = await storage.createTask(taskData);
-
-      // Send email notification if task is assigned to a team member
-      if (task.assignedToMember) {
-        try {
-          const teamMember = await storage.getTeamMember(task.assignedToMember);
-          const project = await storage.getProject(req.params.projectId!);
-          
-          if (teamMember && project) {
-            await emailService.sendTaskAssignmentNotification(
-              teamMember.email,
-              teamMember.name,
-              task.title,
-              project.name,
-              {
-                priority: task.priority ?? undefined,
-                assignedBy: `${user.firstName ?? ''} ${user.lastName ?? ''}`,
-                dueDate: task.dueDate ? new Date(task.dueDate).toLocaleDateString() : undefined,
-                notes: task.notes ?? undefined,
-              }
-            );
-          }
-        } catch (emailError) {
-          console.error("Failed to send task assignment email:", emailError);
-          // Don't fail the task creation if email fails
+      // Start transaction
+      let task: any;
+      let assignments: any[] = [];
+      
+      try {
+        // Create the task
+        task = await storage.createTask(taskData);
+        console.log('Created task:', { taskId: task.id, title: task.title, dueAt: task.dueAt });
+        
+        // Create task assignments for each selected team member
+        for (const teamMemberId of selectedTeamMembers) {
+          const assignment = await storage.createTaskAssignment({
+            taskId: task.id,
+            teamMemberId: teamMemberId,
+            assignedBy: userId,
+          });
+          assignments.push(assignment);
+          console.log('Created task assignment:', { assignmentId: assignment.id, taskId: task.id, teamMemberId });
         }
+        
+        console.log('Task creation summary:', { 
+          taskId: task.id, 
+          assignmentCount: assignments.length,
+          assignmentIds: assignments.map(a => a.id)
+        });
+
+        // Send email notifications
+        for (const assignment of assignments) {
+          try {
+            const teamMember = await storage.getTeamMember(assignment.teamMemberId);
+            const project = await storage.getProject(req.params.projectId!);
+            
+            if (teamMember && project) {
+              await emailService.sendTaskAssignmentNotification(
+                teamMember.email,
+                teamMember.name,
+                task.title,
+                project.name,
+                {
+                  priority: task.priority ?? undefined,
+                  assignedBy: `${user.firstName ?? ''} ${user.lastName ?? ''}`,
+                  dueDate: task.dueAt ? task.dueAt.toLocaleDateString() : undefined,
+                  notes: task.notes ?? undefined,
+                }
+              );
+            }
+          } catch (emailError) {
+            console.error("Failed to send task assignment email:", emailError);
+            // Don't fail the task creation if email fails
+          }
+        }
+
+        // Calendar hook: Task created (only if task has due date and assignments)
+        if (task.dueAt && assignments.length > 0) {
+          console.log('Firing calendar hook for task:', task.id);
+          try {
+            await onTaskCreatedOrUpdated(task.id);
+          } catch (calendarError) {
+            console.error('Calendar hook error:', calendarError);
+            // Don't fail task creation if calendar sync fails
+          }
+        }
+
+        res.status(201).json({ task, assignments });
+      } catch (transactionError) {
+        console.error('Task creation transaction failed:', transactionError);
+        throw transactionError;
       }
-
-      // Calendar hook: Task created
-      await onTaskCreatedOrUpdated(task.id);
-
-      res.status(201).json(task);
     } catch (error) {
       console.error("Error creating task:", error);
       if (error instanceof Error) {
