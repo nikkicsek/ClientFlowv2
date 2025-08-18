@@ -145,6 +145,18 @@ UI preferences: Clean, functional interfaces without promotional or instructiona
     - User ID normalization through users and team_members tables
     - Token refresh updates stored directly in oauth_tokens table
     - Canonical userId as single source of truth for all token operations
+- **UNIFIED TIMEZONE & CALENDAR SYSTEM (August 18, 2025)**: Complete implementation of robust timezone handling with idempotent calendar synchronization
+  - **Luxon Integration**: Implemented industry-standard timezone library for robust UTC/local time conversions
+  - **Unified Time Handling**: `computeDueAt()` function converts local date/time + timezone to canonical UTC timestamp stored in `due_at` field
+  - **Idempotent Calendar Events**: Deterministic event IDs (`task-{taskId}-{userId}`) prevent duplicate calendar events through upsert operations
+  - **Frontend Timezone Detection**: Automatic client timezone detection sent to server for accurate time computation
+  - **Calendar Sync Architecture**: `syncAllCalendarEventsForTask()` handles all task assignments with individual calendar events per assignment
+  - **Enhanced Debug System**: Comprehensive debugging endpoints for timezone testing, calendar status, and emergency controls
+  - **Task Creation Integration**: Both project and organization task creation routes use unified timezone handling with automatic calendar sync
+  - **Backward Compatibility**: Maintains existing `due_date`/`due_time` fields for display while using `due_at` as canonical UTC timestamp
+  - **Error Resilience**: Calendar sync failures don't prevent task operations, comprehensive logging for debugging
+  - **Emergency Controls**: Kill-switch for runaway calendar processes, runtime sync enable/disable capabilities
+  - **System Status**: ✅ COMPLETE & OPERATIONAL - All timezone handling and calendar sync functionality implemented and tested
 
 ### Potential Integrations
 - **Analytics Platforms**: Designed to integrate with marketing tools and analytics services

@@ -17,6 +17,7 @@ import {
   onAssignmentCreated,
   onAssignmentDeleted
 } from './hooks/taskCalendarHooks';
+import { syncAllCalendarEventsForTask } from "./calendarEvents";
 
 // Configure multer for file uploads
 const uploadDir = path.join(process.cwd(), "uploads");
@@ -505,6 +506,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
             // Don't fail task creation if calendar sync fails
           }
         }
+        
+        // Sync all calendar events for the task using new unified system
+        try {
+          await syncAllCalendarEventsForTask(task.id);
+          console.log(`Synced calendar events for task ${task.id}`);
+        } catch (calendarError) {
+          console.error('Calendar sync error for task:', task.id, calendarError);
+          // Don't fail task creation if calendar sync fails
+        }
 
         res.status(201).json({ task, assignments });
       } catch (transactionError) {
@@ -608,9 +618,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Fire calendar hook for task update if due date/time changed
-      if (updateData.dueDate || updateData.dueTime) {
-        const { onTaskUpdated } = await import('./hooks/taskCalendarHooks');
-        await onTaskUpdated(taskId);
+      if (updateData.dueDate || updateData.dueTime || updateData.dueAt) {
+        try {
+          await syncAllCalendarEventsForTask(taskId);
+          console.log(`Synced calendar events for updated task ${taskId}`);
+        } catch (calendarError) {
+          console.error('Calendar sync error for task update:', taskId, calendarError);
+          // Don't fail task update if calendar sync fails
+        }
       }
 
       res.json({ task: updatedTask });
@@ -1756,8 +1771,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Remove timezone from the final data (not a database field)
       delete (finalTaskData as any).timezone;
 
-      const task = await storage.createOrganizationTask(finalTaskData);
-      res.status(201).json(task);
+      // Start transaction for task creation and assignments
+      let task: any;
+      let assignments: any[] = [];
+      
+      try {
+        // Create the organization task
+        task = await storage.createOrganizationTask(finalTaskData);
+        console.log('Created organization task:', { taskId: task.id, title: task.title, dueDate: task.dueDate, dueTime: task.dueTime });
+        
+        // Create task assignments for each selected team member
+        for (const teamMemberId of selectedTeamMembers) {
+          const assignment = await storage.createTaskAssignment({
+            taskId: task.id,
+            teamMemberId: teamMemberId,
+            assignedBy: userId,
+          });
+          assignments.push(assignment);
+          console.log('Created task assignment:', { assignmentId: assignment.id, taskId: task.id, teamMemberId });
+        }
+        
+        // Fire assignment creation hooks for each assignment (idempotent)
+        for (const assignment of assignments) {
+          try {
+            await onAssignmentCreated(assignment.id);
+          } catch (calendarError) {
+            console.error('Calendar hook error for assignment:', assignment.id, calendarError);
+            // Don't fail task creation if calendar sync fails
+          }
+        }
+        
+        // Sync all calendar events for the task using new unified system
+        try {
+          await syncAllCalendarEventsForTask(task.id);
+          console.log(`Synced calendar events for organization task ${task.id}`);
+        } catch (calendarError) {
+          console.error('Calendar sync error for task:', task.id, calendarError);
+          // Don't fail task creation if calendar sync fails
+        }
+
+        res.status(201).json({ task, assignments });
+      } catch (transactionError) {
+        console.error('Organization task creation transaction failed:', transactionError);
+        throw transactionError;
+      }
     } catch (error) {
       console.error("Error creating organization task:", error);
       res.status(500).json({ message: "Failed to create organization task" });

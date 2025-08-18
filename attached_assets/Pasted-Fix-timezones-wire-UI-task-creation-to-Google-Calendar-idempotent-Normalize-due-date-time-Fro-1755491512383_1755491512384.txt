@@ -1,0 +1,64 @@
+Fix timezones + wire UI task creation to Google Calendar (idempotent)
+
+Normalize due date/time:
+
+Frontend (task modal): send strings, not Date objects:
+{ title, description, dueDate: "YYYY-MM-DD", dueTime: "HH:mm", tz: Intl.DateTimeFormat().resolvedOptions().timeZone }.
+
+Backend Zod schema must expect these strings and tz (string).
+
+Merge on server with Luxon (or Dayjs/TZ):
+const utc = DateTime.fromISO(${dueDate}T${dueTime}, { zone: tz }).toUTC();
+Store tasks.due_at as TIMESTAMPTZ (UTC). Also persist due_date (DATE) and due_time (TEXT) for quick list rendering.
+
+Migrations:
+
+Ensure tasks.due_at TIMESTAMPTZ NULL exists (create if missing).
+
+Ensure existing rows backfill due_at from (due_date,due_time) assuming tz = 'America/Vancouver' for @nikki@csekcreative.com as a temporary default. Write a one-off SQL backfill.
+
+Display correct local time:
+
+My Tasks page: render “Due: Aug 17, 9:30 PM” using client local TZ based on due_at (UTC). Do not re-interpret due_date/due_time without TZ.
+
+Calendar sync on real task flows:
+
+In the normal createTask and updateTask server handlers, after DB write, call upsertCalendarEventForTask(taskId) for each assignee that has tokens.
+
+Implement upsertCalendarEventForTask(taskId, userId) to be idempotent using a deterministic Google event id: task-${taskId}-${userId}.
+If 409 on insert, call events.update instead. Always set start/end from due_at (30 or 60 min default), use the assignee’s timezone, add a link back to the task.
+
+Store the returned google_event_id per assignee (e.g., on task_assignments.google_event_id). On task delete/unassign, delete the event.
+
+Prevent duplicates:
+
+Before creating an event, check if google_event_id exists; if yes, update it instead of creating a new one.
+
+Debug + visibility:
+
+/debug/time returns { tzServer, nowUtc, nowLocalForUser } (supports ?as=).
+
+/debug/task/:id/calendar?as= returns each assignee’s google_event_id, start/end being sent to Google, and last sync timestamp.
+
+Update /debug/calendar-status to accept ?as= and show which key was used.
+
+Fix the Zod error seen earlier:
+
+Ensure the debug “create-test-task” route passes strings for dueDate and dueTime and includes tz. Remove any code sending a JS Date.
+
+Acceptance tests (run these for nikki@csekcreative.com):
+
+/debug/calendar-status?as=<email> → hasTokens: true.
+
+Create a task from the UI with due date today and time = 9:30 PM local; assign to Nikki.
+Expect: (a) the card shows “Due: … 9:30 PM”, (b) Google Calendar has exactly one event at 9:30–10:00 PM local with deterministic id, (c) refreshing the task or changing its time updates the same event (no duplicates).
+
+/debug/task/<newTaskId>/calendar?as=<email> shows the event id and the same start/end as seen in Calendar.
+
+Safety:
+
+Keep the “Disable Sync / Enable Sync” admin toggles working; when disabled, the hook should no-op.
+
+Log failures with enough context (taskId, userId, tz).
+
+Commit message: “Normalize task timezones; make UI task creation/updating sync to Google Calendar with idempotent event IDs; add debug endpoints.
