@@ -158,7 +158,7 @@ class GoogleCalendarService {
     return google.calendar({ version: 'v3', auth: this.oauth2Client });
   }
 
-  async createTaskEvent(userId: string, task: any): Promise<string | null> {
+  async createTaskEvent(userId: string, task: any): Promise<{ eventId: string; htmlLink: string } | null> {
     if (!SYNC_ENABLED) { 
       console.warn('Calendar sync disabled - createTaskEvent skipped'); 
       return null; 
@@ -166,36 +166,33 @@ class GoogleCalendarService {
     try {
       const calendar = await this.getAuthenticatedClient(userId);
       
-      // Handle PostgreSQL timestamp format properly - support both Date objects and strings
-      let startDate;
-      if (task.dueDate) {
-        if (task.dueDate instanceof Date) {
-          startDate = task.dueDate;
-        } else if (typeof task.dueDate === 'string') {
-          if (task.dueDate.includes(' ') && !task.dueDate.includes('T')) {
-            // PostgreSQL format: "2025-08-29 13:00:00" - treat as local time
-            startDate = new Date(task.dueDate.replace(' ', 'T'));
-          } else {
-            startDate = new Date(task.dueDate);
-          }
-        } else {
-          startDate = new Date();
-        }
+      // Use proper timezone handling with Luxon - convert UTC due_at to Vancouver local time
+      const { DateTime } = await import('luxon');
+      let startLocal: any;
+      
+      if (task.dueDate instanceof Date) {
+        // Convert Date object to Vancouver time
+        startLocal = DateTime.fromJSDate(task.dueDate, { zone: 'utc' }).setZone('America/Vancouver');
+      } else if (typeof task.dueDate === 'string') {
+        // Parse ISO string as UTC, then convert to Vancouver
+        startLocal = DateTime.fromISO(task.dueDate, { zone: 'utc' }).setZone('America/Vancouver');
       } else {
-        startDate = new Date();
+        // Fallback to current time in Vancouver
+        startLocal = DateTime.now().setZone('America/Vancouver');
       }
-      const endDate = new Date(startDate.getTime() + 60 * 60 * 1000); // 1 hour duration
+      
+      const endLocal = startLocal.plus({ minutes: 60 });
 
       const event = {
         summary: task.title,
         description: `${task.description || ''}\n\n${task.projectName ? `Project: ${task.projectName}` : 'Organization Task'}\nStatus: ${task.status}\nPriority: ${task.priority || 'medium'}${task.googleDriveLink ? `\nDrive Link: ${task.googleDriveLink}` : ''}`,
         start: {
-          dateTime: startDate.toISOString(),
-          timeZone: 'America/Los_Angeles',
+          dateTime: startLocal.toISO(),
+          timeZone: 'America/Vancouver',
         },
         end: {
-          dateTime: endDate.toISOString(),
-          timeZone: 'America/Los_Angeles',
+          dateTime: endLocal.toISO(),
+          timeZone: 'America/Vancouver',
         },
         reminders: {
           useDefault: false,
@@ -211,64 +208,67 @@ class GoogleCalendarService {
         requestBody: event,
       });
 
-      return response.data.id || null;
+      const eventId = response.data.id;
+      const htmlLink = response.data.htmlLink;
+      
+      if (!eventId) {
+        throw new Error('No event ID returned from Google Calendar');
+      }
+
+      console.log(`Calendar event created: ${eventId} for task: ${task.title}`);
+      return { eventId, htmlLink: htmlLink || '' };
     } catch (error) {
       console.error('Error creating calendar event:', error);
       return null;
     }
   }
 
-  async updateTaskEvent(userId: string, eventId: string, task: any): Promise<boolean> {
+  async updateTaskEvent(userId: string, eventId: string, task: any): Promise<{ success: boolean; htmlLink?: string }> {
     if (!SYNC_ENABLED) { 
       console.warn('Calendar sync disabled - updateTaskEvent skipped'); 
-      return false; 
+      return { success: false }; 
     }
     try {
       const calendar = await this.getAuthenticatedClient(userId);
       
-      // Handle PostgreSQL timestamp format properly - support both Date objects and strings
-      let startDate;
-      if (task.dueDate) {
-        if (task.dueDate instanceof Date) {
-          startDate = task.dueDate;
-        } else if (typeof task.dueDate === 'string') {
-          if (task.dueDate.includes(' ') && !task.dueDate.includes('T')) {
-            // PostgreSQL format: "2025-08-29 13:00:00" - treat as local time
-            startDate = new Date(task.dueDate.replace(' ', 'T'));
-          } else {
-            startDate = new Date(task.dueDate);
-          }
-        } else {
-          startDate = new Date();
-        }
+      // Use proper timezone handling with Luxon
+      const { DateTime } = await import('luxon');
+      let startLocal: any;
+      
+      if (task.dueDate instanceof Date) {
+        startLocal = DateTime.fromJSDate(task.dueDate, { zone: 'utc' }).setZone('America/Vancouver');
+      } else if (typeof task.dueDate === 'string') {
+        startLocal = DateTime.fromISO(task.dueDate, { zone: 'utc' }).setZone('America/Vancouver');
       } else {
-        startDate = new Date();
+        startLocal = DateTime.now().setZone('America/Vancouver');
       }
-      const endDate = new Date(startDate.getTime() + 60 * 60 * 1000);
+      
+      const endLocal = startLocal.plus({ minutes: 60 });
 
       const event = {
         summary: task.title,
         description: `${task.description || ''}\n\n${task.projectName ? `Project: ${task.projectName}` : 'Organization Task'}\nStatus: ${task.status}\nPriority: ${task.priority || 'medium'}${task.googleDriveLink ? `\nDrive Link: ${task.googleDriveLink}` : ''}`,
         start: {
-          dateTime: startDate.toISOString(),
-          timeZone: 'America/Los_Angeles',
+          dateTime: startLocal.toISO(),
+          timeZone: 'America/Vancouver',
         },
         end: {
-          dateTime: endDate.toISOString(),
-          timeZone: 'America/Los_Angeles',
+          dateTime: endLocal.toISO(),
+          timeZone: 'America/Vancouver',
         },
       };
 
-      await calendar.events.update({
+      const response = await calendar.events.update({
         calendarId: 'primary',
         eventId: eventId,
         requestBody: event,
       });
 
-      return true;
+      const htmlLink = response.data.htmlLink;
+      return { success: true, htmlLink: htmlLink || '' };
     } catch (error) {
       console.error('Error updating calendar event:', error);
-      return false;
+      return { success: false };
     }
   }
 
@@ -289,6 +289,35 @@ class GoogleCalendarService {
     } catch (error) {
       console.error('Error deleting calendar event:', error);
       return false;
+    }
+  }
+
+  async listCalendars(userId: string): Promise<any[]> {
+    try {
+      const calendar = await this.getAuthenticatedClient(userId);
+      
+      const response = await calendar.calendarList.list();
+      
+      return response.data.items || [];
+    } catch (error) {
+      console.error('Error listing calendars:', error);
+      return [];
+    }
+  }
+
+  async getEvent(userId: string, eventId: string, calendarId: string = 'primary'): Promise<any | null> {
+    try {
+      const calendar = await this.getAuthenticatedClient(userId);
+      
+      const response = await calendar.events.get({
+        calendarId: calendarId,
+        eventId: eventId,
+      });
+      
+      return response.data;
+    } catch (error) {
+      console.error('Error getting calendar event:', error);
+      return null;
     }
   }
 
