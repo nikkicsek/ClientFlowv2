@@ -42,11 +42,11 @@ export async function upsertCalendarEventForTask(eventData: CalendarEventData): 
     
     // Check if we already have a Google event ID stored
     const existingAssignment = await pool.query(
-      'SELECT google_event_id FROM task_assignments WHERE task_id = $1 AND team_member_id = $2',
+      'SELECT calendar_event_id FROM task_assignments WHERE task_id = $1 AND team_member_id = $2',
       [taskId, userId]
     );
     
-    const googleEventId = existingAssignment.rows[0]?.google_event_id;
+    const googleEventId = existingAssignment.rows[0]?.calendar_event_id;
     
     // Prepare event data
     const eventPayload = {
@@ -60,7 +60,12 @@ export async function upsertCalendarEventForTask(eventData: CalendarEventData): 
         dateTime: end,
         timeZone: timezone
       },
-      id: eventId // Deterministic ID
+      extendedProperties: {
+        private: {
+          taskId: taskId,
+          userId: userId
+        }
+      }
     };
 
     let finalEventId: string;
@@ -83,7 +88,7 @@ export async function upsertCalendarEventForTask(eventData: CalendarEventData): 
       // Store the event ID in task_assignments
       if (finalEventId) {
         await pool.query(
-          'UPDATE task_assignments SET google_event_id = $1, updated_at = NOW() WHERE task_id = $2 AND team_member_id = $3',
+          'UPDATE task_assignments SET calendar_event_id = $1, updated_at = NOW() WHERE task_id = $2 AND team_member_id = $3',
           [finalEventId, taskId, userId]
         );
       }
@@ -112,11 +117,11 @@ export async function deleteCalendarEventForTask(taskId: string, userId: string)
   try {
     // Get the stored Google event ID
     const assignment = await pool.query(
-      'SELECT google_event_id FROM task_assignments WHERE task_id = $1 AND team_member_id = $2',
+      'SELECT calendar_event_id FROM task_assignments WHERE task_id = $1 AND team_member_id = $2',
       [taskId, userId]
     );
     
-    const googleEventId = assignment.rows[0]?.google_event_id;
+    const googleEventId = assignment.rows[0]?.calendar_event_id;
     
     if (googleEventId) {
       console.log(`Deleting calendar event ${googleEventId} for task ${taskId}, user ${userId}`);
@@ -130,7 +135,7 @@ export async function deleteCalendarEventForTask(taskId: string, userId: string)
       
       // Clear the event ID from task_assignments
       await pool.query(
-        'UPDATE task_assignments SET google_event_id = NULL, updated_at = NOW() WHERE task_id = $1 AND team_member_id = $2',
+        'UPDATE task_assignments SET calendar_event_id = NULL, updated_at = NOW() WHERE task_id = $1 AND team_member_id = $2',
         [taskId, userId]
       );
     }
