@@ -189,7 +189,14 @@ export function TeamMemberTasks({ teamMemberId, teamMemberName }: TeamMemberTask
                             {assignment.task.dueDate && (
                               <div className="flex items-center gap-1">
                                 <Calendar className="h-3 w-3" />
-                                <span>Due: {new Date(assignment.task.dueDate).toLocaleDateString()}</span>
+                                <span>
+                                  Due: {new Date(assignment.task.dueDate).toLocaleDateString()}
+                                  {assignment.task.dueTime && (
+                                    <span className="ml-1 text-blue-600 font-medium">
+                                      at {assignment.task.dueTime}
+                                    </span>
+                                  )}
+                                </span>
                               </div>
                             )}
                           </div>
@@ -254,6 +261,19 @@ export function TeamMemberTasks({ teamMemberId, teamMemberName }: TeamMemberTask
                               <div className="flex items-center gap-1">
                                 <Building2 className="h-3 w-3" />
                                 <span>{assignment.project.name}</span>
+                              </div>
+                            )}
+                            {assignment.task.dueDate && (
+                              <div className="flex items-center gap-1">
+                                <Calendar className="h-3 w-3" />
+                                <span>
+                                  Due: {new Date(assignment.task.dueDate).toLocaleDateString()}
+                                  {assignment.task.dueTime && (
+                                    <span className="ml-1 text-blue-600 font-medium">
+                                      at {assignment.task.dueTime}
+                                    </span>
+                                  )}
+                                </span>
                               </div>
                             )}
                             <span>Completed: {new Date(assignment.updatedAt).toLocaleDateString()}</span>
