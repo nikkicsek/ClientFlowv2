@@ -1,12 +1,13 @@
 import { useState, useEffect } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Calendar, Clock, Link as LinkIcon, Save } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Calendar, Clock, Link as LinkIcon, Save, Users, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { getUserTimezone, formatDueAt } from "@/utils/timeFormatting";
@@ -14,10 +15,11 @@ import { getUserTimezone, formatDueAt } from "@/utils/timeFormatting";
 interface EditTaskModalProps {
   isOpen: boolean;
   onClose: () => void;
-  task: any;
+  task?: any; // Optional for when loading
+  taskId?: string; // For fetching if task not provided
 }
 
-export function EditTaskModal({ isOpen, onClose, task }: EditTaskModalProps) {
+export function EditTaskModal({ isOpen, onClose, task, taskId }: EditTaskModalProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -29,30 +31,51 @@ export function EditTaskModal({ isOpen, onClose, task }: EditTaskModalProps) {
     dueDate: "",
     dueTime: "",
     googleDriveLink: "",
+    assigneeTeamMemberIds: [] as string[],
   });
+
+  // Fetch task if taskId provided but not task data
+  const { data: fetchedTask, isLoading: taskLoading } = useQuery({
+    queryKey: ["/api/tasks", taskId],
+    enabled: !task && !!taskId && isOpen,
+  });
+
+  // Fetch team members for assignment selection
+  const { data: teamMembers = [] } = useQuery({
+    queryKey: ["/api/admin/team-members"],
+    enabled: isOpen,
+  });
+
+  // Fetch task assignments
+  const { data: taskAssignments = [] } = useQuery({
+    queryKey: ["/api/admin/task-assignments"],
+    enabled: isOpen,
+  });
+
+  const currentTask = task || fetchedTask;
 
   // Initialize form data when task changes
   useEffect(() => {
-    if (task) {
+    if (currentTask) {
       let dateValue = "";
       let timeValue = "";
       
       // Prioritize due_at field over legacy dueDate/dueTime
-      if (task.dueAt) {
+      if (currentTask.dueAt) {
         // Use due_at (unified UTC timestamp) - convert to local timezone for form
-        const dueAtDate = new Date(task.dueAt);
+        const dueAtDate = new Date(currentTask.dueAt);
         if (!isNaN(dueAtDate.getTime())) {
           dateValue = dueAtDate.toISOString().split('T')[0];
           timeValue = dueAtDate.toTimeString().slice(0, 5); // Local time for editing
         }
-      } else if (task.dueDate) {
+      } else if (currentTask.dueDate) {
         // Fallback to legacy dueDate/dueTime fields
-        const dueDate = new Date(task.dueDate);
+        const dueDate = new Date(currentTask.dueDate);
         if (!isNaN(dueDate.getTime())) {
           dateValue = dueDate.toISOString().split('T')[0];
-          if (task.dueDate.includes(' ')) {
+          if (currentTask.dueDate.includes(' ')) {
             // PostgreSQL format: "2025-08-29 13:00:00"
-            const timePart = task.dueDate.split(' ')[1];
+            const timePart = currentTask.dueDate.split(' ')[1];
             if (timePart) {
               timeValue = timePart.slice(0, 5); // "13:00"
             }
@@ -63,17 +86,24 @@ export function EditTaskModal({ isOpen, onClose, task }: EditTaskModalProps) {
         }
       }
       
+      // Get current assignees
+      const currentAssignments = taskAssignments.filter((assignment: any) => 
+        assignment.taskId === currentTask.id
+      );
+      const assigneeIds = currentAssignments.map((assignment: any) => assignment.teamMemberId);
+      
       setFormData({
-        title: task.title || "",
-        description: task.description || "",
-        status: task.status || "in_progress",
-        priority: task.priority || "medium",
+        title: currentTask.title || "",
+        description: currentTask.description || "",
+        status: currentTask.status || "in_progress",
+        priority: currentTask.priority || "medium",
         dueDate: dateValue,
         dueTime: timeValue,
-        googleDriveLink: task.googleDriveLink || "",
+        googleDriveLink: currentTask.googleDriveLink || "",
+        assigneeTeamMemberIds: assigneeIds,
       });
     }
-  }, [task]);
+  }, [currentTask, taskAssignments]);
 
   const updateTaskMutation = useMutation({
     mutationFn: async (taskData: any) => {
@@ -81,13 +111,14 @@ export function EditTaskModal({ isOpen, onClose, task }: EditTaskModalProps) {
         ...taskData,
         timezone: getUserTimezone() // Include user's timezone for unified time handling
       };
-      const response = await apiRequest("PUT", `/api/admin/tasks/${task.id}`, dataWithTimezone);
+      const response = await apiRequest("PUT", `/api/tasks/${currentTask.id}`, dataWithTimezone);
       return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/tasks"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/task-assignments"] });
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks"] }); // Invalidate individual task queries
       toast({
         title: "Task Updated",
         description: "Task has been updated successfully.",
@@ -104,10 +135,19 @@ export function EditTaskModal({ isOpen, onClose, task }: EditTaskModalProps) {
     },
   });
 
-  const handleInputChange = (field: string, value: string) => {
+  const handleInputChange = (field: string, value: string | string[]) => {
     setFormData(prev => ({
       ...prev,
       [field]: value
+    }));
+  };
+
+  const handleAssigneeChange = (teamMemberId: string, checked: boolean) => {
+    setFormData(prev => ({
+      ...prev,
+      assigneeTeamMemberIds: checked 
+        ? [...prev.assigneeTeamMemberIds, teamMemberId]
+        : prev.assigneeTeamMemberIds.filter(id => id !== teamMemberId)
     }));
   };
 
@@ -132,15 +172,34 @@ export function EditTaskModal({ isOpen, onClose, task }: EditTaskModalProps) {
       dueDate: formData.dueDate || null,
       dueTime: formData.dueTime || null,
       googleDriveLink: formData.googleDriveLink || null,
+      assigneeUserIds: formData.assigneeTeamMemberIds, // Use the correct field name
     };
 
     console.log("Updating task with data:", taskData);
     updateTaskMutation.mutate(taskData);
   };
 
+  // Show loading state while fetching task
+  if (taskLoading) {
+    return (
+      <Dialog open={isOpen} onOpenChange={onClose}>
+        <DialogContent className="sm:max-w-[500px]">
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="h-8 w-8 animate-spin" />
+            <span className="ml-2">Loading task...</span>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  if (!currentTask) {
+    return null;
+  }
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Save className="h-5 w-5" />
@@ -252,6 +311,30 @@ export function EditTaskModal({ isOpen, onClose, task }: EditTaskModalProps) {
               onChange={(e) => handleInputChange('googleDriveLink', e.target.value)}
               placeholder="https://drive.google.com/..."
             />
+          </div>
+
+          <div className="space-y-3">
+            <Label className="flex items-center gap-2">
+              <Users className="h-4 w-4" />
+              Assignees
+            </Label>
+            <div className="grid grid-cols-2 gap-2 max-h-32 overflow-y-auto">
+              {teamMembers.map((member: any) => (
+                <div key={member.id} className="flex items-center space-x-2">
+                  <Checkbox
+                    id={`assignee-${member.id}`}
+                    checked={formData.assigneeTeamMemberIds.includes(member.id)}
+                    onCheckedChange={(checked) => handleAssigneeChange(member.id, !!checked)}
+                  />
+                  <Label 
+                    htmlFor={`assignee-${member.id}`}
+                    className="text-sm font-normal cursor-pointer"
+                  >
+                    {member.name}
+                  </Label>
+                </div>
+              ))}
+            </div>
           </div>
 
           <div className="flex justify-end gap-3">

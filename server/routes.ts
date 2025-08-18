@@ -599,6 +599,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get individual task route
+  app.get('/api/tasks/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      const taskId = req.params.id;
+      
+      const task = await storage.getTask(taskId);
+      if (!task) {
+        return res.status(404).json({ message: 'Task not found' });
+      }
+      
+      // Get task assignments to check if user has access
+      const assignments = await storage.getTaskAssignments(taskId);
+      const isAssigned = assignments.some(assignment => {
+        return assignment.teamMember?.email === user.email;
+      });
+      
+      // Allow access if user is admin or assigned to task
+      if (user.role !== 'admin' && !isAssigned) {
+        return res.status(403).json({ message: 'Not authorized to view this task' });
+      }
+      
+      res.json(task);
+    } catch (error) {
+      console.error('Error fetching task:', error);
+      res.status(500).json({ message: 'Failed to fetch task' });
+    }
+  });
+
   app.put('/api/tasks/:id', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;

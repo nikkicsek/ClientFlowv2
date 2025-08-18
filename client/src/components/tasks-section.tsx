@@ -1,53 +1,30 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Palette, Code, Megaphone, BarChart3, Filter } from "lucide-react";
+import { Palette, Code, Megaphone, BarChart3, Filter, Edit } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
+import { EditTaskModal } from "@/components/edit-task-modal";
 import type { Task } from "@shared/schema";
 
 export default function TasksSection() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
 
-  const { data: projects } = useQuery({
+  const { data: projects = [] } = useQuery({
     queryKey: ["/api/projects"],
-    onError: (error: Error) => {
-      if (isUnauthorizedError(error)) {
-        toast({
-          title: "Unauthorized",
-          description: "You are logged out. Logging in again...",
-          variant: "destructive",
-        });
-        setTimeout(() => {
-          window.location.href = "/api/login";
-        }, 500);
-        return;
-      }
-    },
   });
 
   const activeProject = projects?.[0];
 
-  const { data: tasks, isLoading } = useQuery({
+  const { data: tasks = [], isLoading } = useQuery({
     queryKey: ["/api/projects", activeProject?.id, "tasks"],
     enabled: !!activeProject?.id,
-    onError: (error: Error) => {
-      if (isUnauthorizedError(error)) {
-        toast({
-          title: "Unauthorized",
-          description: "You are logged out. Logging in again...",
-          variant: "destructive",
-        });
-        setTimeout(() => {
-          window.location.href = "/api/login";
-        }, 500);
-        return;
-      }
-    },
   });
 
   if (isLoading) {
@@ -141,9 +118,19 @@ export default function TasksSection() {
             </p>
           )}
         </div>
-        <Badge variant={getStatusBadgeVariant(task.status)}>
-          {getStatusLabel(task.status)}
-        </Badge>
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setEditingTask(task)}
+            className="h-8 w-8 p-0"
+          >
+            <Edit className="h-4 w-4" />
+          </Button>
+          <Badge variant={getStatusBadgeVariant(task.status)}>
+            {getStatusLabel(task.status)}
+          </Badge>
+        </div>
       </div>
     </div>
   );
@@ -237,6 +224,13 @@ export default function TasksSection() {
           )}
         </TabsContent>
       </Tabs>
+
+      {/* Edit Task Modal */}
+      <EditTaskModal
+        isOpen={!!editingTask}
+        onClose={() => setEditingTask(null)}
+        task={editingTask}
+      />
     </div>
   );
 }
