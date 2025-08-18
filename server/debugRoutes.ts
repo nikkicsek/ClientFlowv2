@@ -660,15 +660,18 @@ router.get('/create-test-task', async (req, res) => {
     // Create test task with due time ~10 minutes from now
     const now = new Date();
     const dueDateTime = new Date(now.getTime() + 10 * 60 * 1000); // 10 minutes from now
+    const iso = new Date(dueDateTime.getTime() - dueDateTime.getTimezoneOffset() * 60000).toISOString();
+    const due_date = iso.slice(0, 10);
+    const due_time = iso.slice(11, 16);
     
     const taskData = {
-      title: `Test Task ${now.getTime()}`,
+      title: 'Replit Sync Test (server)',
       description: 'Debug test task created automatically',
       projectId,
       status: 'in_progress',
       priority: 'medium',
-      dueDate: dueDateTime,
-      dueTime: `${dueDateTime.getHours().toString().padStart(2, '0')}:${dueDateTime.getMinutes().toString().padStart(2, '0')}`,
+      dueDate: new Date(due_date + 'T00:00:00Z'),
+      dueTime: due_time,
     };
 
     // Create task using storage
@@ -709,6 +712,8 @@ router.get('/create-test-task', async (req, res) => {
         teamMemberId,
         projectId,
         dueAtFormatted: dueDateTime.toISOString(),
+        due_date,
+        due_time,
       }
     });
 

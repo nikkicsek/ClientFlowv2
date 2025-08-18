@@ -1,0 +1,65 @@
+Fix task due-date handling (stop using "due_at"):
+
+Goal
+— The DB has tasks.due_date (DATE) and tasks.due_time (TIME).
+— All inserts/updates must write only these columns.
+— All selects should return a computed "due_at" for the UI.
+— The /debug/create-test-task route must also use due_date/due_time.
+
+Changes
+
+1) server/storage.ts
+   - In createTask(...) accept either:
+       a) { due_date: 'YYYY-MM-DD', due_time: 'HH:mm' } OR
+       b) { dueAt: ISO string }
+     Normalize to due_date + due_time before insert.
+
+   Example normalizer (TS):
+     function splitDueAt(dueAt?: string) {
+       if (!dueAt) return {};
+       const d = new Date(dueAt);
+       const iso = new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString(); // local -> UTC iso
+       const due_date = iso.slice(0,10);          // 'YYYY-MM-DD'
+       const due_time = iso.slice(11,16);         // 'HH:MM'
+       return { due_date, due_time };
+     }
+
+   - Update the INSERT to NO LONGER reference "due_at" at all.
+     Insert only (title, status, priority, due_date, due_time, project_id, created_by, etc).
+
+   - In any UPDATE that referenced due_at, switch to setting due_date and due_time.
+
+   - In task-list SELECTs, add a computed alias "due_at" so the frontend keeps working:
+       SELECT
+         t.id, t.title, t.status, t.due_date, t.due_time,
+         (t.due_date::timestamp
+            + COALESCE(t.due_time::interval, interval '00:00')) AT TIME ZONE 'UTC'
+           AS due_at,
+         ...
+       FROM tasks t
+       ...
+
+2) server/debugRoutes.ts
+   - Update /debug/create-test-task to create with due_date and due_time (no "due_at").
+     For example: today at now()+5 minutes:
+       const now = new Date();
+       const iso = new Date(now.getTime()-now.getTimezoneOffset()*60000).toISOString();
+       const due_date = iso.slice(0,10);
+       const due_time = iso.slice(11,16);
+       await db.createTask({ title: 'Replit Sync Test (server)', status:'in_progress', due_date, due_time, assigneeUserIds:[teamMemberId] });
+
+3) Types
+   - If Task types include a "due_at" field, keep it optional or computed from the SELECT.
+   - Ensure API handlers accept either due_date/due_time or dueAt (normalized as above).
+
+4) Frontend (Add Task modal)
+   - When submitting, send { due_date, due_time }.
+   - If the modal currently builds a single "dueAt", either split it client-side or let the server normalizer handle it.
+   - Make sure the modal has visible action buttons and actually calls the submit handler (form with onSubmit, footer buttons visible).
+
+5) Remove any remaining SQL that references tasks.due_at (INSERT/UPDATE), since that column does not exist.
+
+After changes:
+- /debug/routes should list /debug/create-test-task
+- /debug/create-test-task?as=nikki@csekcreative.com should return { ok: true, eventId: ... }
+- /debug/my-tasks?as=nikki@csekcreative.com should show tasks with a computed "due_at"
