@@ -475,9 +475,9 @@ router.get('/create-test-task', async (req: any, res) => {
       });
     }
 
-    const dueDate = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes from now
-    const hours = dueDate.getHours().toString().padStart(2, '0');
-    const minutes = dueDate.getMinutes().toString().padStart(2, '0');
+    const start = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes from now
+    const dueDate = start.toISOString().slice(0, 10);         // "YYYY-MM-DD"
+    const dueTime = start.toTimeString().slice(0, 5);         // "HH:mm"
 
     const taskData = insertTaskSchema.parse({
       title: "Replit Sync Test (server)",
@@ -485,7 +485,7 @@ router.get('/create-test-task', async (req: any, res) => {
       status: "in_progress",
       assignedTo: effectiveUser.userId,
       dueDate,
-      dueTime: `${hours}:${minutes}`,
+      dueTime,
       priority: "medium",
       taskScope: "organization"
     });
