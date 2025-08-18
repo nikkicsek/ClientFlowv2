@@ -12,28 +12,45 @@ dayjs.extend(tz);
 dayjs.extend(customParse);
 
 /**
- * Enhanced time parsing with multiple format support per specification
+ * Comprehensive time computation per specification
  * @param dueDate - Date string in YYYY-MM-DD format  
  * @param dueTime - Time string like "9:55 PM", "21:55", "9 AM", etc.
  * @param userTz - IANA timezone string
  * @returns Object with UTC timestamp, normalized database time, and database date
  */
-export function parseTaskDateTime(dueDate: string, dueTime: string, userTz: string): {
+export function computeDueAt(dueDate: string, dueTime: string, timezone: string): {
   due_at: string | null;
   due_time_db: string | null;
   due_date_db: string | null;
 } {
-  if (!dueDate || !dueTime) {
+  // Return nulls if date is missing or time is missing (no calendar sync)
+  if (!dueDate) {
     return { due_at: null, due_time_db: null, due_date_db: null };
   }
   
+  if (!dueTime) {
+    // Date only - no calendar sync
+    return { 
+      due_at: null, 
+      due_time_db: null, 
+      due_date_db: dayjs(dueDate).format("YYYY-MM-DD") 
+    };
+  }
+  
   try {
+    const userTz = timezone || process.env.APP_TIMEZONE || "America/Los_Angeles";
     const dateTimeStr = `${dueDate} ${dueTime.trim()}`;
+    
+    // Enhanced format support per specification - order matters for parsing priority
     const formats = [
       "YYYY-MM-DD h:mm A",  // "2025-08-18 9:55 PM"
-      "YYYY-MM-DD H:mm",    // "2025-08-18 21:55"
+      "YYYY-MM-DD HH:mm",   // "2025-08-18 21:55" (24-hour with leading zero)
+      "YYYY-MM-DD H:mm",    // "2025-08-18 9:55" (24-hour without leading zero)
       "YYYY-MM-DD h A",     // "2025-08-18 9 PM"
-      "YYYY-MM-DD H"        // "2025-08-18 21"
+      "YYYY-MM-DD HH",      // "2025-08-18 21" (24-hour hour only with leading zero)
+      "YYYY-MM-DD H",       // "2025-08-18 9" (24-hour hour only)
+      "YYYY-MM-DD h:mmA",   // "2025-08-18 9:55PM" (no space)
+      "YYYY-MM-DD hA"       // "2025-08-18 9PM" (no space)
     ];
     
     let local = null;
@@ -45,22 +62,33 @@ export function parseTaskDateTime(dueDate: string, dueTime: string, userTz: stri
     }
     
     if (!local || !local.isValid()) {
-      console.error('parseTaskDateTime failed - invalid formats:', dueDate, dueTime, userTz);
-      return { due_at: null, due_time_db: null, due_date_db: null };
+      console.error('computeDueAt failed - invalid formats:', dueDate, dueTime, userTz);
+      return { due_at: null, due_time_db: null, due_date_db: dayjs(dueDate).format("YYYY-MM-DD") };
     }
     
     const result = {
-      due_at: local.utc().toISOString(),           // UTC for scheduling
+      due_at: local.utc().toISOString(),           // UTC for scheduling and calendar
       due_time_db: local.format("HH:mm"),         // 24-hour format for DB
       due_date_db: dayjs(dueDate).format("YYYY-MM-DD") // Normalized date
     };
     
-    console.log('parseTaskDateTime success:', { dueDate, dueTime, userTz, result });
+    console.log('computeDueAt success:', { dueDate, dueTime, userTz, result });
     return result;
   } catch (error) {
-    console.error('Error parsing task date/time:', error);
-    return { due_at: null, due_time_db: null, due_date_db: null };
+    console.error('Error computing due_at:', error);
+    return { due_at: null, due_time_db: null, due_date_db: dayjs(dueDate).format("YYYY-MM-DD") };
   }
+}
+
+/**
+ * Enhanced time parsing with multiple format support (alias for backward compatibility)
+ */
+export function parseTaskDateTime(dueDate: string, dueTime: string, userTz: string): {
+  due_at: string | null;
+  due_time_db: string | null;
+  due_date_db: string | null;
+} {
+  return computeDueAt(dueDate, dueTime, userTz);
 }
 
 /**
@@ -71,14 +99,7 @@ export function buildDueAtUTC(dueDate: string, dueTime: string, userTz: string):
   return result.due_at;
 }
 
-/**
- * Legacy function for backward compatibility - use buildDueAtUTC instead
- */
-export function computeDueAt(dueDate: string, dueTime?: string | null, timezone?: string): string | null {
-  if (!dueDate || !timezone) return null;
-  const timeStr = dueTime || "00:00";
-  return buildDueAtUTC(dueDate, timeStr, timezone);
-}
+
 
 /**
  * Convert UTC timestamp to local timezone display using DayJS  

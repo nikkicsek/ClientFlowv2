@@ -414,9 +414,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { selectedTeamMembers = [], ...bodyData } = req.body;
       
-      // Enhanced time parsing with multiple format support
+      // Compute due_at using comprehensive time computation per specification  
       const userTz = bodyData.timezone || process.env.APP_TIMEZONE || "America/Vancouver";
-      const timeResult = parseTaskDateTime(bodyData.dueDate, bodyData.dueTime, userTz);
+      const timeResult = computeDueAt(bodyData.dueDate, bodyData.dueTime, userTz);
       
       const taskData = insertTaskSchema.parse({
         ...bodyData,
@@ -554,9 +554,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Parse and validate the request body
       const { title, description, status, priority, dueDate, dueTime, timezone, assigneeUserIds } = req.body;
       
-      // Enhanced time parsing with multiple format support
+      // Compute due_at using comprehensive time computation per specification
       const userTz = timezone || process.env.APP_TIMEZONE || "America/Vancouver";
-      const timeResult = parseTaskDateTime(dueDate, dueTime, userTz);
+      const timeResult = computeDueAt(dueDate, dueTime, userTz);
       
       const updateData: any = {
         title,
@@ -1739,9 +1739,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { selectedTeamMembers = [], ...bodyData } = req.body;
       
-      // Enhanced time parsing with multiple format support
+      // Compute due_at using comprehensive time computation per specification  
       const userTz = bodyData.timezone || process.env.APP_TIMEZONE || "America/Vancouver";
-      const timeResult = parseTaskDateTime(bodyData.dueDate, bodyData.dueTime, userTz);
+      const timeResult = computeDueAt(bodyData.dueDate, bodyData.dueTime, userTz);
       
       const taskData = insertTaskSchema.parse({
         ...bodyData,
@@ -2921,6 +2921,89 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Error revoking calendar access:', error);
       res.status(500).json({ message: 'Failed to revoke calendar access' });
+    }
+  });
+
+  // Additional debug endpoints for task debugging and regression testing
+  app.get('/debug/task/:id', async (req, res) => {
+    try {
+      const taskId = req.params.id;
+      const task = await storage.getTask(taskId);
+      
+      if (!task) {
+        return res.status(404).json({ error: 'Task not found' });
+      }
+      
+      // Return normalized response with all three time fields
+      res.json({
+        id: task.id,
+        title: task.title,
+        due_date: task.dueDate ? task.dueDate.toISOString().split('T')[0] : null, // ISO date local
+        due_time: task.dueTime || null, // HH:mm 24h string 
+        due_at: task.dueAt ? task.dueAt.toISOString() : null, // UTC ISO
+        status: task.status,
+        priority: task.priority,
+        created_at: task.createdAt?.toISOString(),
+        project_id: task.projectId,
+        organization_id: task.organizationId
+      });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post('/debug/create-quick-task', async (req, res) => {
+    try {
+      const { dueTime, timezone = "America/Vancouver" } = req.body;
+      const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+      
+      // Compute due_at using the unified system
+      const timeResult = computeDueAt(today, dueTime, timezone);
+      
+      const debugTaskData = {
+        title: `Debug Task ${dueTime}`,
+        description: `Test task created at ${new Date().toISOString()}`,
+        status: 'in_progress',
+        priority: 'medium',
+        taskScope: 'organization', // For testing without requiring project
+        dueDate: timeResult.due_date_db ? new Date(timeResult.due_date_db) : null,
+        dueTime: timeResult.due_time_db,
+        dueAt: timeResult.due_at ? new Date(timeResult.due_at) : null,
+      };
+      
+      // Create the task
+      const task = await storage.createOrganizationTask(debugTaskData);
+      
+      // Try to sync calendar (will show if calendar event ID is created)
+      let calendarEventId = null;
+      try {
+        await syncAllCalendarEventsForTask(task.id);
+        
+        // Check if calendar event was created
+        const { pool } = await import('./db');
+        const calendarCheck = await pool.query(
+          'SELECT calendar_event_id FROM tasks WHERE id = $1',
+          [task.id]
+        );
+        calendarEventId = calendarCheck.rows[0]?.calendar_event_id || null;
+      } catch (calendarError) {
+        console.error('Calendar sync error:', calendarError);
+      }
+      
+      res.json({
+        message: `Created debug task with time ${dueTime}`,
+        task: {
+          id: task.id,
+          title: task.title,
+          computed_due_at: timeResult.due_at,
+          stored_due_time: timeResult.due_time_db,
+          calendar_event_id: calendarEventId,
+          timezone_used: timezone
+        },
+        time_computation: timeResult
+      });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
     }
   });
 
