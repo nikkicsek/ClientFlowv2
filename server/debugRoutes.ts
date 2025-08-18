@@ -217,7 +217,10 @@ export function registerDebugRoutes(app: Express) {
         'GET /debug/calendar-create-from-task?id=<taskId>&as=<email> - Force calendar sync for task',
         'GET /debug/sync/flush?taskId=<id> - Single-task calendar flush',
         'GET /debug/sync/upsert-task?taskId=<id>&as=<email> - Push this task now (direct upsert)',
-        'GET /debug/sync/run?hours=12&as=<email> - Run once sync sweep for user'
+        'GET /debug/sync/run?hours=12&as=<email> - Run once sync sweep for user',
+        'GET /debug/sync/self-test?as=<email>&tz=<timezone> - Run comprehensive calendar sync self-test',
+        'GET /debug/sync/get-mapping?taskId=<id> - Get task event mapping',
+        'GET /debug/sync/get-event?eventId=<id>&as=<email> - Get calendar event details'
       ]
     });
   });
@@ -335,6 +338,86 @@ export function registerDebugRoutes(app: Express) {
       calendar_sync_enabled: SYNC_ENABLED(),
       environment_var: process.env.CALENDAR_SYNC_ENABLED
     });
+  });
+
+  // One-click self-test endpoint
+  app.get('/debug/sync/self-test', async (req, res) => {
+    try {
+      const email = req.query.as as string;
+      const timezone = (req.query.tz as string) || 'America/Vancouver';
+
+      if (!email) {
+        return res.status(400).json({ 
+          ok: false, 
+          error: 'Missing required parameter: as (email)' 
+        });
+      }
+
+      const { calendarSelfTest } = await import('./calendarSelfTest');
+      const result = await calendarSelfTest.runSelfTest(email, timezone);
+      
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+        logs: [`Self-test failed: ${error instanceof Error ? error.message : String(error)}`]
+      });
+    }
+  });
+
+  // Debug route: Get task event mapping
+  app.get('/debug/sync/get-mapping', async (req, res) => {
+    try {
+      const taskId = req.query.taskId as string;
+      if (!taskId) {
+        return res.status(400).json({ error: 'Missing taskId parameter' });
+      }
+
+      const result = await pool.query(
+        'SELECT * FROM task_event_mappings WHERE task_id = $1',
+        [taskId]
+      );
+
+      if (result.rows.length === 0) {
+        return res.json({ mapping: null, message: 'No mapping found' });
+      }
+
+      res.json({ mapping: result.rows[0] });
+    } catch (error) {
+      console.error('Error fetching mapping:', error);
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : String(error) 
+      });
+    }
+  });
+
+  // Debug route: Get calendar event details  
+  app.get('/debug/sync/get-event', async (req, res) => {
+    try {
+      const eventId = req.query.eventId as string;
+      const email = req.query.as as string;
+
+      if (!eventId) {
+        return res.status(400).json({ error: 'Missing eventId parameter' });
+      }
+
+      const { user } = await resolveUserAndTokens(req);
+      const { googleCalendarService } = await import('./googleCalendar');
+      
+      const event = await googleCalendarService.getEvent(user.id, eventId);
+      
+      if (!event) {
+        return res.status(404).json({ error: 'Event not found' });
+      }
+
+      res.json({ event });
+    } catch (error) {
+      console.error('Error fetching event:', error);
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : String(error) 
+      });
+    }
   });
 
   // Enable sync
