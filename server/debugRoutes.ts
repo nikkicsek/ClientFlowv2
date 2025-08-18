@@ -5,6 +5,7 @@ import { onTaskCreatedOrUpdated, onAssignmentCreated } from './hooks/taskCalenda
 import { insertTaskSchema, type TeamMember } from "@shared/schema";
 import { pool } from "./db";
 import { google } from 'googleapis';
+import { computeDueAt } from "./utils/timeHandling";
 
 const router = Router();
 
@@ -313,6 +314,75 @@ router.get('/calendar-status', async (req: any, res) => {
   } catch (error) {
     console.error("Error in debug/calendar-status:", error);
     res.status(500).json({ message: "Failed to get calendar status", stack: error instanceof Error ? error.stack : String(error) });
+  }
+});
+
+// Backfill migration route: Convert existing tasks to use due_at field
+router.post('/backfill-due-at', async (req, res) => {
+  try {
+    console.log('Starting due_at backfill migration...');
+    
+    // Get all tasks that have dueDate but no dueAt
+    const tasksQuery = await pool.query(`
+      SELECT id, due_date, due_time 
+      FROM tasks 
+      WHERE due_date IS NOT NULL 
+      AND due_at IS NULL
+      ORDER BY created_at DESC
+    `);
+    
+    const tasks = tasksQuery.rows;
+    console.log(`Found ${tasks.length} tasks to migrate`);
+    
+    let migrated = 0;
+    let errors = 0;
+    const defaultTimezone = "America/Los_Angeles"; // Default for Nikki
+    
+    for (const task of tasks) {
+      try {
+        let dueDate = task.due_date;
+        let dueTime = task.due_time;
+        
+        // Format date consistently
+        if (dueDate instanceof Date) {
+          dueDate = dueDate.toISOString().slice(0, 10);
+        } else if (typeof dueDate === 'string') {
+          dueDate = dueDate.slice(0, 10);
+        }
+        
+        // Compute due_at using unified time handling
+        const dueAt = computeDueAt(dueDate, dueTime, defaultTimezone);
+        
+        if (dueAt) {
+          // Update the task with computed due_at
+          await pool.query(
+            'UPDATE tasks SET due_at = $1 WHERE id = $2',
+            [dueAt, task.id]
+          );
+          migrated++;
+          console.log(`Migrated task ${task.id}: ${dueDate} ${dueTime || '00:00'} -> ${dueAt}`);
+        } else {
+          console.warn(`Could not compute due_at for task ${task.id}: ${dueDate} ${dueTime}`);
+          errors++;
+        }
+      } catch (error) {
+        console.error(`Error migrating task ${task.id}:`, error);
+        errors++;
+      }
+    }
+    
+    console.log(`Migration complete: ${migrated} migrated, ${errors} errors`);
+    
+    res.json({
+      message: 'due_at backfill migration completed',
+      totalTasks: tasks.length,
+      migrated,
+      errors,
+      defaultTimezone
+    });
+  } catch (error) {
+    console.error('Backfill migration error:', error);
+    res.status(500).json({ error: error instanceof Error ? error.message : String(error) });
   }
 });
 

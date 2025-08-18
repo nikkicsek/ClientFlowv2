@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { CheckCircle, Clock, Calendar, Target, User, Building2, AlertTriangle, Edit } from 'lucide-react';
 import CreateTaskModal from './create-task-modal';
 import { useToast } from '@/hooks/use-toast';
+import { formatDueAt } from '@/utils/timeFormatting';
 
 interface TeamMemberTasksProps {
   teamMemberId: string;
@@ -186,16 +187,14 @@ export function TeamMemberTasks({ teamMemberId, teamMemberName }: TeamMemberTask
                                 <span>{assignment.task.estimatedHours}h estimated</span>
                               </div>
                             )}
-                            {assignment.task.dueDate && (
+                            {(assignment.task.dueAt || assignment.task.dueDate) && (
                               <div className="flex items-center gap-1">
                                 <Calendar className="h-3 w-3" />
                                 <span>
-                                  Due: {new Date(assignment.task.dueDate).toLocaleDateString()}
-                                  {assignment.task.dueTime && (
-                                    <span className="ml-1 text-blue-600 font-medium">
-                                      at {assignment.task.dueTime}
-                                    </span>
-                                  )}
+                                  Due: {assignment.task.dueAt 
+                                    ? formatDueAt(assignment.task.dueAt)
+                                    : `${new Date(assignment.task.dueDate).toLocaleDateString()}${assignment.task.dueTime ? ` at ${assignment.task.dueTime}` : ''}`
+                                  }
                                 </span>
                               </div>
                             )}
@@ -263,16 +262,14 @@ export function TeamMemberTasks({ teamMemberId, teamMemberName }: TeamMemberTask
                                 <span>{assignment.project.name}</span>
                               </div>
                             )}
-                            {assignment.task.dueDate && (
+                            {(assignment.task.dueAt || assignment.task.dueDate) && (
                               <div className="flex items-center gap-1">
                                 <Calendar className="h-3 w-3" />
                                 <span>
-                                  Due: {new Date(assignment.task.dueDate).toLocaleDateString()}
-                                  {assignment.task.dueTime && (
-                                    <span className="ml-1 text-blue-600 font-medium">
-                                      at {assignment.task.dueTime}
-                                    </span>
-                                  )}
+                                  Due: {assignment.task.dueAt 
+                                    ? formatDueAt(assignment.task.dueAt)
+                                    : `${new Date(assignment.task.dueDate).toLocaleDateString()}${assignment.task.dueTime ? ` at ${assignment.task.dueTime}` : ''}`
+                                  }
                                 </span>
                               </div>
                             )}
