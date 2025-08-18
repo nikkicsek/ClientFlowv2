@@ -33,7 +33,7 @@ const parseLocal = (dateStr: string, timeStr: string, tz: string): DateTime => {
  * @param userTz - IANA timezone string (fallback to America/Vancouver for nikki@csekcreative.com)
  * @returns Object with UTC timestamp, normalized database time, and database date
  */
-export function computeDueAt(dueDate: string, dueTime: string, timezone: string): {
+export function computeDueAt(dueDate: string, dueTime: string, timezone?: string): {
   due_at: string | null;
   due_time_db: string | null; 
   due_date_db: string | null;
@@ -53,19 +53,20 @@ export function computeDueAt(dueDate: string, dueTime: string, timezone: string)
   }
   
   try {
-    // Determine userTz with fallback for nikki@csekcreative.com
-    const userTz = timezone || process.env.APP_TIMEZONE || "America/Vancouver";
+    // Fixed timezone - America/Vancouver (no double offset)
+    const TZ = 'America/Vancouver';
     
-    // Parse in user's local timezone using Luxon
-    const local = parseLocal(dueDate, dueTime, userTz);
+    // dueDateISO like '2025-08-18', dueTimeHHmm like '10:30'  
+    const local = DateTime.fromISO(`${dueDate}T${dueTime}`, { zone: TZ })
+                     .set({ second: 0, millisecond: 0 });
     
     const result = {
-      due_at: local.toUTC().toISO(),              // UTC for scheduling and calendar
-      due_time_db: local.toFormat("HH:mm"),      // 24-hour format for DB (display helper)
+      due_at: local.toUTC().toISO({ suppressMilliseconds: true }),  // UTC for scheduling and calendar
+      due_time_db: DateTime.fromISO(`${dueDate}T${dueTime}`, { zone: TZ }).toFormat('HH:mm'), // keep canonical
       due_date_db: local.toISODate()             // Normalized date (display helper)
     };
     
-    console.log('computeDueAt success:', { dueDate, dueTime, userTz, result });
+    console.log('computeDueAt (fixed TZ):', { dueDate, dueTime, TZ, result });
     return result;
   } catch (error) {
     console.error('Error computing due_at:', error);
