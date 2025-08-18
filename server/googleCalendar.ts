@@ -166,32 +166,38 @@ class GoogleCalendarService {
     try {
       const calendar = await this.getAuthenticatedClient(userId);
       
-      // Use proper timezone handling with Luxon - convert UTC due_at to Vancouver local time
-      const { DateTime } = await import('luxon');
-      let startLocal: any;
-      
-      if (task.dueDate instanceof Date) {
-        // Convert Date object to Vancouver time
-        startLocal = DateTime.fromJSDate(task.dueDate, { zone: 'utc' }).setZone('America/Vancouver');
-      } else if (typeof task.dueDate === 'string') {
-        // Parse ISO string as UTC, then convert to Vancouver
-        startLocal = DateTime.fromISO(task.dueDate, { zone: 'utc' }).setZone('America/Vancouver');
-      } else {
-        // Fallback to current time in Vancouver
-        startLocal = DateTime.now().setZone('America/Vancouver');
+      // Helper to convert due_at to milliseconds (handles Date, ISO string, epoch seconds/ms)
+      function toMs(v: any): number {
+        if (v instanceof Date) return v.getTime();
+        if (typeof v === 'string') return Date.parse(v);
+        if (typeof v === 'number') return v < 1e12 ? v * 1000 : v; // epoch secs → ms
+        throw new Error('Unknown due_at format');
       }
-      
-      const endLocal = startLocal.plus({ minutes: 60 });
+
+      const startMs = toMs(task.dueDate);
+      const endMs = startMs + 60 * 60 * 1000; // 60 minutes
+
+      const startISO = new Date(startMs).toISOString();
+      const endISO = new Date(endMs).toISOString();
+
+      console.info('[CAL]', { 
+        taskId: task.title, 
+        startISO, 
+        endISO, 
+        tz: 'America/Vancouver',
+        originalDueDate: task.dueDate,
+        startMs
+      });
 
       const event = {
         summary: task.title,
         description: `${task.description || ''}\n\n${task.projectName ? `Project: ${task.projectName}` : 'Organization Task'}\nStatus: ${task.status}\nPriority: ${task.priority || 'medium'}${task.googleDriveLink ? `\nDrive Link: ${task.googleDriveLink}` : ''}`,
         start: {
-          dateTime: startLocal.toISO(),
+          dateTime: startISO,
           timeZone: 'America/Vancouver',
         },
         end: {
-          dateTime: endLocal.toISO(),
+          dateTime: endISO,
           timeZone: 'America/Vancouver',
         },
         reminders: {
@@ -231,29 +237,38 @@ class GoogleCalendarService {
     try {
       const calendar = await this.getAuthenticatedClient(userId);
       
-      // Use proper timezone handling with Luxon
-      const { DateTime } = await import('luxon');
-      let startLocal: any;
-      
-      if (task.dueDate instanceof Date) {
-        startLocal = DateTime.fromJSDate(task.dueDate, { zone: 'utc' }).setZone('America/Vancouver');
-      } else if (typeof task.dueDate === 'string') {
-        startLocal = DateTime.fromISO(task.dueDate, { zone: 'utc' }).setZone('America/Vancouver');
-      } else {
-        startLocal = DateTime.now().setZone('America/Vancouver');
+      // Helper to convert due_at to milliseconds (handles Date, ISO string, epoch seconds/ms)
+      function toMs(v: any): number {
+        if (v instanceof Date) return v.getTime();
+        if (typeof v === 'string') return Date.parse(v);
+        if (typeof v === 'number') return v < 1e12 ? v * 1000 : v; // epoch secs → ms
+        throw new Error('Unknown due_at format');
       }
-      
-      const endLocal = startLocal.plus({ minutes: 60 });
+
+      const startMs = toMs(task.dueDate);
+      const endMs = startMs + 60 * 60 * 1000; // 60 minutes
+
+      const startISO = new Date(startMs).toISOString();
+      const endISO = new Date(endMs).toISOString();
+
+      console.info('[CAL]', { 
+        taskId: task.title, 
+        startISO, 
+        endISO, 
+        tz: 'America/Vancouver',
+        originalDueDate: task.dueDate,
+        startMs
+      });
 
       const event = {
         summary: task.title,
         description: `${task.description || ''}\n\n${task.projectName ? `Project: ${task.projectName}` : 'Organization Task'}\nStatus: ${task.status}\nPriority: ${task.priority || 'medium'}${task.googleDriveLink ? `\nDrive Link: ${task.googleDriveLink}` : ''}`,
         start: {
-          dateTime: startLocal.toISO(),
+          dateTime: startISO,
           timeZone: 'America/Vancouver',
         },
         end: {
-          dateTime: endLocal.toISO(),
+          dateTime: endISO,
           timeZone: 'America/Vancouver',
         },
       };

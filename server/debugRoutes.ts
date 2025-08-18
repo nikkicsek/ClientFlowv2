@@ -419,12 +419,28 @@ export function registerDebugRoutes(app: Express) {
         
         const { userId, tz, tokens } = resolution;
         
-        // Convert UTC due_at to assignee local time using IANA timezone
-        const dueAtUtc = DateTime.fromISO(task.due_at, { zone: 'utc' });
-        const startLocal = dueAtUtc.setZone(tz);
-        const endLocal = startLocal.plus({ minutes: 60 });
+        // Helper to convert due_at to milliseconds (handles Date, ISO string, epoch seconds/ms)
+        function toMs(v: any): number {
+          if (v instanceof Date) return v.getTime();
+          if (typeof v === 'string') return Date.parse(v);
+          if (typeof v === 'number') return v < 1e12 ? v * 1000 : v; // epoch secs → ms
+          throw new Error('Unknown due_at format');
+        }
 
-        console.log(`[CAL] upsert task=${taskId} user=${userId} start=${startLocal.toISO()} tz=${tz}`);
+        const startMs = toMs(task.due_at);
+        const endMs = startMs + 60 * 60 * 1000; // 60 minutes
+
+        const startISO = new Date(startMs).toISOString();
+        const endISO = new Date(endMs).toISOString();
+
+        console.info('[CAL]', { 
+          taskId, 
+          startISO, 
+          endISO, 
+          tz: 'America/Vancouver',
+          originalDueAt: task.due_at,
+          startMs
+        });
 
         // Check if this task already has a calendar event for this user (idempotent)
         const existingEventResult = await pool.query(
@@ -446,7 +462,7 @@ export function registerDebugRoutes(app: Express) {
           const updateResult = await googleCalendarService.updateTaskEvent(userId, eventId, {
             title: task.title,
             description: task.description || '',
-            dueDate: new Date(startLocal.toISO()),
+            dueDate: startMs, // Pass milliseconds directly
             status: task.status || 'pending',
             priority: task.priority || 'medium'
           });
@@ -463,7 +479,7 @@ export function registerDebugRoutes(app: Express) {
           const createResult = await googleCalendarService.createTaskEvent(userId, {
             title: task.title,
             description: task.description || '',
-            dueDate: new Date(startLocal.toISO()),
+            dueDate: startMs, // Pass milliseconds directly
             status: task.status || 'pending',
             priority: task.priority || 'medium'
           });
@@ -482,7 +498,7 @@ export function registerDebugRoutes(app: Express) {
           );
         }
 
-        console.log(`[CAL] upsert ok task=${taskId} user=${userId} cal=primary event=${eventId} startLocal=${startLocal.isValid ? startLocal.toFormat('yyyy-LL-dd HH:mm') : 'INVALID'} tz=${tz}`);
+        console.log(`[CAL] upsert ok task=${taskId} user=${userId} cal=primary event=${eventId} startISO=${startISO} tz=America/Vancouver`);
 
         return res.json({ 
           ok: true, 
@@ -516,12 +532,28 @@ export function registerDebugRoutes(app: Express) {
       
       const { userId, email, tz, tokens } = resolution;
       
-      // Convert UTC due_at to assignee local time using IANA timezone
-      const dueAtUtc = DateTime.fromISO(task.due_at, { zone: 'utc' });
-      const startLocal = dueAtUtc.setZone(tz);
-      const endLocal = startLocal.plus({ minutes: 60 });
+      // Helper to convert due_at to milliseconds (handles Date, ISO string, epoch seconds/ms)
+      function toMs(v: any): number {
+        if (v instanceof Date) return v.getTime();
+        if (typeof v === 'string') return Date.parse(v);
+        if (typeof v === 'number') return v < 1e12 ? v * 1000 : v; // epoch secs → ms
+        throw new Error('Unknown due_at format');
+      }
 
-      console.log(`[CAL] upsert task=${taskId} user=${userId} start=${startLocal.toISO()} tz=${tz}`);
+      const startMs = toMs(task.due_at);
+      const endMs = startMs + 60 * 60 * 1000; // 60 minutes
+
+      const startISO = new Date(startMs).toISOString();
+      const endISO = new Date(endMs).toISOString();
+
+      console.info('[CAL]', { 
+        taskId, 
+        startISO, 
+        endISO, 
+        tz: 'America/Vancouver',
+        originalDueAt: task.due_at,
+        startMs
+      });
 
       // Check if this task already has a calendar event for this user (idempotent)
       const existingEventResult = await pool.query(
@@ -543,7 +575,7 @@ export function registerDebugRoutes(app: Express) {
         const updateResult = await googleCalendarService.updateTaskEvent(userId, eventId, {
           title: task.title,
           description: task.description || '',
-          dueDate: new Date(startLocal.toISO()),
+          dueDate: startMs, // Pass milliseconds directly
           status: task.status || 'pending',
           priority: task.priority || 'medium'
         });
@@ -560,7 +592,7 @@ export function registerDebugRoutes(app: Express) {
         const createResult = await googleCalendarService.createTaskEvent(userId, {
           title: task.title,
           description: task.description || '',
-          dueDate: new Date(startLocal.toISO()),
+          dueDate: startMs, // Pass milliseconds directly
           status: task.status || 'pending',
           priority: task.priority || 'medium'
         });
@@ -579,7 +611,7 @@ export function registerDebugRoutes(app: Express) {
         );
       }
 
-      console.log(`[CAL] upsert ok task=${taskId} user=${userId} cal=primary event=${eventId} startLocal=${startLocal.isValid ? startLocal.toFormat('yyyy-LL-dd HH:mm') : 'INVALID'} tz=${tz}`);
+      console.log(`[CAL] upsert ok task=${taskId} user=${userId} cal=primary event=${eventId} startISO=${startISO} tz=America/Vancouver`);
 
       res.json({ 
         ok: true, 
