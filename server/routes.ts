@@ -4,7 +4,7 @@ import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { requireAuth, getCurrentUser } from "./middleware/auth";
 import { insertProjectSchema, insertTaskSchema, insertMessageSchema, insertAnalyticsSchema, insertTeamMemberSchema, insertTaskAssignmentSchema, insertProposalSchema, insertProposalItemSchema, type TeamMember } from "@shared/schema";
-import { computeDueAt, backfillDisplayFields } from "./utils/timeHandling";
+import { computeDueAt, buildDueAtUTC, backfillDisplayFields } from "./utils/timeHandling";
 import { emailService } from "./emailService";
 import { nangoService } from "./nangoService";
 import { googleCalendarService } from "./googleCalendar";
@@ -414,11 +414,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { selectedTeamMembers = [], ...bodyData } = req.body;
       
-      // Compute due_at from dueDate, dueTime, and timezone (unified time handling)
+      // Compute due_at from dueDate, dueTime, and timezone using enhanced parsing
       let dueAt = null;
-      if (bodyData.dueDate) {
-        const timezone = bodyData.timezone || "America/Los_Angeles"; // Default timezone for Nikki
-        dueAt = computeDueAt(bodyData.dueDate, bodyData.dueTime, timezone);
+      if (bodyData.dueDate && bodyData.dueTime) {
+        const userTz = bodyData.timezone || process.env.APP_TIMEZONE || "America/Vancouver";
+        dueAt = buildDueAtUTC(bodyData.dueDate, bodyData.dueTime, userTz);
       }
       
       const taskData = insertTaskSchema.parse({
@@ -1745,11 +1745,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { selectedTeamMembers = [], ...bodyData } = req.body;
       
-      // Compute due_at from dueDate, dueTime, and timezone (unified time handling)
+      // Compute due_at from dueDate, dueTime, and timezone using enhanced parsing
       let dueAt = null;
-      if (bodyData.dueDate) {
-        const timezone = bodyData.timezone || "America/Los_Angeles"; // Default timezone for Nikki
-        dueAt = computeDueAt(bodyData.dueDate, bodyData.dueTime, timezone);
+      if (bodyData.dueDate && bodyData.dueTime) {
+        const userTz = bodyData.timezone || process.env.APP_TIMEZONE || "America/Vancouver";
+        dueAt = buildDueAtUTC(bodyData.dueDate, bodyData.dueTime, userTz);
       }
       
       const taskData = insertTaskSchema.parse({

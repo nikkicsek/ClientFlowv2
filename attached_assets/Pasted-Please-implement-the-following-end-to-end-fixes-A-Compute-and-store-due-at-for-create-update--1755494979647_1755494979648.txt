@@ -1,0 +1,73 @@
+Please implement the following end-to-end fixes:
+
+A) Compute and store `due_at` for create/update
+-----------------------------------------------
+Context: The client sends local `dueDate` (YYYY-MM-DD) and `dueTime` (string, may be “9:55 PM” or “21:55”). Many tasks show `due_at: null` which blocks calendar sync. Others display 04:55 in UI because we format UTC without converting to local.
+
+1) Server (tasks controller or route handler for create & update):
+   - Accept body with { title, description, status, priority, assigneeIds, dueDate, dueTime }.
+   - If both dueDate and dueTime are present, parse as LOCAL time and compute `due_at` in UTC.
+     Use a single helper:
+
+       // utils/time.ts
+       import dayjs from "dayjs";
+       import utc from "dayjs/plugin/utc";
+       import tz from "dayjs/plugin/timezone";
+       import customParse from "dayjs/plugin/customParseFormat";
+       dayjs.extend(utc); dayjs.extend(tz); dayjs.extend(customParse);
+
+       export function buildDueAtUTC(dueDate: string, dueTime: string, userTz: string): string | null {
+         if (!dueDate || !dueTime) return null;
+         // normalize time like "9:55 PM" or "21:55"
+         const normalized = dueTime.trim().toUpperCase(); // allow AM/PM
+         const formats = ["h:mm A", "H:mm", "h A", "H"];  // support loose inputs
+         const local = dayjs.tz(`${dueDate} ${normalized}`, formats, userTz);
+         if (!local.isValid()) return null;
+         return local.utc().toISOString();
+       }
+
+   - Determine `userTz` from the signed-in user's profile (if we store it) or default to process.env.APP_TIMEZONE || "America/Vancouver".
+   - On CREATE and UPDATE, compute `due_at = buildDueAtUTC(dueDate, dueTime, userTz)` and persist it.
+   - Keep `due_date` (date) and `due_time` (time) columns as-is, but make sure they mirror what the user entered.
+
+2) Frontend (My Tasks list + Edit modal):
+   - When showing the “Due: … at HH:mm”, format in the BROWSER’S timezone:
+       const local = due_at ? dayjs.utc(due_at).tz(Intl.DateTimeFormat().resolvedOptions().timeZone) : null;
+       show local?.format("h:mm A") instead of the raw UTC time.
+   - If `due_at` is null but `due_date` is set, show the date and “No time”.
+   - Ensure the Edit modal sends `dueDate` and `dueTime` as strings (not Date objects), e.g. "2025-08-18" and "9:55 PM".
+
+B) Calendar sync (idempotent, no duplicates)
+--------------------------------------------
+1) When creating a Google Calendar event, set:
+   - `extendedProperties.private.taskId = <taskId>`
+   - Also include `taskId:<taskId>` in the description for easy searching
+2) Before creating an event, query by `q: "taskId:<taskId>"` OR use the Calendar API `privateExtendedProperty` filter if available; if found, update instead of creating.
+3) Only sync tasks that:
+   - have `due_at` (not null)
+   - are assigned to the target team member
+4) On task update:
+   - If `due_at` changes, update the existing event’s start/end.
+5) Store the created `eventId` in the task_assignment or a join table so subsequent updates are direct.
+
+C) Backfill existing tasks to set `due_at` and sync once
+-------------------------------------------------------
+1) Add a one-off script/endpoint `/debug/backfill-due-at?as=<email>` that:
+   - Finds tasks for the impersonated user where `due_date` and `due_time` are set AND `due_at IS NULL`.
+   - Computes `due_at` using buildDueAtUTC with the same timezone rules.
+   - Saves `due_at`.
+2) Add `/debug/sync/run-once?as=<email>` to enqueue sync for those tasks. Must use the idempotent logic above to avoid duplicates.
+
+D) Fix debug route list + /api alias
+------------------------------------
+1) Mount the same router at both `/debug` and `/api/debug` BEFORE any SPA catch-all.
+2) Implement `GET /debug/routes` that enumerates registered debug routes, so we can verify quickly.
+
+E) QA steps (please run):
+-------------------------
+- Create a task from the UI with dueDate=today and dueTime="9:55 PM". Verify in DB:
+   - `due_time` ~ "21:55"
+   - `due_at` ~ today 21:55 in local -> correct UTC ISO
+- Verify My Tasks shows “9:55 PM” (local), not 04:55.
+- Confirm Google Calendar creates exactly ONE event with the right local time, using extendedProperties.private.taskId and the saved eventId.
+- Confirm editing time updates the existing event (no duplicates).

@@ -35,7 +35,11 @@ console.log('REDIRECT_URI =', process.env.GOOGLE_REDIRECT_URI);
 console.log('Mounted debug routes at /debug');
 
 // CRITICAL: Mount debug and oauth routes EARLY BEFORE any other routes
+// D) Mount debug routes at both /debug and /api/debug
 registerDebugRoutes(app);
+const debugApp = registerDebugRoutes(express());
+app.use('/api', debugApp); // Mount debug routes under /api/debug as well
+
 app.use(googleRouter);
 app.use('/api', googleRouter);
 

@@ -384,4 +384,125 @@ export function registerDebugRoutes(app: Express) {
       res.status(500).json({ message: 'Failed to backfill due_at', error: error.message });
     }
   });
+
+  // D) Debug route listing
+  app.get('/debug/routes', (req, res) => {
+    const routes = [
+      'GET /debug/routes - List all debug routes',
+      'GET /debug/calendar-status?as=<email> - Check calendar tokens for user',
+      'GET /debug/tokens/dump?as=<email> - Show token information',
+      'GET /debug/my-tasks?as=<email> - Get tasks assigned to user',
+      'POST /debug/create-test-task - Create test task with timezone',
+      'POST /debug/sync/disable - Emergency disable calendar sync',
+      'POST /debug/sync/enable - Re-enable calendar sync',
+      'GET /debug/backfill-due-at?as=<email> - Backfill missing due_at timestamps',
+      'POST /debug/sync/run-once?as=<email> - Run calendar sync for user tasks'
+    ];
+    res.json({ debugRoutes: routes });
+  });
+
+  // C) Enhanced backfill for user-specific tasks
+  app.get('/debug/backfill-user-due-at', async (req: any, res) => {
+    try {
+      const { user } = await resolveUserAndTokens(req);
+      
+      // Find tasks where due_date and due_time are set BUT due_at IS NULL
+      const rows = await pool.query(`
+        SELECT t.id, t.title, t.due_date, t.due_time, t.organization_id, t.project_id
+        FROM tasks t
+        LEFT JOIN task_assignments ta ON ta.task_id = t.id
+        LEFT JOIN team_members tm ON tm.id = ta.team_member_id
+        WHERE tm.email = $1 
+          AND t.due_date IS NOT NULL 
+          AND t.due_time IS NOT NULL 
+          AND t.due_at IS NULL
+        GROUP BY t.id
+        ORDER BY t.created_at DESC
+        LIMIT 50
+      `, [user.email]);
+      
+      const { buildDueAtUTC } = await import('./utils/timeHandling');
+      const userTz = process.env.APP_TIMEZONE || "America/Vancouver";
+      let updatedCount = 0;
+      
+      for (const task of rows.rows) {
+        try {
+          const dueDate = task.due_date.toISOString().slice(0, 10); // YYYY-MM-DD
+          const dueTime = task.due_time;
+          
+          // Debug logging
+          console.log(`Backfill task ${task.id}: dueDate=${dueDate}, dueTime=${dueTime}`);
+          
+          const dueAt = buildDueAtUTC(dueDate, dueTime, userTz);
+          
+          if (dueAt) {
+            await pool.query(
+              'UPDATE tasks SET due_at = $1 WHERE id = $2',
+              [dueAt, task.id]
+            );
+            updatedCount++;
+          }
+        } catch (err) {
+          console.error(`Error backfilling task ${task.id}:`, err);
+        }
+      }
+      
+      res.json({
+        message: `Backfilled ${updatedCount} tasks with due_at timestamps`,
+        totalFound: rows.rows.length,
+        updated: updatedCount,
+        userEmail: user.email,
+        timezone: userTz
+      });
+    } catch (error) {
+      console.error('Error in backfill-user-due-at:', error);
+      res.status(500).json({ message: 'Failed to backfill due_at', stack: error.stack });
+    }
+  });
+
+  // C) Run calendar sync once for user's tasks
+  app.post('/debug/sync/run-once', async (req: any, res) => {
+    try {
+      const { user } = await resolveUserAndTokens(req);
+      
+      // Get all tasks assigned to this user that have due_at
+      const rows = await pool.query(`
+        SELECT DISTINCT t.id, t.created_at
+        FROM tasks t
+        LEFT JOIN task_assignments ta ON ta.task_id = t.id
+        LEFT JOIN team_members tm ON tm.id = ta.team_member_id
+        WHERE tm.email = $1 
+          AND t.due_at IS NOT NULL
+        ORDER BY t.created_at DESC
+        LIMIT 20
+      `, [user.email]);
+      
+      const { syncAllCalendarEventsForTask } = await import('./calendarEvents');
+      let syncedCount = 0;
+      const errors: string[] = [];
+      
+      for (const taskRow of rows.rows) {
+        try {
+          await syncAllCalendarEventsForTask(taskRow.id);
+          syncedCount++;
+        } catch (err) {
+          errors.push(`Task ${taskRow.id}: ${err.message}`);
+          console.error(`Sync error for task ${taskRow.id}:`, err);
+        }
+      }
+      
+      res.json({
+        message: `Synced ${syncedCount} tasks to calendar`,
+        totalTasks: rows.rows.length,
+        synced: syncedCount,
+        errors: errors.length > 0 ? errors : undefined,
+        userEmail: user.email
+      });
+    } catch (error) {
+      console.error('Error in sync/run-once:', error);
+      res.status(500).json({ message: 'Failed to run calendar sync', stack: error.stack });
+    }
+  });
+
+  return app;
 }
