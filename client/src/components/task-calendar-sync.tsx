@@ -32,18 +32,37 @@ export function TaskCalendarSync({
         method: "POST",
       });
     },
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/team-members"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/task-assignments"] });
-      toast({
-        title: "Task Synced",
-        description: `"${taskTitle}" has been added to your Google Calendar`,
-      });
+      
+      // Show success toast with optional calendar link
+      if (data.htmlLink) {
+        toast({
+          title: "Calendar Synced",
+          description: (
+            <div className="flex flex-col gap-2">
+              <span>"{taskTitle}" has been synced to Google Calendar</span>
+              <button
+                onClick={() => window.open(data.htmlLink, '_blank')}
+                className="text-blue-600 hover:text-blue-800 text-sm underline text-left"
+              >
+                Open in Google Calendar
+              </button>
+            </div>
+          ),
+        });
+      } else {
+        toast({
+          title: "Task Synced",
+          description: `"${taskTitle}" has been added to your Google Calendar`,
+        });
+      }
     },
-    onError: () => {
+    onError: (error: any) => {
       toast({
         title: "Sync Failed",
-        description: "Failed to sync task to Google Calendar",
+        description: error?.message || "Failed to sync task to Google Calendar",
         variant: "destructive",
       });
     },
@@ -78,18 +97,37 @@ export function TaskCalendarSync({
         method: "POST",
       });
     },
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/team-members"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/task-assignments"] });
-      toast({
-        title: "Calendar Synced",
-        description: `"${taskTitle}" calendar event updated successfully`,
-      });
+      
+      // Show success toast with optional calendar link
+      if (data.htmlLink) {
+        toast({
+          title: "Calendar Synced",
+          description: (
+            <div className="flex flex-col gap-2">
+              <span>"{taskTitle}" calendar event updated successfully</span>
+              <button
+                onClick={() => window.open(data.htmlLink, '_blank')}
+                className="text-blue-600 hover:text-blue-800 text-sm underline text-left"
+              >
+                Open in Google Calendar
+              </button>
+            </div>
+          ),
+        });
+      } else {
+        toast({
+          title: "Calendar Synced",
+          description: `"${taskTitle}" calendar event updated successfully`,
+        });
+      }
     },
-    onError: () => {
+    onError: (error: any) => {
       toast({
         title: "Sync Failed", 
-        description: "Failed to sync task calendar",
+        description: error?.message || "Failed to sync task calendar",
         variant: "destructive",
       });
     },
