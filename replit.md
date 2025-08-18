@@ -157,15 +157,17 @@ UI preferences: Clean, functional interfaces without promotional or instructiona
   - **Error Resilience**: Calendar sync failures don't prevent task operations, comprehensive logging for debugging
   - **Emergency Controls**: Kill-switch for runaway calendar processes, runtime sync enable/disable capabilities
   - **System Status**: ✅ COMPLETE & OPERATIONAL - All timezone handling and calendar sync functionality implemented and tested
-- **ENHANCED TIME PARSING SYSTEM (August 18, 2025)**: Comprehensive task time handling upgraded across entire application stack
-  - **Client-Side Enhancements**: Replace time input fields with controlled text inputs to prevent unwanted Date object conversions
-  - **Server-Side Consolidation**: All task routes (create, update, project tasks, organization tasks) use unified `computeDueAt()` function  
-  - **Enhanced Parsing**: Support for multiple time formats (12-hour AM/PM, 24-hour, edge cases) with robust validation
-  - **Debug Infrastructure**: New regression test endpoints `/debug/task/:id` and `/debug/create-quick-task` for API response validation
-  - **Import Optimization**: Resolved duplicate function declarations and streamlined timeHandling.ts utilities
-  - **Response Normalization**: Consistent API responses with proper due_at computation throughout application
-  - **Validation Confirmed**: Time parsing endpoint tests confirm "9:55 PM" correctly converts to UTC timestamps and 24h storage format
-  - **Complete Coverage**: Enhanced time handling now spans client forms, server routes, database storage, and calendar synchronization
+- **LUXON MIGRATION & COMPLETE TIME PARSING FIX (August 18, 2025)**: Single source of truth implementation using Luxon
+  - **Library Migration**: Completely migrated from dayjs to Luxon for superior timezone handling and parsing precision
+  - **Server-Side Single Source**: All due_at computation happens on server using unified `computeDueAt()` function with Luxon
+  - **Enhanced Format Support**: Robust parsing of "HH:mm", "H:mm", "h:mm a", "h a" using Luxon's format patterns
+  - **Client-Side Cleanup**: Removed all client-side timezone math and Date object conversions that caused time shifts
+  - **UTC Normalization**: All tasks store canonical UTC timestamps in `due_at` field with display helpers in user timezone
+  - **Edit Modal Prefill**: Proper UTC-to-local conversion using `utcToLocal()` function for accurate form prefill
+  - **Debug Endpoints**: Added `/debug/time/preview` endpoint for time parsing validation and testing
+  - **Calendar Sync Integration**: Enhanced calendar event creation using Luxon DateTime for proper timezone handling
+  - **Backward Compatibility**: Maintained existing `due_date`/`due_time` fields while using `due_at` as canonical source
+  - **System Status**: ✅ COMPLETE - "9:45 AM" now correctly stores as "09:45" in database (bug fixed)
 
 ### Potential Integrations
 - **Analytics Platforms**: Designed to integrate with marketing tools and analytics services

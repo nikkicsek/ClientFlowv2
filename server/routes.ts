@@ -2924,6 +2924,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Debug endpoint for quick verification (as specified)
+  app.get('/debug/time/preview', async (req, res) => {
+    try {
+      const { date, time, tz = "America/Vancouver" } = req.query as { date: string, time: string, tz?: string };
+      
+      if (!date || !time) {
+        return res.status(400).json({ error: 'Missing date or time parameters' });
+      }
+      
+      // Use the unified computeDueAt function
+      const result = computeDueAt(date, time, tz);
+      
+      res.json({
+        local: `${date} ${time} (${tz})`,
+        due_at_utc: result.due_at,
+        due_time_db: result.due_time_db,
+        due_date_db: result.due_date_db
+      });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Additional debug endpoints for task debugging and regression testing
   app.get('/debug/task/:id', async (req, res) => {
     try {
