@@ -443,17 +443,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         task = await storage.createTask(finalTaskData);
         console.log('Created task:', { taskId: task.id, title: task.title, dueDate: task.dueDate, dueTime: task.dueTime });
         
-        // Calendar upsert if due_at is set (idempotent)
-        if (task.dueAt) {
-          const { calendarUpsert } = await import('./calendarUpsert');
-          const upsertResult = await calendarUpsert(task, userId, userTz);
-          
-          if (upsertResult.success && upsertResult.eventId) {
-            // Update task with calendar event ID
-            await storage.updateTask(task.id, { googleCalendarEventId: upsertResult.eventId });
-            console.log('Calendar event created/updated:', { taskId: task.id, eventId: upsertResult.eventId });
-          } else {
-            console.warn('Calendar upsert failed:', upsertResult.error);
+        // Auto-sync calendar events for task assignments (enhanced system)
+        if (task.dueAt && assignments.length > 0) {
+          try {
+            await syncAllCalendarEventsForTask(task.id);
+            console.log(`Auto-synced calendar events for task ${task.id} with ${assignments.length} assignments`);
+          } catch (calendarError) {
+            console.warn('Auto calendar sync failed:', calendarError);
+            // Don't fail task creation if calendar sync fails
           }
         }
         

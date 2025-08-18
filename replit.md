@@ -1,175 +1,89 @@
 # replit.md
 
 ## Overview
-
-AgencyPro is a customizable client-facing project management dashboard web application designed for marketing agencies. The platform provides clients with a comprehensive view of their active projects, task progress, analytics, file sharing, and communication capabilities. Built as a full-stack TypeScript application with a React frontend and Express backend, it offers features similar to Agency Analytics for client reporting and project transparency.
+AgencyPro is a customizable client-facing project management dashboard web application for marketing agencies. It provides clients with a comprehensive view of their active projects, task progress, analytics, file sharing, and communication capabilities. The platform aims to offer features similar to Agency Analytics, focusing on client reporting and project transparency.
 
 ## User Preferences
-
 Preferred communication style: Simple, everyday language.
 UI preferences: Clean, functional interfaces without promotional or instructional content. Direct organization lists instead of benefits information.
 
 ## System Architecture
+AgencyPro is a full-stack TypeScript application featuring a React frontend and an Express backend.
 
 ### Frontend Architecture
-- **Framework**: React with TypeScript using Vite as the build tool
-- **UI Library**: Radix UI components with shadcn/ui for consistent, accessible design
-- **Styling**: Tailwind CSS with CSS variables for theming (supports light/dark modes)
-- **State Management**: TanStack Query (React Query) for server state management and caching
-- **Routing**: Wouter for lightweight client-side routing
-- **Form Handling**: React Hook Form with Zod validation through @hookform/resolvers
+- **Framework**: React with TypeScript (Vite build tool)
+- **UI/UX**: Radix UI and shadcn/ui for consistent, accessible design, styled with Tailwind CSS (CSS variables for theming, light/dark modes).
+- **State Management**: TanStack Query for server state and caching.
+- **Routing**: Wouter for lightweight client-side routing.
+- **Form Handling**: React Hook Form with Zod validation.
 
 ### Backend Architecture
-- **Runtime**: Node.js with Express.js framework
-- **Language**: TypeScript with ES modules
-- **Database ORM**: Drizzle ORM for type-safe database operations
-- **Database**: PostgreSQL via Neon Database serverless connection
-- **Session Management**: express-session with PostgreSQL session store
-- **File Upload**: Multer middleware for handling multipart form data
+- **Runtime**: Node.js with Express.js.
+- **Language**: TypeScript (ES modules).
+- **Database ORM**: Drizzle ORM for type-safe operations.
+- **Database**: PostgreSQL (via Neon Database serverless connection).
+- **Session Management**: express-session with PostgreSQL session store.
+- **File Upload**: Multer middleware.
 
 ### Authentication System
-- **Provider**: Replit OpenID Connect (OIDC) integration
-- **Strategy**: Passport.js with openid-client strategy
-- **Session Storage**: PostgreSQL-backed sessions with connect-pg-simple
-- **Authorization**: Role-based access control (admin vs client roles)
-- **Team Management**: Secure invitation system for agency team members with full admin access
-- **Organization Management**: Business entity grouping for multiple client contacts
+- **Provider**: Replit OpenID Connect (OIDC) integration.
+- **Strategy**: Passport.js with openid-client.
+- **Session Storage**: PostgreSQL-backed sessions.
+- **Authorization**: Role-based access control (admin vs. client).
+- **Team Management**: Secure invitation system for agency team members (admin access).
+- **Organization Management**: Business entity grouping for multiple client contacts.
+- **Dev Authentication**: Supports non-Replit user authentication for development via email-based login.
 
 ### Data Storage
-- **Primary Database**: PostgreSQL with the following core entities:
-  - Users (with role-based permissions: admin/client)
-  - Organizations (business entities for grouping multiple client contacts)
-  - Projects (with client assignments, organization links, and progress tracking)
-  - Services (categorized offerings like web design, marketing, etc.)
-  - Tasks (linked to projects and services with status tracking)
-  - Project Files (with approval workflows and categorization)
-  - Analytics (metrics and performance data)
-  - Messages (project communication and updates)
-  - KPIs (Key Performance Indicators with multi-platform integration)
-  - Team Invitations (secure invitation system for agency staff)
-- **File Storage**: Local filesystem with organized directory structure
-- **Session Storage**: PostgreSQL sessions table for auth persistence
+- **Primary Database (PostgreSQL)**: Stores Users (roles: admin/client), Organizations, Projects, Services, Tasks, Project Files, Analytics, Messages, KPIs, and Team Invitations.
+- **File Storage**: Local filesystem with organized directory structure.
+- **Session Storage**: PostgreSQL sessions table.
 
 ### API Design
-- **Architecture**: RESTful API with consistent `/api` prefix
-- **Error Handling**: Centralized error middleware with proper HTTP status codes
-- **Request/Response**: JSON-based communication with proper CORS handling
-- **File Handling**: Multipart form data for file uploads with size limits
+- **Architecture**: RESTful API (`/api` prefix).
+- **Communication**: JSON-based with proper CORS.
+- **Error Handling**: Centralized error middleware.
+- **File Handling**: Multipart form data for uploads.
 
 ### Real-time Features
-- **Updates**: Polling-based updates through React Query's refetch intervals
-- **Notifications**: Toast-based user feedback system
-- **Live Data**: Automatic re-fetching on window focus and network reconnection
+- **Updates**: Polling-based updates via React Query.
+- **Notifications**: Toast-based user feedback.
+- **Live Data**: Automatic re-fetching on window focus/network reconnection.
+
+### Core Features & Enhancements
+- **Project/Organization Management**: Comprehensive project and organization management with various view options (tile/grid, list), direct editing, contact management, and project navigation.
+- **Task Management**: Detailed task tracking linked to projects/services, with soft delete, restore, and comprehensive delete functionality. Includes an enhanced "Edit Task Modal" and assignment display.
+- **Time Management**: Unified timezone handling using Luxon for robust UTC/local time conversions and accurate `due_at` computations.
+- **Google Calendar Integration**: Full OAuth integration for task synchronization, supporting individual calendar management and automatic event creation. Idempotent calendar events prevent duplicates.
+- **Quote Upload System**: Automated quote-to-project conversion workflow.
+- **Role Management**: Defined roles like "GHL Lead" and "Strategist".
+- **Debug System**: Robust debugging infrastructure with isolated routes, OAuth state preservation, and kill-switch capabilities for calendar sync.
 
 ## External Dependencies
 
 ### Database Services
-- **Neon Database**: Serverless PostgreSQL database with connection pooling
-- **Connection**: @neondatabase/serverless for WebSocket-based connections
+- **Neon Database**: Serverless PostgreSQL database.
+- **@neondatabase/serverless**: For WebSocket-based connections to Neon.
 
 ### Authentication & Session Management
-- **OpenID Connect**: Replit's OIDC provider for user authentication
-- **Session Store**: PostgreSQL-backed session persistence
+- **Replit's OIDC provider**: For user authentication.
+- **PostgreSQL-backed session store**: For session persistence.
 
 ### UI & Styling
-- **Component Library**: Radix UI primitives for accessible components
-- **Design System**: shadcn/ui component collection
-- **Icons**: Lucide React for consistent iconography
-- **CSS Framework**: Tailwind CSS with PostCSS processing
+- **Radix UI**: Primitives for accessible components.
+- **shadcn/ui**: Component collection for design system.
+- **Lucide React**: For consistent iconography.
+- **Tailwind CSS**: CSS framework with PostCSS.
 
 ### Development & Build Tools
-- **Build System**: Vite with React plugin and TypeScript support
-- **Code Quality**: ESBuild for production bundling
-- **Development**: Hot module replacement and error overlay integration
-- **Replit Integration**: Cartographer plugin for Replit-specific features
+- **Vite**: Build system for React/TypeScript.
+- **ESBuild**: For production bundling.
+- **Cartographer plugin**: For Replit-specific features.
 
 ### File Processing
-- **Upload Handling**: Multer for multipart form processing
-- **Cloud Storage**: Google Cloud Storage integration (@google-cloud/storage)
-- **File Management**: Uppy.js components for advanced upload UI
+- **Multer**: For multipart form processing.
+- **@google-cloud/storage**: For Google Cloud Storage integration.
+- **Uppy.js**: For advanced upload UI components.
 
-### Recent Updates (August 2025)
-- **Quote Upload System**: Fully operational automated quote-to-project conversion workflow
-- **Team Management**: Added "GHL Lead" (orange) and "Strategist" (indigo) roles with proper styling
-- **Organization Management**: Streamlined UI removing instructional content, added alphabetical sorting
-- **Navigation Enhancement**: Fixed Organizations button to navigate directly to Business Organizations tab
-- **View Options**: Added tile/grid and list view toggle for business organizations and projects display with list view as default
-- **Direct Organization Editing**: Added hover-to-edit functionality on organization cards in both tile and list views
-- **Organization Contact Management**: Added direct contact assignment/removal from organization cards with dedicated modal
-- **Organization Project Navigation**: Added project count display and direct navigation to projects from organization cards
-- **Organization Update API**: Implemented PUT endpoint for updating organization details without extra navigation steps
-- **Project Status Management**: Added dropdown status selector directly on project tiles/list items with pending status option
-- **Drag-and-Drop Reordering**: Implemented project reordering within organizations using @dnd-kit with display_order field
-- **Enhanced Project Views**: Added both grid and list view options for projects with comprehensive list view including Google Drive links
-- **Navigation Streamlined**: Removed "All Projects" tab for organization-based project management approach to handle hundreds of concurrent projects efficiently
-- **Agency Tasks Modal**: Replaced fake team workload data with practical Quick Actions (Add Task, Manage Team, Edit Project)
-- **Task Delete System**: Implemented comprehensive delete functionality for both project and organization tasks with confirmation dialogs
-- **Soft Delete & Restore**: Added soft delete system that moves tasks to deleted items with restore capability for accidental deletions
-- **Feature Parity**: Achieved complete feature parity between organization and project task creation (Google Drive links, proper scrolling, streamlined forms)
-- **Google Calendar Integration**: Fully implemented Google Calendar OAuth integration for task synchronization with individual calendar management, automatic event creation, and manual sync capabilities
-- **Modern Task UI**: Implemented gold-standard task card design following 2025 UI/UX best practices with card-based layouts, visual hierarchy, and improved information architecture
-- **Enhanced Edit Task Modal**: Fixed time field display issues and improved date/time parsing for accurate task editing
-- **Task Assignment Display**: Resolved assignment visibility with proper team member assignment fetching and visual indicators
-- **Debug System Overhaul (August 17, 2025)**: Complete debugging infrastructure with routing fixes, emergency kill-switch, and idempotent calendar events
-  - **EMERGENCY RESPONSE**: Successfully stopped runaway loop creating duplicate test tasks with immediate kill-switch
-  - **Routing Fixed**: Debug routes properly isolated to `/debug` without interfering with main app at `/` - confirmed via curl tests
-  - **OAuth State Preservation**: Enhanced OAuth flow to preserve `?as=email` impersonation parameters through callback state
-    - OAuth connect: `/oauth/google/connect?as=email` preserves impersonation in Google's state parameter
-    - OAuth callback: `/oauth/google/callback` extracts and restores impersonation from state
-    - Canonical user ID resolution: All token storage normalized by userId as source of truth
-  - **Dev Authentication System (August 17, 2025)**: Complete non-Replit user authentication with session management
-    - **Dev Login Route**: `GET /auth/dev/login?email=<email>` creates/finds users and establishes sessions
-    - **Session Management**: Express sessions with 'sid' cookie, secure configuration, 24-hour expiry
-    - **Logout Functionality**: `POST /auth/logout` destroys sessions and redirects properly
-    - **Frontend Integration**: Dev email login form on login page for non-Replit users
-    - **Session Auth Gates**: `/auth/status` endpoint for session verification without impersonation
-    - **API Integration**: All API routes use session authentication with `credentials: include`
-    - **QA Verified**: Complete login/logout flow tested and working with real task data access
-  - **Debug Endpoints Streamlined**: Simplified debug endpoints to use canonical user ID approach
-    - `/debug/calendar-status` returns single token record with keyType indicators ("session"|"impersonated")
-    - `/debug/tokens/dump` shows redacted token information for canonical user only
-    - All debug endpoints support `?as=email` parameter for sessionless testing
-  - **Kill-Switch Implemented**: Emergency calendar sync controls with `CALENDAR_SYNC_ENABLED` environment variable and runtime POST endpoints
-    - `POST /debug/sync/disable` - Instant calendar write prevention (tested working)
-    - `POST /debug/sync/enable` - Re-enable calendar operations (tested working)
-  - **GoogleCalendarService Enhanced**: Added `getClientForUser()` method with email/userId normalization
-    - Accepts either userId or email, resolves to canonical user ID internally
-    - Direct oauth_tokens table queries for reliable token fetching
-    - Proper token refresh handling with database updates
-  - **Idempotent Calendar Hooks**: Enhanced calendar sync hooks with comprehensive sync control
-    - All hooks respect `SYNC_ENABLED` flag - early return when disabled
-    - Calendar events use `calendarEventId` for proper create vs update logic
-    - Prevents duplicate calendar events through database event ID tracking
-    - Enhanced logging with task/user/assignment IDs and action types
-  - **Database Integration**: Direct raw SQL queries via pool connection for oauth_tokens operations
-    - User ID normalization through users and team_members tables
-    - Token refresh updates stored directly in oauth_tokens table
-    - Canonical userId as single source of truth for all token operations
-- **UNIFIED TIMEZONE & CALENDAR SYSTEM (August 18, 2025)**: Complete implementation of robust timezone handling with idempotent calendar synchronization
-  - **Luxon Integration**: Implemented industry-standard timezone library for robust UTC/local time conversions
-  - **Unified Time Handling**: `computeDueAt()` function converts local date/time + timezone to canonical UTC timestamp stored in `due_at` field
-  - **Idempotent Calendar Events**: Deterministic event IDs (`task-{taskId}-{userId}`) prevent duplicate calendar events through upsert operations
-  - **Frontend Timezone Detection**: Automatic client timezone detection sent to server for accurate time computation
-  - **Calendar Sync Architecture**: `syncAllCalendarEventsForTask()` handles all task assignments with individual calendar events per assignment
-  - **Enhanced Debug System**: Comprehensive debugging endpoints for timezone testing, calendar status, and emergency controls
-  - **Task Creation Integration**: Both project and organization task creation routes use unified timezone handling with automatic calendar sync
-  - **Backward Compatibility**: Maintains existing `due_date`/`due_time` fields for display while using `due_at` as canonical UTC timestamp
-  - **Error Resilience**: Calendar sync failures don't prevent task operations, comprehensive logging for debugging
-  - **Emergency Controls**: Kill-switch for runaway calendar processes, runtime sync enable/disable capabilities
-  - **System Status**: ✅ COMPLETE & OPERATIONAL - All timezone handling and calendar sync functionality implemented and tested
-- **LUXON MIGRATION & COMPLETE TIME PARSING FIX (August 18, 2025)**: Single source of truth implementation using Luxon
-  - **Library Migration**: Completely migrated from dayjs to Luxon for superior timezone handling and parsing precision
-  - **Server-Side Single Source**: All due_at computation happens on server using unified `computeDueAt()` function with Luxon
-  - **Enhanced Format Support**: Robust parsing of "HH:mm", "H:mm", "h:mm a", "h a" using Luxon's format patterns
-  - **Client-Side Cleanup**: Removed all client-side timezone math and Date object conversions that caused time shifts
-  - **UTC Normalization**: All tasks store canonical UTC timestamps in `due_at` field with display helpers in user timezone
-  - **Edit Modal Prefill**: Proper UTC-to-local conversion using `utcToLocal()` function for accurate form prefill
-  - **Debug Endpoints**: Added `/debug/time/preview` endpoint for time parsing validation and testing
-  - **Calendar Sync Integration**: Enhanced calendar event creation using Luxon DateTime for proper timezone handling
-  - **Backward Compatibility**: Maintained existing `due_date`/`due_time` fields while using `due_at` as canonical source
-  - **System Status**: ✅ COMPLETE - "9:45 AM" now correctly stores as "09:45" in database (bug fixed)
-
-### Potential Integrations
-- **Analytics Platforms**: Designed to integrate with marketing tools and analytics services
-- **Reporting**: PDF generation capabilities for client reports
-- **Cloud Storage**: Expandable to AWS S3 or other cloud storage providers
+### Utility Libraries
+- **Luxon**: For robust date and time handling, including timezones.

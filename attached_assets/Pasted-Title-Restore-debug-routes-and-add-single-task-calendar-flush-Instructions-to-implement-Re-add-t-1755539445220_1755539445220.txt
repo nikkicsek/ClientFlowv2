@@ -1,0 +1,63 @@
+Title: Restore debug routes and add single-task calendar flush
+
+Instructions to implement:
+
+Re-add these debug routes (GET unless noted) and guard them the same way as before:
+
+/debug/routes – return the list of registered debug endpoints.
+
+/debug/calendar-status – show { hasTokens, keyType, user, tokenInfo.redacted } for session or ?as=.
+
+/debug/calendar-create-test – create a 30-min “Debug Calendar” event for the current user or ?as=.
+
+/debug/my-tasks – return tasks for the current user or ?as=.
+
+/debug/sync/status, POST /debug/sync/enable, POST /debug/sync/disable.
+
+NEW: /debug/sync/flush?taskId=<id> – upsert the Google Calendar event for that single task for every assignee who has tokens.
+
+Keep the ?as=email impersonation working on all of the above.
+
+Acceptance:
+
+/debug/routes lists all endpoints above.
+
+Hitting /debug/calendar-create-test?as=nikki@csekcreative.com drops a small red event on your calendar.
+
+/debug/sync/flush?taskId=<id> creates/updates/deletes the event for that one task.
+
+2) (Next) Make calendar upsert run automatically on task save
+
+Once the debug routes are back, paste this:
+
+Title: Upsert Google Calendar event on task create/update
+
+Instructions to implement:
+
+After create/update of a task:
+
+If due_at exists and the task has assignees:
+
+For each assignee with tokens, upsert a Google event. Store google_event_id per (task_id, assignee_id).
+
+Start = due_at shown in the assignee’s timezone. Duration default 30 min.
+
+On title, due_at, or assignee changes, update existing events; remove events for removed assignees or when due_at is cleared.
+
+Add concise logs so /debug/sync/flush and normal saves report what happened.
+
+Acceptance:
+
+Assigning yourself to a task with a due date+time creates/updates the calendar event within seconds.
+
+Clearing time or unassigning yourself removes the event.
+
+3) Small UI fix you noted (edit from the Tasks tab)
+
+Title: Add Edit action to Tasks tab rows
+
+Instructions:
+
+In the Tasks tab list, add an Edit button per row that opens the same Edit Task modal used in My Tasks.
+
+Pre-fill Description and Assignees; on save, send assigneeTeamMemberIds and persist Description.
