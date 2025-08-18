@@ -114,7 +114,6 @@ export const tasks = pgTable("tasks", {
   assignedTo: varchar("assigned_to").references(() => users.id),
   dueDate: timestamp("due_date"),
   dueTime: varchar("due_time", { length: 5 }), // Format: "HH:MM"
-  dueAt: timestamp("due_at"), // Combined due date and time in UTC
   completedAt: timestamp("completed_at"),
   notes: text("notes"),
   priority: varchar("priority").default("medium"), // "low", "medium", "high", "urgent"

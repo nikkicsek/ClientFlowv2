@@ -45,23 +45,16 @@ export default function CreateTaskModal({ isOpen, onClose, onSuccess, projectId 
 
   const createTaskMutation = useMutation({
     mutationFn: async (data: any) => {
-      const response = await apiRequest("POST", `/api/projects/${projectId}/tasks`, data);
+      // Include selectedTeamMembers in the payload so server handles assignments in transaction
+      const payload = {
+        ...data,
+        selectedTeamMembers,
+      };
+      const response = await apiRequest("POST", `/api/projects/${projectId}/tasks`, payload);
       return response.json();
     },
-    onSuccess: async (newTask) => {
-      // Assign selected team members to the task
-      if (selectedTeamMembers.length > 0) {
-        for (const memberId of selectedTeamMembers) {
-          try {
-            await apiRequest("POST", "/api/task-assignments", {
-              taskId: newTask.id,
-              teamMemberId: memberId,
-            });
-          } catch (error) {
-            console.error("Error assigning team member:", error);
-          }
-        }
-      }
+    onSuccess: async (result) => {
+      // Task and assignments are created in server transaction, no need for separate API calls
       
       queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "tasks"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/task-assignments"] });
@@ -115,22 +108,14 @@ export default function CreateTaskModal({ isOpen, onClose, onSuccess, projectId 
       return;
     }
 
-    // Combine date and time for due date if both are provided
-    let dueDateTime = null;
-    if (formData.dueDate) {
-      if (formData.dueTime) {
-        dueDateTime = `${formData.dueDate}T${formData.dueTime}:00`;
-      } else {
-        dueDateTime = `${formData.dueDate}T09:00:00`; // Default to 9 AM if no time specified
-      }
-    }
-
+    // Send separate dueDate and dueTime fields to match server expectation
     const taskData = {
       title: formData.title,
       description: formData.description || null,
       status: formData.status,
       priority: formData.priority,
-      dueDate: dueDateTime,
+      dueDate: formData.dueDate || null,
+      dueTime: formData.dueTime || null,
       googleDriveLink: formData.googleDriveLink || null,
     };
 
@@ -144,12 +129,13 @@ export default function CreateTaskModal({ isOpen, onClose, onSuccess, projectId 
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle>Add New Task</DialogTitle>
         </DialogHeader>
         
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="flex flex-col h-full">
+          <div className="space-y-4 overflow-y-auto flex-1 pr-2">
           <div className="space-y-2">
             <Label htmlFor="title">Task Title *</Label>
             <Input
@@ -302,7 +288,9 @@ export default function CreateTaskModal({ isOpen, onClose, onSuccess, projectId 
             />
           </div>
 
-          <div className="flex gap-2 pt-4">
+          </div>
+          
+          <div className="sticky bottom-0 bg-white border-t p-4 flex gap-2">
             <Button type="button" variant="outline" onClick={onClose} className="flex-1">
               Cancel
             </Button>

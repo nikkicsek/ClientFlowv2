@@ -412,31 +412,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { selectedTeamMembers = [], ...bodyData } = req.body;
       
-      // Combine due_date + due_time into due_at (UTC)
-      let dueAt: Date | undefined = undefined;
+      // Handle date and time parsing
       if (bodyData.dueDate) {
+        // Ensure we have a valid date string for database storage
         const dueDateTime = new Date(bodyData.dueDate);
-        
-        // If dueTime is provided, combine them
-        if (bodyData.dueTime && typeof bodyData.dueTime === 'string') {
-          const [hours, minutes] = bodyData.dueTime.split(':').map(Number);
-          if (!isNaN(hours) && !isNaN(minutes)) {
-            dueDateTime.setHours(hours, minutes, 0, 0);
-          }
-        }
-        
         if (!isNaN(dueDateTime.getTime())) {
-          dueAt = dueDateTime;
-          // Keep legacy fields for backward compatibility
-          bodyData.dueDate = dueDateTime;
-          bodyData.dueTime = bodyData.dueTime || `${dueDateTime.getHours().toString().padStart(2, '0')}:${dueDateTime.getMinutes().toString().padStart(2, '0')}`;
+          // Store as YYYY-MM-DD format
+          bodyData.dueDate = dueDateTime.toISOString().split('T')[0] + 'T' + dueDateTime.toISOString().split('T')[1];
+          
+          // Extract or preserve time component
+          if (!bodyData.dueTime && dueDateTime.getHours() > 0) {
+            bodyData.dueTime = `${dueDateTime.getHours().toString().padStart(2, '0')}:${dueDateTime.getMinutes().toString().padStart(2, '0')}`;
+          }
         }
       }
       
       const taskData = insertTaskSchema.parse({
         ...bodyData,
         projectId: req.params.projectId,
-        dueAt, // Add combined due_at field
       });
       
       // Start transaction
@@ -446,7 +439,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       try {
         // Create the task
         task = await storage.createTask(taskData);
-        console.log('Created task:', { taskId: task.id, title: task.title, dueAt: task.dueAt });
+        console.log('Created task:', { taskId: task.id, title: task.title, dueDate: task.dueDate, dueTime: task.dueTime });
         
         // Create task assignments for each selected team member
         for (const teamMemberId of selectedTeamMembers) {
@@ -480,7 +473,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 {
                   priority: task.priority ?? undefined,
                   assignedBy: `${user.firstName ?? ''} ${user.lastName ?? ''}`,
-                  dueDate: task.dueAt ? task.dueAt.toLocaleDateString() : undefined,
+                  dueDate: task.dueDate ? new Date(task.dueDate).toLocaleDateString() : undefined,
                   notes: task.notes ?? undefined,
                 }
               );
@@ -492,7 +485,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         // Calendar hook: Task created (only if task has due date and assignments)
-        if (task.dueAt && assignments.length > 0) {
+        if (task.dueDate && assignments.length > 0) {
           console.log('Firing calendar hook for task:', task.id);
           try {
             await onTaskCreatedOrUpdated(task.id);
