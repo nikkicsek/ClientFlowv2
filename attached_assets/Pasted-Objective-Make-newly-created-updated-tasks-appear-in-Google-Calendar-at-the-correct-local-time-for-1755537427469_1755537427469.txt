@@ -1,0 +1,48 @@
+Objective: Make newly created/updated tasks appear in Google Calendar at the correct local time (for nikki@csekcreative.com) with minimal changes.
+
+1) Compute due_at on the server (authoritative)
+- In the task create/update API, if (dueDate + dueTime) are provided and due_at is null, compute due_at in UTC based on the user's timezone.
+- For Nikki, hardcode userTz = "America/Vancouver" for now (we’ll make it per-user later).
+- Use luxon:
+    import { DateTime } from "luxon";
+    const parseLocal = (dateStr, timeStr, tz) => {
+      const candidates = [
+        "yyyy-LL-dd HH:mm","yyyy-LL-dd H:mm","yyyy-LL-dd h:mm a","yyyy-LL-dd h a"
+      ];
+      for (const fmt of candidates) {
+        const dt = DateTime.fromFormat(`${dateStr} ${timeStr}`, fmt, { zone: tz });
+        if (dt.isValid) return dt;
+      }
+      throw new Error("Invalid date/time");
+    };
+    const local = parseLocal(dueDate, dueTime, userTz);
+    const due_at = local.toUTC().toISO();
+    save due_at with the task.
+
+- Do NOT do client-side timezone math anymore. Keep the user’s typed time; let the server compute due_at.
+
+2) Calendar upsert (idempotent)
+- Add nullable column tasks.calendar_event_id.
+- After saving a task (create/update), if due_at is set, call calendarUpsert(task, userId):
+   * Lookup Google tokens for that user.
+   * Build event with:
+       start.dateTime = DateTime.fromISO(task.due_at, { zone: "utc" }).setZone(userTz).toISO();
+       start.timeZone = userTz
+       end.dateTime   = same + 60 minutes
+       end.timeZone   = userTz
+       summary = task.title
+       description = "Task from AgencyPro"
+   * If tasks.calendar_event_id exists → events.patch; else → events.insert and store returned id.
+   * Log errors to server console and return ok:false if any.
+
+3) Backfill helper (small, temporary)
+- Create /debug/calendar/backfill?hours=24&as=email (protected).
+- For tasks assigned to ?as user where due_at IS NOT NULL AND calendar_event_id IS NULL AND updated_at within last X hours → call calendarUpsert.
+
+4) Quick preview route (optional but handy)
+- /debug/time/preview?date=YYYY-MM-DD&time=HH:mm&tz=America/Vancouver → show computed due_at UTC.
+
+Acceptance test:
+- In the UI, create: “Sanity 10:15 AM” today, assign to Nikki.
+- API stores due_time "10:15", computes due_at UTC correctly, triggers calendarUpsert.
+- Event appears on Nikki’s Google Calendar at 10:15–11:15 AM local time (not 17:15).

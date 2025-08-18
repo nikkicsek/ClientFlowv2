@@ -460,69 +460,28 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createTask(task: InsertTask & { dueAt?: string }): Promise<Task> {
-    // Normalize dueAt to due_date + due_time if provided
-    function splitDueAt(dueAt?: string | Date) {
-      if (!dueAt) return {};
-      const d = dueAt instanceof Date ? dueAt : new Date(dueAt);
-      if (isNaN(d.getTime())) return {};
-      const iso = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString();
-      const due_date = iso.slice(0, 10);
-      const due_time = iso.slice(11, 16);
-      return { due_date: new Date(due_date + 'T00:00:00Z'), due_time };
-    }
+    // Do NOT use splitDueAt anymore - it causes UTC time conversion bugs
+    // The task creation route now properly handles time computation
     
-    // Handle both input formats
-    const { dueAt, dueDate, dueTime, ...restData } = task as any;
-    let finalData = {
+    // Handle input format - trust the route computation for time fields
+    const { dueAt, ...restData } = task as any;
+    const finalData = {
       ...restData,
       taskScope: task.taskScope || 'project', // Default to project scope if not specified
     };
-    
-    if (dueAt) {
-      const { due_date, due_time } = splitDueAt(dueAt);
-      if (due_date) {
-        finalData.dueDate = due_date;
-        finalData.dueTime = due_time;
-      }
-    } else if (dueDate) {
-      finalData.dueDate = dueDate instanceof Date ? dueDate : new Date(dueDate);
-      finalData.dueTime = dueTime || null;
-    }
     
     const [newTask] = await db.insert(tasks).values(finalData).returning();
     return newTask;
   }
 
   async createOrganizationTask(task: InsertTask & { dueAt?: string }): Promise<Task> {
-    // Normalize dueAt to due_date + due_time if provided
-    function splitDueAt(dueAt?: string | Date) {
-      if (!dueAt) return {};
-      const d = dueAt instanceof Date ? dueAt : new Date(dueAt);
-      if (isNaN(d.getTime())) return {};
-      const iso = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString();
-      const due_date = iso.slice(0, 10);
-      const due_time = iso.slice(11, 16);
-      return { due_date: new Date(due_date + 'T00:00:00Z'), due_time };
-    }
-    
-    // Handle both input formats
-    const { dueAt, dueDate, dueTime, ...restData } = task as any;
-    let finalData = {
+    // Handle input format - trust the route computation for time fields
+    const { dueAt, ...restData } = task as any;
+    const finalData = {
       ...restData,
       taskScope: 'organization',
       projectId: null, // Organization tasks don't belong to projects
     };
-    
-    if (dueAt) {
-      const { due_date, due_time } = splitDueAt(dueAt);
-      if (due_date) {
-        finalData.dueDate = due_date;
-        finalData.dueTime = due_time;
-      }
-    } else if (dueDate) {
-      finalData.dueDate = dueDate instanceof Date ? dueDate : new Date(dueDate);
-      finalData.dueTime = dueTime || null;
-    }
     
     const [newTask] = await db.insert(tasks).values(finalData).returning();
     return newTask;
