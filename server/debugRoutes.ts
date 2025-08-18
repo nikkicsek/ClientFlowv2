@@ -419,27 +419,32 @@ export function registerDebugRoutes(app: Express) {
         
         const { userId, tz, tokens } = resolution;
         
-        // Helper to convert due_at to milliseconds (handles Date, ISO string, epoch seconds/ms)
-        function toMs(v: any): number {
-          if (v instanceof Date) return v.getTime();
-          if (typeof v === 'string') return Date.parse(v);
-          if (typeof v === 'number') return v < 1e12 ? v * 1000 : v; // epoch secs → ms
-          throw new Error('Unknown due_at format');
+        // Use Luxon for proper timezone handling - avoid double conversion
+        const { DateTime } = await import('luxon');
+        const legacyCalendarTz = 'America/Vancouver';
+        
+        let legacyStartLocal: DateTime;
+        
+        if (task.due_at instanceof Date) {
+          legacyStartLocal = DateTime.fromJSDate(task.due_at, { zone: 'utc' }).setZone(legacyCalendarTz);
+        } else if (typeof task.due_at === 'string') {
+          legacyStartLocal = DateTime.fromISO(task.due_at, { zone: 'utc' }).setZone(legacyCalendarTz);
+        } else if (typeof task.due_at === 'number') {
+          // Handle epoch seconds/milliseconds conversion
+          const ms = task.due_at < 1e12 ? task.due_at * 1000 : task.due_at;
+          legacyStartLocal = DateTime.fromMillis(ms, { zone: 'utc' }).setZone(legacyCalendarTz);
+        } else {
+          legacyStartLocal = DateTime.now().setZone(legacyCalendarTz);
         }
+        
+        const legacyEndLocal = legacyStartLocal.plus({ minutes: 60 });
 
-        const startMs = toMs(task.due_at);
-        const endMs = startMs + 60 * 60 * 1000; // 60 minutes
-
-        const startISO = new Date(startMs).toISOString();
-        const endISO = new Date(endMs).toISOString();
-
-        console.info('[CAL]', { 
+        console.info('[CAL LEGACY]', { 
           taskId, 
-          startISO, 
-          endISO, 
-          tz: 'America/Vancouver',
           originalDueAt: task.due_at,
-          startMs
+          startLocal: legacyStartLocal.toISO({ includeOffset: false }),
+          endLocal: legacyEndLocal.toISO({ includeOffset: false }),
+          tz: legacyCalendarTz
         });
 
         // Check if this task already has a calendar event for this user (idempotent)
@@ -462,7 +467,7 @@ export function registerDebugRoutes(app: Express) {
           const updateResult = await googleCalendarService.updateTaskEvent(userId, eventId, {
             title: task.title,
             description: task.description || '',
-            dueDate: startMs, // Pass milliseconds directly
+            dueDate: legacyStartLocal.toJSDate(), // Pass local Date object
             status: task.status || 'pending',
             priority: task.priority || 'medium'
           });
@@ -479,7 +484,7 @@ export function registerDebugRoutes(app: Express) {
           const createResult = await googleCalendarService.createTaskEvent(userId, {
             title: task.title,
             description: task.description || '',
-            dueDate: startMs, // Pass milliseconds directly
+            dueDate: legacyStartLocal.toJSDate(), // Pass local Date object
             status: task.status || 'pending',
             priority: task.priority || 'medium'
           });
@@ -498,7 +503,7 @@ export function registerDebugRoutes(app: Express) {
           );
         }
 
-        console.log(`[CAL] upsert ok task=${taskId} user=${userId} cal=primary event=${eventId} startISO=${startISO} tz=America/Vancouver`);
+        console.log(`[CAL] upsert ok task=${taskId} user=${userId} cal=primary event=${eventId} startLocal=${legacyStartLocal.toISO({ includeOffset: false })} tz=${legacyCalendarTz}`);
 
         return res.json({ 
           ok: true, 
@@ -532,27 +537,32 @@ export function registerDebugRoutes(app: Express) {
       
       const { userId, email, tz, tokens } = resolution;
       
-      // Helper to convert due_at to milliseconds (handles Date, ISO string, epoch seconds/ms)
-      function toMs(v: any): number {
-        if (v instanceof Date) return v.getTime();
-        if (typeof v === 'string') return Date.parse(v);
-        if (typeof v === 'number') return v < 1e12 ? v * 1000 : v; // epoch secs → ms
-        throw new Error('Unknown due_at format');
+      // Use Luxon for proper timezone handling - avoid double conversion
+      const { DateTime } = await import('luxon');
+      const calendarTz = 'America/Vancouver';
+      
+      let startLocal: DateTime;
+      
+      if (task.due_at instanceof Date) {
+        startLocal = DateTime.fromJSDate(task.due_at, { zone: 'utc' }).setZone(calendarTz);
+      } else if (typeof task.due_at === 'string') {
+        startLocal = DateTime.fromISO(task.due_at, { zone: 'utc' }).setZone(calendarTz);
+      } else if (typeof task.due_at === 'number') {
+        // Handle epoch seconds/milliseconds conversion
+        const ms = task.due_at < 1e12 ? task.due_at * 1000 : task.due_at;
+        startLocal = DateTime.fromMillis(ms, { zone: 'utc' }).setZone(calendarTz);
+      } else {
+        startLocal = DateTime.now().setZone(calendarTz);
       }
+      
+      const endLocal = startLocal.plus({ minutes: 60 });
 
-      const startMs = toMs(task.due_at);
-      const endMs = startMs + 60 * 60 * 1000; // 60 minutes
-
-      const startISO = new Date(startMs).toISOString();
-      const endISO = new Date(endMs).toISOString();
-
-      console.info('[CAL]', { 
+      console.info('[CAL DEBUG]', { 
         taskId, 
-        startISO, 
-        endISO, 
-        tz: 'America/Vancouver',
         originalDueAt: task.due_at,
-        startMs
+        startLocal: startLocal.toISO({ includeOffset: false }),
+        endLocal: endLocal.toISO({ includeOffset: false }),
+        tz: calendarTz
       });
 
       // Check if this task already has a calendar event for this user (idempotent)
@@ -575,7 +585,7 @@ export function registerDebugRoutes(app: Express) {
         const updateResult = await googleCalendarService.updateTaskEvent(userId, eventId, {
           title: task.title,
           description: task.description || '',
-          dueDate: startMs, // Pass milliseconds directly
+          dueDate: startLocal.toJSDate(), // Pass local Date object
           status: task.status || 'pending',
           priority: task.priority || 'medium'
         });
@@ -592,7 +602,7 @@ export function registerDebugRoutes(app: Express) {
         const createResult = await googleCalendarService.createTaskEvent(userId, {
           title: task.title,
           description: task.description || '',
-          dueDate: startMs, // Pass milliseconds directly
+          dueDate: startLocal.toJSDate(), // Pass local Date object
           status: task.status || 'pending',
           priority: task.priority || 'medium'
         });
@@ -611,7 +621,7 @@ export function registerDebugRoutes(app: Express) {
         );
       }
 
-      console.log(`[CAL] upsert ok task=${taskId} user=${userId} cal=primary event=${eventId} startISO=${startISO} tz=America/Vancouver`);
+      console.log(`[CAL] upsert ok task=${taskId} user=${userId} cal=primary event=${eventId} startLocal=${startLocal.toISO({ includeOffset: false })} tz=${calendarTz}`);
 
       res.json({ 
         ok: true, 
