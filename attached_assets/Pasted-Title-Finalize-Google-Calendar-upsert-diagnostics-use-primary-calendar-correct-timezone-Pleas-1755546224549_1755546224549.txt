@@ -1,0 +1,74 @@
+Title: Finalize Google Calendar upsert + diagnostics (use primary calendar, correct timezone)
+
+Please implement:
+
+Upsert: return proof + force primary
+
+In the Google Calendar upsert, explicitly set calendarId = 'primary'.
+
+When successful, return:
+
+{ "ok": true, "taskId": "<id>", "assigneeUserId": "<id>", "calendarId": "primary", "eventId": "<id>", "htmlLink": "<google link>" }
+
+
+Log one concise line:
+
+[CAL] upsert ok task=<id> user=<userId> cal=primary event=<eventId> startLocal=<YYYY-MM-DD HH:mm> tz=<tz>
+
+
+Correct timezone math (DST safe)
+
+Compute due_at using IANA tz America/Vancouver (DST aware). No fixed offsets.
+
+Example (luxon):
+
+import { DateTime } from "luxon";
+const local = DateTime.fromFormat(`${dueDate} ${dueTime}`, "yyyy-LL-dd HH:mm", { zone: "America/Vancouver" });
+if (!local.isValid) { try 12h formats: "yyyy-LL-dd h:mm a", "yyyy-LL-dd h a"; }
+const due_at = local.toUTC().toISO();
+
+
+When building the Google event:
+
+const startLocal = DateTime.fromISO(task.due_at, { zone: 'utc' }).setZone("America/Vancouver");
+event.start = { dateTime: startLocal.toISO(), timeZone: "America/Vancouver" };
+event.end   = { dateTime: startLocal.plus({ minutes: 60 }).toISO(), timeZone: "America/Vancouver" };
+
+
+Diagnostics
+
+Add GET /debug/calendar/list?as=... → list user’s calendars (id, summary, primary).
+
+Add GET /debug/calendar/get?eventId=...&calendarId=primary&as=... → fetch the event and return { found:true, eventId, start, end, htmlLink }.
+
+Add GET /debug/db/task-events?taskId=... → show any stored event rows for that task (redact nothing sensitive).
+
+Owner resolution for sync
+
+Treat a task as yours if:
+
+tasks.assigned_to = userId OR
+
+EXISTS task_assignments ta WHERE ta.task_id = tasks.id AND ta.team_member_id = <your teamMemberId>
+
+Token lookup must normalize to userId (not teamMemberId) before reading oauth_tokens.
+
+Auto-sync on save (use the same upsert)
+
+After task create/update: if due_at exists and at least one assignee with tokens → upsert event(s).
+
+Maintain a table task_google_events (task_id UUID, user_id TEXT, event_id TEXT, PRIMARY KEY(task_id,user_id)) for idempotency.
+
+If due_at or title changed → PATCH. If an assignee was removed or due_at cleared → DELETE that event.
+
+Acceptance:
+
+Hitting
+/debug/sync/upsert-task?taskId=def42661-adc0-48f8-812d-1420bddcdfa5&as=nikki@csekcreative.com
+returns { ok:true, calendarId:"primary", eventId:"...", htmlLink:"..." }.
+
+Clicking htmlLink opens the event in your Google Calendar at the correct local time.
+
+/debug/calendar/get?eventId=...&calendarId=primary&as=... returns found:true.
+
+Creating or editing a task (assign to Nikki, set date+time) auto-creates/updates the event without using debug endpoints.

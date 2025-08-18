@@ -436,6 +436,7 @@ export function registerDebugRoutes(app: Express) {
         const { googleCalendarService } = await import('./googleCalendar');
         
         let eventId: string;
+        let htmlLink: string = '';
         
         if (existingEventResult.rows.length > 0) {
           // PATCH existing event
@@ -450,14 +451,16 @@ export function registerDebugRoutes(app: Express) {
             priority: task.priority || 'medium'
           });
           
-          if (!updateResult) {
+          if (!updateResult.success) {
             throw new Error(`Failed to update calendar event ${eventId}`);
           }
+          
+          htmlLink = updateResult.htmlLink || '';
         } else {
           // CREATE new event and store mapping
           console.log(`Creating new calendar event for task ${taskId}`);
           
-          eventId = await googleCalendarService.createTaskEvent(userId, {
+          const createResult = await googleCalendarService.createTaskEvent(userId, {
             title: task.title,
             description: task.description || '',
             dueDate: new Date(startLocal.toISO()),
@@ -465,9 +468,12 @@ export function registerDebugRoutes(app: Express) {
             priority: task.priority || 'medium'
           });
           
-          if (!eventId) {
-            throw new Error('Failed to create calendar event - no event ID returned');
+          if (!createResult) {
+            throw new Error('Failed to create calendar event - no result returned');
           }
+          
+          eventId = createResult.eventId;
+          htmlLink = createResult.htmlLink;
           
           // Store event mapping in task_google_events table
           await pool.query(
@@ -476,13 +482,15 @@ export function registerDebugRoutes(app: Express) {
           );
         }
 
-        console.log(`[CAL] upsert ok task=${taskId} user=${userId} event=${eventId} start=${startLocal.toISO()} tz=${tz}`);
+        console.log(`[CAL] upsert ok task=${taskId} user=${userId} cal=primary event=${eventId} startLocal=${startLocal.isValid ? startLocal.toFormat('yyyy-LL-dd HH:mm') : 'INVALID'} tz=${tz}`);
 
         return res.json({ 
           ok: true, 
           taskId, 
           assigneeUserId: userId,
-          eventId 
+          calendarId: 'primary',
+          eventId,
+          htmlLink: htmlLink || ''
         });
       } else {
         // Check task_assignments table
@@ -525,6 +533,7 @@ export function registerDebugRoutes(app: Express) {
       const { googleCalendarService } = await import('./googleCalendar');
       
       let eventId: string;
+      let htmlLink: string = '';
       
       if (existingEventResult.rows.length > 0) {
         // PATCH existing event
@@ -539,14 +548,16 @@ export function registerDebugRoutes(app: Express) {
           priority: task.priority || 'medium'
         });
         
-        if (!updateResult) {
+        if (!updateResult.success) {
           throw new Error(`Failed to update calendar event ${eventId}`);
         }
+        
+        htmlLink = updateResult.htmlLink || '';
       } else {
         // CREATE new event and store mapping
         console.log(`Creating new calendar event for task ${taskId}`);
         
-        eventId = await googleCalendarService.createTaskEvent(userId, {
+        const createResult = await googleCalendarService.createTaskEvent(userId, {
           title: task.title,
           description: task.description || '',
           dueDate: new Date(startLocal.toISO()),
@@ -554,9 +565,12 @@ export function registerDebugRoutes(app: Express) {
           priority: task.priority || 'medium'
         });
         
-        if (!eventId) {
-          throw new Error('Failed to create calendar event - no event ID returned');
+        if (!createResult) {
+          throw new Error('Failed to create calendar event - no result returned');
         }
+        
+        eventId = createResult.eventId;
+        htmlLink = createResult.htmlLink;
         
         // Store event mapping in task_google_events table
         await pool.query(
@@ -565,13 +579,15 @@ export function registerDebugRoutes(app: Express) {
         );
       }
 
-      console.log(`[CAL] upsert ok task=${taskId} user=${userId} event=${eventId} start=${startLocal.toISO()} tz=${tz}`);
+      console.log(`[CAL] upsert ok task=${taskId} user=${userId} cal=primary event=${eventId} startLocal=${startLocal.isValid ? startLocal.toFormat('yyyy-LL-dd HH:mm') : 'INVALID'} tz=${tz}`);
 
       res.json({ 
         ok: true, 
         taskId, 
         assigneeUserId: userId,
-        eventId 
+        calendarId: 'primary',
+        eventId,
+        htmlLink: htmlLink || ''
       });
     } catch (error: any) {
       console.error('Task upsert failed:', error);
@@ -1282,6 +1298,131 @@ export function registerDebugRoutes(app: Express) {
     } catch (error: any) {
       console.error('[SIMPLE] Test failed:', error);
       res.status(500).json({ error: error.message });
+    }
+  });
+
+  // New diagnostic endpoints
+
+  // List user's calendars
+  app.get('/debug/calendar/list', async (req, res) => {
+    const impersonateAs = req.query.as as string;
+    
+    if (!impersonateAs) {
+      return res.status(400).json({ error: 'Missing ?as=email parameter' });
+    }
+    
+    try {
+      const resolution = await resolveUserAndTokensEnhanced({
+        asEmail: impersonateAs
+      });
+      
+      if (!resolution.ok) {
+        return res.status(400).json({ 
+          error: `Token resolution failed: ${resolution.reason}`,
+          details: resolution
+        });
+      }
+      
+      const { userId } = resolution;
+      const { googleCalendarService } = await import('./googleCalendar');
+      
+      const calendars = await googleCalendarService.listCalendars(userId);
+      
+      res.json({
+        userEmail: impersonateAs,
+        userId,
+        calendars: calendars.map(cal => ({
+          id: cal.id,
+          summary: cal.summary,
+          primary: cal.primary || false
+        }))
+      });
+    } catch (error: any) {
+      console.error('Calendar list failed:', error);
+      res.status(500).json({ 
+        error: 'Calendar list failed', 
+        details: error.message 
+      });
+    }
+  });
+
+  // Get specific calendar event
+  app.get('/debug/calendar/get', async (req, res) => {
+    const { eventId, as: impersonateAs } = req.query;
+    const calendarId = req.query.calendarId as string || 'primary';
+    
+    if (!eventId || !impersonateAs) {
+      return res.status(400).json({ error: 'Missing ?eventId=...&as=email parameters' });
+    }
+    
+    try {
+      const resolution = await resolveUserAndTokensEnhanced({
+        asEmail: impersonateAs as string
+      });
+      
+      if (!resolution.ok) {
+        return res.status(400).json({ 
+          error: `Token resolution failed: ${resolution.reason}`,
+          details: resolution
+        });
+      }
+      
+      const { userId } = resolution;
+      const { googleCalendarService } = await import('./googleCalendar');
+      
+      const event = await googleCalendarService.getEvent(userId, eventId as string, calendarId);
+      
+      if (!event) {
+        return res.json({
+          found: false,
+          eventId,
+          calendarId
+        });
+      }
+      
+      res.json({
+        found: true,
+        eventId: event.id,
+        calendarId,
+        start: event.start,
+        end: event.end,
+        htmlLink: event.htmlLink,
+        summary: event.summary,
+        description: event.description
+      });
+    } catch (error: any) {
+      console.error('Calendar get event failed:', error);
+      res.status(500).json({ 
+        error: 'Calendar get event failed', 
+        details: error.message 
+      });
+    }
+  });
+
+  // Get task events from database
+  app.get('/debug/db/task-events', async (req, res) => {
+    const { taskId } = req.query;
+    
+    if (!taskId) {
+      return res.status(400).json({ error: 'Missing ?taskId=... parameter' });
+    }
+    
+    try {
+      const result = await pool.query(
+        'SELECT task_id, user_id, event_id, created_at, updated_at FROM task_google_events WHERE task_id = $1',
+        [taskId]
+      );
+      
+      res.json({
+        taskId,
+        events: result.rows
+      });
+    } catch (error: any) {
+      console.error('Database query failed:', error);
+      res.status(500).json({ 
+        error: 'Database query failed', 
+        details: error.message 
+      });
     }
   });
 
