@@ -412,18 +412,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { selectedTeamMembers = [], ...bodyData } = req.body;
       
-      // Handle date and time parsing
+      // Handle date and time parsing - keep as strings for database
       if (bodyData.dueDate) {
-        // Ensure we have a valid date string for database storage
+        // Validate date format but keep as string
         const dueDateTime = new Date(bodyData.dueDate);
         if (!isNaN(dueDateTime.getTime())) {
-          // Store as YYYY-MM-DD format
-          bodyData.dueDate = dueDateTime.toISOString().split('T')[0] + 'T' + dueDateTime.toISOString().split('T')[1];
-          
-          // Extract or preserve time component
-          if (!bodyData.dueTime && dueDateTime.getHours() > 0) {
-            bodyData.dueTime = `${dueDateTime.getHours().toString().padStart(2, '0')}:${dueDateTime.getMinutes().toString().padStart(2, '0')}`;
-          }
+          // Keep as YYYY-MM-DD format string for database
+          bodyData.dueDate = bodyData.dueDate;
+        } else {
+          bodyData.dueDate = null;
         }
       }
       
