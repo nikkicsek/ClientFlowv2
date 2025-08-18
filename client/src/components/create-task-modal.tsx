@@ -180,13 +180,13 @@ export default function CreateTaskModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
-        <DialogHeader>
+      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
+        <DialogHeader className="shrink-0">
           <DialogTitle>{mode === 'edit' ? 'Edit Task' : 'Add New Task'}</DialogTitle>
         </DialogHeader>
         
-        <form onSubmit={handleSubmit} className="flex flex-col h-full">
-          <div className="space-y-4 overflow-y-auto flex-1 pr-2">
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+          <div className="space-y-4 overflow-y-auto flex-1 pr-2 pb-4">
           <div className="space-y-2">
             <Label htmlFor="title">Task Title *</Label>
             <Input
@@ -215,7 +215,7 @@ export default function CreateTaskModal({
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="z-50">
                 <SelectItem value="in_progress">In Progress</SelectItem>
                 <SelectItem value="completed">Completed</SelectItem>
                 <SelectItem value="needs_approval">Needs Approval</SelectItem>
@@ -231,7 +231,7 @@ export default function CreateTaskModal({
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="z-50">
                 <SelectItem value="low">Low</SelectItem>
                 <SelectItem value="medium">Medium</SelectItem>
                 <SelectItem value="high">High</SelectItem>
@@ -341,7 +341,7 @@ export default function CreateTaskModal({
 
           </div>
           
-          <div className="sticky bottom-0 bg-white border-t p-4 flex gap-2">
+          <div className="shrink-0 bg-white border-t pt-4 mt-4 flex gap-2">
             <Button type="button" variant="outline" onClick={onClose} className="flex-1">
               Cancel
             </Button>
