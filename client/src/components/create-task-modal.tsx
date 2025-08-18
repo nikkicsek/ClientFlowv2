@@ -13,6 +13,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { Users, X, Calendar, Clock } from "lucide-react";
 import type { TeamMember } from "@shared/schema";
 import { getUserTimezone } from "@/utils/timeFormatting";
+import { extractTaskDateTime, adaptFormDataToAPI, isValidTimeFormat } from "@/utils/dateTimeUtils";
 
 
 interface CreateTaskModalProps {
@@ -51,26 +52,18 @@ export default function CreateTaskModal({
   
   const [selectedTeamMembers, setSelectedTeamMembers] = useState<string[]>([]);
 
-  // Initialize form with task data in edit mode - avoid Date conversion issues
+  // Initialize form with task data in edit mode - proper due_at handling
   useState(() => {
     if (mode === 'edit' && task) {
-      let dueDateStr = "";
-      if (task.dueDate) {
-        // Handle various date input formats without converting to Date
-        if (typeof task.dueDate === 'string') {
-          dueDateStr = task.dueDate.split('T')[0]; // Extract YYYY-MM-DD from ISO string
-        } else {
-          dueDateStr = new Date(task.dueDate).toISOString().split('T')[0];
-        }
-      }
+      const { dueDate, dueTime } = extractTaskDateTime(task);
       
       setFormData({
         title: task.title || "",
         description: task.description || "",
         status: task.status || "in_progress",
         priority: task.priority || "medium",
-        dueDate: dueDateStr,
-        dueTime: task.dueTime || "", // Keep raw time string from database
+        dueDate,
+        dueTime,
         googleDriveLink: task.googleDriveLink || "",
       });
       setSelectedTeamMembers(task.assigneeUserIds || []);
@@ -84,11 +77,13 @@ export default function CreateTaskModal({
   });
 
   const taskMutation = useMutation({
-    mutationFn: async (data: any) => {
+    mutationFn: async (formData: any) => {
+      // Adapt form data to API shape and add additional fields
+      const apiData = adaptFormDataToAPI(formData);
       const payload = {
-        ...data,
-        assigneeUserIds: selectedTeamMembers, // Changed from selectedTeamMembers to match API
-        timezone: getUserTimezone() // Include user's timezone for unified time handling
+        ...apiData,
+        assigneeUserIds: selectedTeamMembers,
+        timezone: getUserTimezone() // Include user's timezone for server-side time computation
       };
       
       if (mode === 'edit' && task) {
@@ -171,22 +166,18 @@ export default function CreateTaskModal({
       return;
     }
 
-    // Send timezone data along with task data for unified time handling
-    const userTimezone = getUserTimezone();
-    const taskData = {
-      title: formData.title,
-      description: formData.description || null,
-      status: formData.status,
-      priority: formData.priority,
-      dueDate: formData.dueDate || null,
-      dueTime: formData.dueTime || null,
-      timezone: userTimezone, // Include timezone for server computation
-      googleDriveLink: formData.googleDriveLink || null,
-      selectedTeamMembers,
-    };
+    // Validate time format if provided
+    if (formData.dueTime && !isValidTimeFormat(formData.dueTime)) {
+      toast({
+        title: "Invalid Time Format",
+        description: "Please use a valid time format like '9:30 PM' or '21:30'.",
+        variant: "destructive",
+      });
+      return;
+    }
 
-    console.log(`${mode === 'edit' ? 'Updating' : 'Creating'} task with data:`, taskData);
-    taskMutation.mutate(taskData);
+    console.log(`${mode === 'edit' ? 'Updating' : 'Creating'} task with data:`, formData);
+    taskMutation.mutate(formData);
   };
 
   const handleInputChange = (field: string, value: string) => {
@@ -335,12 +326,20 @@ export default function CreateTaskModal({
               </Label>
               <Input
                 id="dueTime"
-                type="time"
+                type="text"
                 value={formData.dueTime}
                 onChange={(e) => handleInputChange('dueTime', e.target.value)}
-                placeholder="09:00"
+                placeholder="9:30 PM, 21:30, or 9 PM"
+                className={!formData.dueTime || isValidTimeFormat(formData.dueTime) ? "" : "border-red-500"}
               />
-              <p className="text-xs text-gray-500">Time for Google Calendar sync</p>
+              <p className="text-xs text-gray-500">
+                Accepts formats like "9:30 PM", "21:30", or "9 PM"
+              </p>
+              {formData.dueTime && !isValidTimeFormat(formData.dueTime) && (
+                <p className="text-xs text-red-500">
+                  Invalid time format. Try "9:30 PM" or "21:30"
+                </p>
+              )}
             </div>
           </div>
 

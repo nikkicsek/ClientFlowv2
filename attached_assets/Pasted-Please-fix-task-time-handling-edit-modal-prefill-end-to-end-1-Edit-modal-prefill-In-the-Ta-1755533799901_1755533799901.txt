@@ -1,0 +1,40 @@
+Please fix task time handling + edit modal prefill end-to-end:
+
+1) Edit modal prefill
+   - In the Task Edit/Create form component, ensure `defaultValues` (or react-hook-form `reset`) maps the loaded task.
+   - If the task has `due_at`, derive:
+       dueDate = formatLocal(due_at, 'YYYY-MM-DD')
+       dueTime = formatLocal(due_at, 'HH:mm')   // 24h string
+     Else if it has `due_date` / `due_time`, map those directly to the form.
+   - The form should use camelCase fields internally (`dueDate`, `dueTime`) and the API adapter should translate to the API shape.
+
+2) Time input hotfix (stop auto-normalizing)
+   - Replace `<input type="time">` with a controlled text input.
+   - Accept user strings like “9:30 PM”, “21:30”, “9 PM”. Store the exact string (no client conversions).
+   - Light client validation only (regex). Don’t coerce to a Date on the client.
+
+3) Server: compute and persist `due_at` on create/update
+   - When a task is saved with (`dueDate`, `dueTime`) but no `due_at`, compute `due_at` in the user’s timezone and persist.
+   - If only `dueDate` is given, leave `due_at` null and `due_time` null (no calendar sync).
+   - Use a single function `computeDueAt(dueDate, dueTime, timezone)`:
+       - Parse `dueTime` as either 24h (“HH:mm”) or 12h (“h:mm a” or “h a”).
+       - Combine with `dueDate` in the user tz; persist `due_at` as UTC.
+     (Use luxon or date-fns-tz; fallback timezone “America/Los_Angeles” if none present.)
+
+4) Ensure calendar sync is triggered
+   - When `due_at` is created or changed, enqueue the calendar upsert.
+   - Guard to avoid minute-by-minute loops (debounce or ignore identical `due_at`).
+
+5) API response normalization
+   - For GET /tasks and /my-tasks, include:
+       - `due_date` (ISO date, local) 
+       - `due_time` ("HH:mm" 24h string) 
+       - `due_at` (UTC ISO)
+     so the UI can prefill reliably.
+   - Add `/debug/task/:id` to dump the three fields for a single task (redact nothing sensitive).
+
+6) Quick regression test (add to debug page)
+   - A button to create “Debug Task HH:MM” with dueDate=today and chosen dueTime, then immediately show the computed `due_at` and whether a calendar event id was created.
+
+7) Small bug noted
+   - Where the form sends snake_case vs camelCase, add a tiny adapter layer so we don’t have to chase casing mismatches again.
