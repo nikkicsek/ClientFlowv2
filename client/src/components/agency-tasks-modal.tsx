@@ -37,6 +37,7 @@ import {
 import { apiRequest } from "@/lib/queryClient";
 import { TaskAssignmentManager } from "./task-assignment-manager";
 import { DeleteConfirmationDialog } from "./delete-confirmation-dialog";
+import { EditTaskModal } from "./edit-task-modal";
 import type { Project, Task } from "@shared/schema";
 
 interface AgencyTasksModalProps {
@@ -54,6 +55,7 @@ export function AgencyTasksModal({ isOpen, onClose, project, onCreateTask }: Age
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [newAssignee, setNewAssignee] = useState("");
   const [deletingTask, setDeletingTask] = useState<{id: string, title: string} | null>(null);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
 
   // Delete task mutation
   const deleteTaskMutation = useMutation({
@@ -384,6 +386,15 @@ export function AgencyTasksModal({ isOpen, onClose, project, onCreateTask }: Age
                 <Button
                   size="sm"
                   variant="outline"
+                  onClick={() => setEditingTask(task)}
+                  className="h-7 text-xs"
+                >
+                  <Edit3 className="h-3 w-3 mr-1" />
+                  Edit
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
                   onClick={() => {
                     setEditingTaskId(task.id);
                     setNewAssignee(task.assignedToMember || "unassigned");
@@ -391,7 +402,7 @@ export function AgencyTasksModal({ isOpen, onClose, project, onCreateTask }: Age
                   className="h-7 text-xs"
                 >
                   <UserPlus className="h-3 w-3 mr-1" />
-                  Assign/Edit
+                  Assign
                 </Button>
                 <Button
                   size="sm"
@@ -634,6 +645,19 @@ export function AgencyTasksModal({ isOpen, onClose, project, onCreateTask }: Age
         itemName={deletingTask?.title || ''}
         itemType="task"
         isLoading={deleteTaskMutation.isPending}
+      />
+
+      <EditTaskModal
+        isOpen={!!editingTask}
+        onClose={() => setEditingTask(null)}
+        task={editingTask}
+        projectId={project?.id}
+        onTaskUpdated={() => {
+          queryClient.invalidateQueries({ queryKey: ["/api/projects", project?.id, "tasks"] });
+          queryClient.invalidateQueries({ queryKey: ["/api/admin/tasks"] });
+          queryClient.invalidateQueries({ queryKey: ["/api/admin/task-assignments"] });
+          setEditingTask(null);
+        }}
       />
     </>
   );

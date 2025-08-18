@@ -72,6 +72,179 @@ async function resolveUserAndTokens(req: any) {
 
 export function registerDebugRoutes(app: Express) {
   console.log('Mounted debug routes at /debug');
+
+  // Debug routes registry endpoint
+  app.get('/debug/routes', (req, res) => {
+    res.json({
+      available_endpoints: [
+        'GET /debug/routes',
+        'GET /debug/calendar-status', 
+        'GET /debug/calendar-create-test',
+        'GET /debug/my-tasks',
+        'GET /debug/sync/status',
+        'POST /debug/sync/enable',
+        'POST /debug/sync/disable', 
+        'GET /debug/sync/flush'
+      ]
+    });
+  });
+
+  // Calendar status for session user or ?as=email
+  app.get('/debug/calendar-status', async (req, res) => {
+    try {
+      const { user, tokens } = await resolveUserAndTokens(req);
+      
+      res.json({
+        hasTokens: !!tokens,
+        keyType: req.query.as ? 'impersonated' : 'session',
+        user: user.email,
+        tokenInfo: tokens ? {
+          access_token: tokens.access_token ? 'REDACTED' : null,
+          refresh_token: tokens.refresh_token ? 'REDACTED' : null,
+          expires_at: tokens.expires_at
+        } : null
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Create test calendar event
+  app.get('/debug/calendar-create-test', async (req, res) => {
+    try {
+      const { user, tokens } = await resolveUserAndTokens(req);
+      
+      if (!tokens) {
+        return res.status(400).json({ error: 'No Google Calendar tokens found for user' });
+      }
+
+      const calendarService = new GoogleCalendarService();
+      const client = await calendarService.getClientForUser(user.id);
+      
+      if (!client) {
+        return res.status(400).json({ error: 'Failed to get Google Calendar client' });
+      }
+
+      // Create a 30-minute test event
+      const now = new Date();
+      const endTime = new Date(now.getTime() + 30 * 60 * 1000);
+      
+      const event = {
+        summary: 'Debug Calendar Test',
+        description: 'Test event created by debug route',
+        start: {
+          dateTime: now.toISOString(),
+          timeZone: 'America/Vancouver'
+        },
+        end: {
+          dateTime: endTime.toISOString(), 
+          timeZone: 'America/Vancouver'
+        },
+        colorId: '11' // Red color
+      };
+
+      const response = await client.events.insert({
+        calendarId: 'primary',
+        requestBody: event
+      });
+
+      res.json({
+        success: true,
+        eventId: response.data.id,
+        eventUrl: response.data.htmlLink,
+        user: user.email
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get tasks for user
+  app.get('/debug/my-tasks', async (req, res) => {
+    try {
+      const { user } = await resolveUserAndTokens(req);
+      
+      // Get team member record
+      const teamMemberQuery = await pool.query(
+        'SELECT * FROM team_members WHERE email = $1',
+        [user.email]
+      );
+      
+      if (teamMemberQuery.rows.length === 0) {
+        return res.json({ tasks: [], message: 'No team member record found' });
+      }
+      
+      const teamMember = teamMemberQuery.rows[0];
+      
+      // Get task assignments
+      const assignmentsQuery = await pool.query(`
+        SELECT t.*, ta.id as assignment_id, ta.assigned_by
+        FROM tasks t
+        JOIN task_assignments ta ON t.id = ta.task_id
+        WHERE ta.team_member_id = $1
+        ORDER BY t.created_at DESC
+        LIMIT 20
+      `, [teamMember.id]);
+      
+      res.json({
+        user: user.email,
+        teamMemberId: teamMember.id,
+        tasks: assignmentsQuery.rows
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Sync status
+  app.get('/debug/sync/status', (req, res) => {
+    res.json({
+      calendar_sync_enabled: SYNC_ENABLED(),
+      environment_var: process.env.CALENDAR_SYNC_ENABLED
+    });
+  });
+
+  // Enable sync
+  app.post('/debug/sync/enable', (req, res) => {
+    CALENDAR_SYNC_ENABLED = true;
+    process.env.CALENDAR_SYNC_ENABLED = 'true';
+    console.log('Calendar sync ENABLED via debug route');
+    res.json({ calendar_sync_enabled: true });
+  });
+
+  // Disable sync  
+  app.post('/debug/sync/disable', (req, res) => {
+    CALENDAR_SYNC_ENABLED = false;
+    process.env.CALENDAR_SYNC_ENABLED = 'false';
+    console.log('Calendar sync DISABLED via debug route');
+    res.json({ calendar_sync_enabled: false });
+  });
+
+  // Single task calendar flush
+  app.get('/debug/sync/flush', async (req, res) => {
+    try {
+      const { taskId } = req.query;
+      
+      if (!taskId) {
+        return res.status(400).json({ error: 'Missing taskId parameter' });
+      }
+
+      console.log(`Debug calendar flush for task: ${taskId}`);
+      
+      // Sync calendar events for the specific task
+      const result = await syncAllCalendarEventsForTask(taskId as string);
+      
+      res.json({
+        success: true,
+        taskId,
+        message: `Calendar flush completed for task ${taskId}`,
+        sync_enabled: SYNC_ENABLED()
+      });
+    } catch (error: any) {
+      console.error('Debug flush error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
   
   // Debug time endpoint
   app.get('/debug/time', async (req: any, res) => {
