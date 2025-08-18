@@ -1,26 +1,41 @@
 /**
  * Server-side time handling utilities for unified timezone management
- * Uses DayJS for robust timezone conversion from client input to UTC timestamps
+ * Uses Luxon for robust timezone conversion from client input to UTC timestamps
+ * Single source of truth approach - all due_at computed on server
  */
-import dayjs from "dayjs";
-import utc from "dayjs/plugin/utc";
-import tz from "dayjs/plugin/timezone";
-import customParse from "dayjs/plugin/customParseFormat";
-
-dayjs.extend(utc);
-dayjs.extend(tz);
-dayjs.extend(customParse);
+import { DateTime } from 'luxon';
 
 /**
- * Comprehensive time computation per specification
+ * Parse local date/time string in user timezone using Luxon (single source of truth)
+ */
+const parseLocal = (dateStr: string, timeStr: string, tz: string): DateTime => {
+  const candidates = [
+    "yyyy-LL-dd HH:mm",    // "2025-08-18 21:55"
+    "yyyy-LL-dd H:mm",     // "2025-08-18 9:55"  
+    "yyyy-LL-dd h:mm a",   // "2025-08-18 9:55 AM"
+    "yyyy-LL-dd h a"       // "2025-08-18 9 AM"
+  ];
+  
+  const input = `${dateStr} ${timeStr.trim()}`;
+  
+  for (const fmt of candidates) {
+    const dt = DateTime.fromFormat(input, fmt, { zone: tz });
+    if (dt.isValid) return dt;
+  }
+  
+  throw new Error(`Invalid date/time input: ${dateStr} ${timeStr}`);
+};
+
+/**
+ * Compute due_at on the server (single source of truth approach)
  * @param dueDate - Date string in YYYY-MM-DD format  
- * @param dueTime - Time string like "9:55 PM", "21:55", "9 AM", etc.
- * @param userTz - IANA timezone string
+ * @param dueTime - Time string like "9:45 AM", "21:55", "9 PM", etc.
+ * @param userTz - IANA timezone string (fallback to America/Vancouver for nikki@csekcreative.com)
  * @returns Object with UTC timestamp, normalized database time, and database date
  */
 export function computeDueAt(dueDate: string, dueTime: string, timezone: string): {
   due_at: string | null;
-  due_time_db: string | null;
+  due_time_db: string | null; 
   due_date_db: string | null;
 } {
   // Return nulls if date is missing or time is missing (no calendar sync)
@@ -33,55 +48,61 @@ export function computeDueAt(dueDate: string, dueTime: string, timezone: string)
     return { 
       due_at: null, 
       due_time_db: null, 
-      due_date_db: dayjs(dueDate).format("YYYY-MM-DD") 
+      due_date_db: DateTime.fromISO(dueDate).toISODate() 
     };
   }
   
   try {
-    const userTz = timezone || process.env.APP_TIMEZONE || "America/Los_Angeles";
-    const dateTimeStr = `${dueDate} ${dueTime.trim()}`;
+    // Determine userTz with fallback for nikki@csekcreative.com
+    const userTz = timezone || process.env.APP_TIMEZONE || "America/Vancouver";
     
-    // Enhanced format support per specification - order matters for parsing priority
-    const formats = [
-      "YYYY-MM-DD h:mm A",  // "2025-08-18 9:55 PM"
-      "YYYY-MM-DD HH:mm",   // "2025-08-18 21:55" (24-hour with leading zero)
-      "YYYY-MM-DD H:mm",    // "2025-08-18 9:55" (24-hour without leading zero)
-      "YYYY-MM-DD h A",     // "2025-08-18 9 PM"
-      "YYYY-MM-DD HH",      // "2025-08-18 21" (24-hour hour only with leading zero)
-      "YYYY-MM-DD H",       // "2025-08-18 9" (24-hour hour only)
-      "YYYY-MM-DD h:mmA",   // "2025-08-18 9:55PM" (no space)
-      "YYYY-MM-DD hA"       // "2025-08-18 9PM" (no space)
-    ];
-    
-    let local = null;
-    
-    // Try each format until one works
-    for (const format of formats) {
-      local = dayjs.tz(dateTimeStr, format, userTz);
-      if (local.isValid()) break;
-    }
-    
-    if (!local || !local.isValid()) {
-      console.error('computeDueAt failed - invalid formats:', dueDate, dueTime, userTz);
-      return { due_at: null, due_time_db: null, due_date_db: dayjs(dueDate).format("YYYY-MM-DD") };
-    }
+    // Parse in user's local timezone using Luxon
+    const local = parseLocal(dueDate, dueTime, userTz);
     
     const result = {
-      due_at: local.utc().toISOString(),           // UTC for scheduling and calendar
-      due_time_db: local.format("HH:mm"),         // 24-hour format for DB
-      due_date_db: dayjs(dueDate).format("YYYY-MM-DD") // Normalized date
+      due_at: local.toUTC().toISO(),              // UTC for scheduling and calendar
+      due_time_db: local.toFormat("HH:mm"),      // 24-hour format for DB (display helper)
+      due_date_db: local.toISODate()             // Normalized date (display helper)
     };
     
     console.log('computeDueAt success:', { dueDate, dueTime, userTz, result });
     return result;
   } catch (error) {
     console.error('Error computing due_at:', error);
-    return { due_at: null, due_time_db: null, due_date_db: dayjs(dueDate).format("YYYY-MM-DD") };
+    return { 
+      due_at: null, 
+      due_time_db: null, 
+      due_date_db: DateTime.fromISO(dueDate).toISODate() 
+    };
   }
 }
 
 /**
- * Enhanced time parsing with multiple format support (alias for backward compatibility)
+ * Convert UTC timestamp to local timezone display using Luxon
+ * @param utcTimestamp - UTC ISO string
+ * @param userTz - IANA timezone string
+ * @returns Object with local date and time for form prefill
+ */
+export function utcToLocal(utcTimestamp: string, userTz: string): {
+  dueDate: string;    // YYYY-MM-DD
+  dueTime: string;    // HH:mm in 24-hour format
+} {
+  try {
+    const utcDateTime = DateTime.fromISO(utcTimestamp, { zone: 'utc' });
+    const localDateTime = utcDateTime.setZone(userTz);
+    
+    return {
+      dueDate: localDateTime.toISODate() || '',
+      dueTime: localDateTime.toFormat('HH:mm')
+    };
+  } catch (error) {
+    console.error('Error converting UTC to local:', error);
+    return { dueDate: '', dueTime: '' };
+  }
+}
+
+/**
+ * Legacy functions - maintained for backward compatibility
  */
 export function parseTaskDateTime(dueDate: string, dueTime: string, userTz: string): {
   due_at: string | null;
@@ -91,9 +112,6 @@ export function parseTaskDateTime(dueDate: string, dueTime: string, userTz: stri
   return computeDueAt(dueDate, dueTime, userTz);
 }
 
-/**
- * Legacy function - maintained for backward compatibility
- */
 export function buildDueAtUTC(dueDate: string, dueTime: string, userTz: string): string | null {
   const result = parseTaskDateTime(dueDate, dueTime, userTz);
   return result.due_at;
@@ -102,42 +120,36 @@ export function buildDueAtUTC(dueDate: string, dueTime: string, userTz: string):
 
 
 /**
- * Convert UTC timestamp to local timezone display using DayJS  
+ * Format UTC timestamp for display using Luxon
  * @param utcTimestamp - UTC ISO string
- * @param timezone - IANA timezone string (optional, uses system default)  
+ * @param userTz - IANA timezone string
  * @returns formatted local time string
  */
-export function formatUtcInTimezone(utcTimestamp: string, timezone?: string): string {
+export function formatUtcInTimezone(utcTimestamp: string, userTz?: string): string {
   try {
-    const utcDateTime = dayjs.utc(utcTimestamp);
+    const utcDateTime = DateTime.fromISO(utcTimestamp, { zone: 'utc' });
+    const localDateTime = userTz ? utcDateTime.setZone(userTz) : utcDateTime;
     
-    if (!utcDateTime.isValid()) {
-      console.error('Invalid UTC DateTime:', utcTimestamp);
-      return utcTimestamp.slice(0, 10);
-    }
-    
-    const localDateTime = timezone ? utcDateTime.tz(timezone) : utcDateTime.local();
-    
-    // Use format specified in requirements: "M/D/YYYY [at] h:mm A"
-    return localDateTime.format('M/D/YYYY [at] h:mm A');
+    // Format: "8/18/2025 at 9:45 AM"
+    return localDateTime.toFormat('L/d/yyyy [at] h:mm a');
   } catch (error) {
-    console.error('Error formatting UTC time with DayJS:', error);
+    console.error('Error formatting UTC time with Luxon:', error);
     return utcTimestamp.slice(0, 10);
   }
 }
 
 /**
- * Get server timezone and current time info for debugging
+ * Get server timezone and current time info for debugging using Luxon
  * @param userTimezone - User's IANA timezone string
  * @returns debug time info
  */
 export function getDebugTimeInfo(userTimezone?: string) {
-  const now = dayjs();
+  const now = DateTime.utc();
   
   return {
     tzServer: Intl.DateTimeFormat().resolvedOptions().timeZone,
-    nowUtc: now.utc().toISOString(),
-    nowLocalForUser: userTimezone ? now.tz(userTimezone).toISOString() : now.toISOString()
+    nowUtc: now.toISO(),
+    nowLocalForUser: userTimezone ? now.setZone(userTimezone).toISO() : now.toISO()
   };
 }
 
@@ -150,13 +162,13 @@ export function getDebugTimeInfo(userTimezone?: string) {
  */
 export function computeCalendarEventTimes(dueAt: string, timezone: string, durationMinutes: number = 60): { start: string; end: string } {
   try {
-    const startTime = dayjs.utc(dueAt).tz(timezone);
-    const endTime = startTime.add(durationMinutes, 'minute');
+    const startTime = DateTime.fromISO(dueAt, { zone: 'utc' }).setZone(timezone);
+    const endTime = startTime.plus({ minutes: durationMinutes });
     
     // Google Calendar expects timezone-aware datetime format
     return {
-      start: startTime.toISOString(),
-      end: endTime.toISOString()
+      start: startTime.toISO() || '',
+      end: endTime.toISO() || ''
     };
   } catch (error) {
     console.error('Error computing calendar event times:', error);
@@ -188,12 +200,12 @@ export function generateCalendarEventId(taskId: string, userId: string): string 
  */
 export function backfillDisplayFields(dueAt: string, timezone: string): { dueDate: string; dueTime: string } {
   try {
-    const utcDateTime = dayjs.utc(dueAt);
-    const localDateTime = utcDateTime.tz(timezone);
+    const utcDateTime = DateTime.fromISO(dueAt, { zone: 'utc' });
+    const localDateTime = utcDateTime.setZone(timezone);
     
     return {
-      dueDate: localDateTime.format('YYYY-MM-DD'),
-      dueTime: localDateTime.format('HH:mm')
+      dueDate: localDateTime.toISODate() || '',
+      dueTime: localDateTime.toFormat('HH:mm')
     };
   } catch (error) {
     console.error('Error backfilling display fields:', error);
@@ -212,11 +224,11 @@ export function shouldCreateTimedEvent(dueAt: string | null, dueTime: string | n
   if (!dueTime) return false; // No time specified = all-day
   
   try {
-    const utcDateTime = dayjs.utc(dueAt);
+    const utcDateTime = DateTime.fromISO(dueAt, { zone: 'utc' });
     // Check if it's exactly midnight UTC (likely an all-day task)
-    const hours = utcDateTime.hour();
-    const minutes = utcDateTime.minute();
-    const seconds = utcDateTime.second();
+    const hours = utcDateTime.hour;
+    const minutes = utcDateTime.minute;
+    const seconds = utcDateTime.second;
     
     return !(hours === 0 && minutes === 0 && seconds === 0);
   } catch (error) {

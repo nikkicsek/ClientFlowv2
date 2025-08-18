@@ -1,0 +1,50 @@
+Fix task date/time handling + calendar sync:
+
+A) Compute due_at on the server (single source of truth)
+- On task create/update, if we get (dueDate, dueTime) and no due_at:
+  * Determine userTz (stored on user, else fallback "America/Vancouver" for nikki@csekcreative.com).
+  * Parse the time string leniently: accept "HH:mm", "H:mm", "h:mm a", "h a".
+  * Example (luxon):
+      import { DateTime } from "luxon";
+      const parseLocal = (dateStr, timeStr, tz) => {
+        const candidates = [
+          "yyyy-LL-dd HH:mm","yyyy-LL-dd H:mm","yyyy-LL-dd h:mm a","yyyy-LL-dd h a"
+        ];
+        for (const fmt of candidates) {
+          const dt = DateTime.fromFormat(`${dateStr} ${timeStr}`, fmt, { zone: tz });
+          if (dt.isValid) return dt;
+        }
+        throw new Error("Invalid date/time input");
+      };
+      const local = parseLocal(dueDate, dueTime, userTz);
+      const due_at = local.toUTC().toISO();
+  * Persist due_at (UTC). Keep due_date (ISO date) and due_time ("HH:mm") as display helpers.
+
+B) Remove client-side timezone math
+- Don’t convert on the client. Keep the user’s typed time string. Let the API compute due_at.
+- If the code does something like `date -/+ getTimezoneOffset()`, delete it. That’s why 9:45 became 16:45.
+
+C) Edit modal prefill
+- Map API → form correctly:
+  * If task.due_at present: derive dueDate (YYYY-MM-DD) and dueTime (HH:mm) in userTz for defaultValues.
+  * Else use task.due_date / task.due_time directly.
+- Ensure react-hook-form `reset(defaultValues)` runs after the task loads.
+
+D) Calendar sync
+- On create/update, if due_at was created or changed, upsert a Google Calendar event:
+  * event.start.dateTime = local.toISO()  // keep original local time
+  * event.start.timeZone = userTz
+  * event.end.dateTime = local.plus({ minutes: 60 }).toISO() (or project default)
+  * event.end.timeZone = userTz
+- Debounce to avoid minute-by-minute loops.
+
+E) Backfill existing tasks
+- One-off migration:
+  UPDATE tasks
+  SET due_at = to_utc(due_date, due_time, 'America/Vancouver')
+  WHERE due_at IS NULL AND due_date IS NOT NULL AND due_time IS NOT NULL;
+  (Implement to_utc in SQL or do it in a script using luxon and update rows.)
+
+F) Add debug endpoint for quick verification
+- GET /debug/time/preview?date=YYYY-MM-DD&time=HH:mm&tz=America/Vancouver
+  → { local: "...", due_at_utc: "..." }

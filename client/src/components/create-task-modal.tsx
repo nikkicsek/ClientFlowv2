@@ -68,7 +68,7 @@ export default function CreateTaskModal({
       });
       setSelectedTeamMembers(task.assigneeUserIds || []);
     }
-  }, [mode, task]);
+  });
 
   // Fetch team members for assignment
   const { data: teamMembers = [] } = useQuery<TeamMember[]>({
