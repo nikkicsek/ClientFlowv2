@@ -1,0 +1,57 @@
+Tell the Replit agent to change the server-side computation to derive due_at from due_date + due_time in the user’s TZ, then convert to UTC. Don’t add an extra DST offset.
+
+Paste this to the agent:
+
+Fix due_at computation (America/Vancouver, no double offset)
+
+Use luxon:
+
+import { DateTime } from 'luxon';
+const TZ = 'America/Vancouver';
+
+function computeDueAt(dueDateISO: string, dueTimeHHmm: string) {
+  // dueDateISO like '2025-08-18', dueTimeHHmm like '10:30'
+  const local = DateTime.fromISO(`${dueDateISO}T${dueTimeHHmm}`, { zone: TZ })
+                   .set({ second: 0, millisecond: 0 });
+  return local.toUTC().toISO({ suppressMilliseconds: true });
+}
+
+// On create/update:
+task.due_at = computeDueAt(task.due_date, task.due_time);
+task.due_time = DateTime.fromISO(`${task.due_date}T${task.due_time}`, { zone: TZ }).toFormat('HH:mm'); // keep canonical
+
+
+Calendar upsert: when building the Google event, convert the stored UTC due_at back to local once:
+
+const startLocal = DateTime.fromISO(task.due_at, { zone: 'utc' }).setZone(TZ);
+const endLocal   = startLocal.plus({ minutes: 60 });
+
+event.start = { dateTime: startLocal.toISO({ suppressMilliseconds: true, includeOffset: false }), timeZone: TZ };
+event.end   = { dateTime: endLocal  .toISO({ suppressMilliseconds: true, includeOffset: false }), timeZone: TZ };
+
+
+No toISOString() with a trailing Z for event payloads, and don’t add offsets twice.
+
+2) Backfill existing rows where due_at is wrong
+
+Ask the agent to run a one-off backfill for tasks that have due_time:
+
+Backfill due_at (Postgres/Neon)
+
+-- Assumes due_date is a DATE (or timestamp at 00:00) and due_time is 'HH:MM'
+UPDATE tasks
+SET due_at = (
+  (make_timestamptz(
+      EXTRACT(YEAR  FROM due_date)::int,
+      EXTRACT(MONTH FROM due_date)::int,
+      EXTRACT(DAY   FROM due_date)::int,
+      split_part(due_time, ':', 1)::int,
+      split_part(due_time, ':', 2)::int,
+      0,
+      'America/Vancouver'
+  )) AT TIME ZONE 'UTC'
+)
+WHERE due_time IS NOT NULL;
+
+
+If due_date is stored as string, parse to date first; if it’s already a timestamp in UTC midnight, the above still works.

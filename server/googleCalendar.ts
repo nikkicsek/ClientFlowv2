@@ -166,47 +166,32 @@ class GoogleCalendarService {
     try {
       const calendar = await this.getAuthenticatedClient(userId);
       
-      // Use Luxon for proper timezone handling - avoid double conversion
+      // Calendar upsert: convert stored UTC due_at back to local once  
       const { DateTime } = await import('luxon');
-      const tz = 'America/Vancouver';
+      const TZ = 'America/Vancouver';
       
-      let startLocal: DateTime;
-      
-      if (task.dueDate instanceof Date) {
-        // Convert Date to Vancouver time
-        startLocal = DateTime.fromJSDate(task.dueDate, { zone: 'utc' }).setZone(tz);
-      } else if (typeof task.dueDate === 'string') {
-        // Parse ISO string and convert to Vancouver time
-        startLocal = DateTime.fromISO(task.dueDate, { zone: 'utc' }).setZone(tz);
-      } else if (typeof task.dueDate === 'number') {
-        // Handle epoch seconds/milliseconds conversion
-        const ms = task.dueDate < 1e12 ? task.dueDate * 1000 : task.dueDate;
-        startLocal = DateTime.fromMillis(ms, { zone: 'utc' }).setZone(tz);
-      } else {
-        // Fallback to current time in Vancouver
-        startLocal = DateTime.now().setZone(tz);
-      }
-      
+      // Expect task.dueDate to be the stored UTC due_at timestamp
+      const startLocal = DateTime.fromISO(task.dueDate, { zone: 'utc' }).setZone(TZ);
       const endLocal = startLocal.plus({ minutes: 60 });
 
       console.info('[CAL CREATE]', { 
         taskId: task.title, 
         originalDueDate: task.dueDate,
-        startLocal: startLocal.toISO({ includeOffset: false }),
-        endLocal: endLocal.toISO({ includeOffset: false }),
-        tz
+        startLocal: startLocal.toISO({ suppressMilliseconds: true, includeOffset: false }),
+        endLocal: endLocal.toISO({ suppressMilliseconds: true, includeOffset: false }),
+        tz: TZ
       });
 
       const event = {
         summary: task.title,
         description: `${task.description || ''}\n\n${task.projectName ? `Project: ${task.projectName}` : 'Organization Task'}\nStatus: ${task.status}\nPriority: ${task.priority || 'medium'}${task.googleDriveLink ? `\nDrive Link: ${task.googleDriveLink}` : ''}`,
         start: {
-          dateTime: startLocal.toISO({ includeOffset: false }),
-          timeZone: tz,
+          dateTime: startLocal.toISO({ suppressMilliseconds: true, includeOffset: false }),
+          timeZone: TZ,
         },
         end: {
-          dateTime: endLocal.toISO({ includeOffset: false }),
-          timeZone: tz,
+          dateTime: endLocal.toISO({ suppressMilliseconds: true, includeOffset: false }),
+          timeZone: TZ,
         },
         reminders: {
           useDefault: false,
@@ -245,47 +230,32 @@ class GoogleCalendarService {
     try {
       const calendar = await this.getAuthenticatedClient(userId);
       
-      // Use Luxon for proper timezone handling - avoid double conversion
+      // Calendar upsert: convert stored UTC due_at back to local once
       const { DateTime } = await import('luxon');
-      const tz = 'America/Vancouver';
+      const TZ = 'America/Vancouver';
       
-      let startLocal: DateTime;
-      
-      if (task.dueDate instanceof Date) {
-        // Convert Date to Vancouver time
-        startLocal = DateTime.fromJSDate(task.dueDate, { zone: 'utc' }).setZone(tz);
-      } else if (typeof task.dueDate === 'string') {
-        // Parse ISO string and convert to Vancouver time
-        startLocal = DateTime.fromISO(task.dueDate, { zone: 'utc' }).setZone(tz);
-      } else if (typeof task.dueDate === 'number') {
-        // Handle epoch seconds/milliseconds conversion
-        const ms = task.dueDate < 1e12 ? task.dueDate * 1000 : task.dueDate;
-        startLocal = DateTime.fromMillis(ms, { zone: 'utc' }).setZone(tz);
-      } else {
-        // Fallback to current time in Vancouver
-        startLocal = DateTime.now().setZone(tz);
-      }
-      
+      // Expect task.dueDate to be the stored UTC due_at timestamp
+      const startLocal = DateTime.fromISO(task.dueDate, { zone: 'utc' }).setZone(TZ);
       const endLocal = startLocal.plus({ minutes: 60 });
 
       console.info('[CAL UPDATE]', { 
         taskId: task.title, 
         originalDueDate: task.dueDate,
-        startLocal: startLocal.toISO({ includeOffset: false }),
-        endLocal: endLocal.toISO({ includeOffset: false }),
-        tz
+        startLocal: startLocal.toISO({ suppressMilliseconds: true, includeOffset: false }),
+        endLocal: endLocal.toISO({ suppressMilliseconds: true, includeOffset: false }),
+        tz: TZ
       });
 
       const event = {
         summary: task.title,
         description: `${task.description || ''}\n\n${task.projectName ? `Project: ${task.projectName}` : 'Organization Task'}\nStatus: ${task.status}\nPriority: ${task.priority || 'medium'}${task.googleDriveLink ? `\nDrive Link: ${task.googleDriveLink}` : ''}`,
         start: {
-          dateTime: startLocal.toISO({ includeOffset: false }),
-          timeZone: tz,
+          dateTime: startLocal.toISO({ suppressMilliseconds: true, includeOffset: false }),
+          timeZone: TZ,
         },
         end: {
-          dateTime: endLocal.toISO({ includeOffset: false }),
-          timeZone: tz,
+          dateTime: endLocal.toISO({ suppressMilliseconds: true, includeOffset: false }),
+          timeZone: TZ,
         },
       };
 
