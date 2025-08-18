@@ -386,6 +386,57 @@ export function registerDebugRoutes(app: Express) {
   });
 
   // D) Debug route listing
+  // Debug endpoint: Test time parsing
+  app.get('/debug/test-time-parsing', async (req, res) => {
+    const { dueDate, dueTime, timezone } = req.query;
+    const userTz = (timezone as string) || process.env.APP_TIMEZONE || "America/Vancouver";
+    
+    try {
+      const { parseTaskDateTime } = await import('./utils/timeHandling');
+      const result = parseTaskDateTime(dueDate as string, dueTime as string, userTz);
+      res.json({
+        input: { dueDate, dueTime, timezone: userTz },
+        result,
+        success: true
+      });
+    } catch (error) {
+      res.json({
+        input: { dueDate, dueTime, timezone: userTz },
+        error: error.message,
+        success: false
+      });
+    }
+  });
+
+  // Debug endpoint: Force calendar create from task
+  app.get('/debug/calendar-create-from-task', async (req, res) => {
+    const { id: taskId, as: impersonateEmail } = req.query;
+    
+    if (!taskId) {
+      return res.status(400).json({ error: 'Task ID required' });
+    }
+
+    try {
+      const { user } = await resolveUserAndTokens(impersonateEmail as string);
+      
+      // Force sync calendar events for this task
+      await syncAllCalendarEventsForTask(taskId as string);
+      
+      res.json({
+        message: `Forced calendar sync for task ${taskId}`,
+        taskId,
+        userEmail: user.email,
+        success: true
+      });
+    } catch (error) {
+      res.status(500).json({
+        error: error.message,
+        taskId,
+        success: false
+      });
+    }
+  });
+
   app.get('/debug/routes', (req, res) => {
     const routes = [
       'GET /debug/routes - List all debug routes',
@@ -396,7 +447,9 @@ export function registerDebugRoutes(app: Express) {
       'POST /debug/sync/disable - Emergency disable calendar sync',
       'POST /debug/sync/enable - Re-enable calendar sync',
       'GET /debug/backfill-due-at?as=<email> - Backfill missing due_at timestamps',
-      'POST /debug/sync/run-once?as=<email> - Run calendar sync for user tasks'
+      'POST /debug/sync/run-once?as=<email> - Run calendar sync for user tasks',
+      'GET /debug/test-time-parsing?dueDate=2025-08-18&dueTime=9:55 PM&timezone=America/Vancouver - Test time parsing',
+      'GET /debug/calendar-create-from-task?id=<taskId>&as=<email> - Force calendar sync for task'
     ];
     res.json({ debugRoutes: routes });
   });
