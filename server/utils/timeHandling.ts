@@ -12,45 +12,63 @@ dayjs.extend(tz);
 dayjs.extend(customParse);
 
 /**
- * Build UTC timestamp from local date/time components with flexible parsing
+ * Enhanced time parsing with multiple format support per specification
  * @param dueDate - Date string in YYYY-MM-DD format  
  * @param dueTime - Time string like "9:55 PM", "21:55", "9 AM", etc.
  * @param userTz - IANA timezone string
- * @returns UTC ISO timestamp string or null if invalid
+ * @returns Object with UTC timestamp, normalized database time, and database date
  */
-export function buildDueAtUTC(dueDate: string, dueTime: string, userTz: string): string | null {
-  if (!dueDate || !dueTime) return null;
+export function parseTaskDateTime(dueDate: string, dueTime: string, userTz: string): {
+  due_at: string | null;
+  due_time_db: string | null;
+  due_date_db: string | null;
+} {
+  if (!dueDate || !dueTime) {
+    return { due_at: null, due_time_db: null, due_date_db: null };
+  }
   
   try {
-    // Normalize time input - handle various formats
-    const normalized = dueTime.trim().toUpperCase();
+    const dateTimeStr = `${dueDate} ${dueTime.trim()}`;
+    const formats = [
+      "YYYY-MM-DD h:mm A",  // "2025-08-18 9:55 PM"
+      "YYYY-MM-DD H:mm",    // "2025-08-18 21:55"
+      "YYYY-MM-DD h A",     // "2025-08-18 9 PM"
+      "YYYY-MM-DD H"        // "2025-08-18 21"
+    ];
     
-    // First try simple ISO format parsing which should work for "HH:mm" format
-    const isoDateTime = `${dueDate}T${dueTime}:00`;
-    let local = dayjs.tz(isoDateTime, userTz);
+    let local = null;
     
-    // If that fails, try various parsing formats  
-    if (!local.isValid()) {
-      const formats = ["YYYY-MM-DD h:mm A", "YYYY-MM-DD H:mm", "YYYY-MM-DD h A", "YYYY-MM-DD H"];
-      const dateTimeStr = `${dueDate} ${normalized}`;
-      
-      for (const format of formats) {
-        local = dayjs.tz(dateTimeStr, format, userTz);
-        if (local.isValid()) break;
-      }
+    // Try each format until one works
+    for (const format of formats) {
+      local = dayjs.tz(dateTimeStr, format, userTz);
+      if (local.isValid()) break;
     }
     
     if (!local || !local.isValid()) {
-      console.error('Invalid DateTime with all formats:', dueDate, dueTime, userTz);
-      return null;
+      console.error('parseTaskDateTime failed - invalid formats:', dueDate, dueTime, userTz);
+      return { due_at: null, due_time_db: null, due_date_db: null };
     }
     
-    console.log('buildDueAtUTC success:', { dueDate, dueTime, userTz, result: local.utc().toISOString() });
-    return local.utc().toISOString();
+    const result = {
+      due_at: local.utc().toISOString(),           // UTC for scheduling
+      due_time_db: local.format("HH:mm"),         // 24-hour format for DB
+      due_date_db: dayjs(dueDate).format("YYYY-MM-DD") // Normalized date
+    };
+    
+    console.log('parseTaskDateTime success:', { dueDate, dueTime, userTz, result });
+    return result;
   } catch (error) {
-    console.error('Error computing due_at with DayJS:', error);
-    return null;
+    console.error('Error parsing task date/time:', error);
+    return { due_at: null, due_time_db: null, due_date_db: null };
   }
+}
+
+/**
+ * Legacy function - maintained for backward compatibility
+ */
+export function buildDueAtUTC(dueDate: string, dueTime: string, userTz: string): string | null {
+  const result = parseTaskDateTime(dueDate, dueTime, userTz);
+  return result.due_at;
 }
 
 /**
@@ -63,9 +81,9 @@ export function computeDueAt(dueDate: string, dueTime?: string | null, timezone?
 }
 
 /**
- * Convert UTC timestamp to local timezone display using DayJS
+ * Convert UTC timestamp to local timezone display using DayJS  
  * @param utcTimestamp - UTC ISO string
- * @param timezone - IANA timezone string (optional, uses system default)
+ * @param timezone - IANA timezone string (optional, uses system default)  
  * @returns formatted local time string
  */
 export function formatUtcInTimezone(utcTimestamp: string, timezone?: string): string {
@@ -79,7 +97,8 @@ export function formatUtcInTimezone(utcTimestamp: string, timezone?: string): st
     
     const localDateTime = timezone ? utcDateTime.tz(timezone) : utcDateTime.local();
     
-    return localDateTime.format('MMM D, YYYY h:mm A');
+    // Use format specified in requirements: "M/D/YYYY [at] h:mm A"
+    return localDateTime.format('M/D/YYYY [at] h:mm A');
   } catch (error) {
     console.error('Error formatting UTC time with DayJS:', error);
     return utcTimestamp.slice(0, 10);

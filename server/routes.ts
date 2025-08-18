@@ -4,7 +4,7 @@ import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { requireAuth, getCurrentUser } from "./middleware/auth";
 import { insertProjectSchema, insertTaskSchema, insertMessageSchema, insertAnalyticsSchema, insertTeamMemberSchema, insertTaskAssignmentSchema, insertProposalSchema, insertProposalItemSchema, type TeamMember } from "@shared/schema";
-import { computeDueAt, buildDueAtUTC, backfillDisplayFields } from "./utils/timeHandling";
+import { computeDueAt, buildDueAtUTC, parseTaskDateTime, backfillDisplayFields } from "./utils/timeHandling";
 import { emailService } from "./emailService";
 import { nangoService } from "./nangoService";
 import { googleCalendarService } from "./googleCalendar";
@@ -414,24 +414,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { selectedTeamMembers = [], ...bodyData } = req.body;
       
-      // Compute due_at from dueDate, dueTime, and timezone using enhanced parsing
-      let dueAt = null;
-      if (bodyData.dueDate && bodyData.dueTime) {
-        const userTz = bodyData.timezone || process.env.APP_TIMEZONE || "America/Vancouver";
-        dueAt = buildDueAtUTC(bodyData.dueDate, bodyData.dueTime, userTz);
-      }
+      // Enhanced time parsing with multiple format support
+      const userTz = bodyData.timezone || process.env.APP_TIMEZONE || "America/Vancouver";
+      const timeResult = parseTaskDateTime(bodyData.dueDate, bodyData.dueTime, userTz);
       
       const taskData = insertTaskSchema.parse({
         ...bodyData,
         projectId: req.params.projectId,
       });
       
-      // Prepare final task data with computed due_at
+      // Prepare final task data with enhanced time handling
       const finalTaskData = {
         ...taskData,
-        dueAt: dueAt ? new Date(dueAt) : null,
-        // Keep dueDate as Date for backward compatibility
-        dueDate: taskData.dueDate ? new Date(taskData.dueDate) : null,
+        dueAt: timeResult.due_at ? new Date(timeResult.due_at) : null,
+        dueDate: timeResult.due_date_db ? new Date(timeResult.due_date_db) : null,
+        dueTime: timeResult.due_time_db || null, // Store 24-hour format in DB
       };
       
       // Remove timezone from the final data (not a database field)
@@ -557,21 +554,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Parse and validate the request body
       const { title, description, status, priority, dueDate, dueTime, timezone, assigneeUserIds } = req.body;
       
-      // Compute due_at if dueDate provided (unified time handling)
-      let dueAt = null;
-      if (dueDate) {
-        const tz = timezone || "America/Los_Angeles"; // Default timezone for Nikki
-        dueAt = computeDueAt(dueDate, dueTime, tz);
-      }
+      // Enhanced time parsing with multiple format support
+      const userTz = timezone || process.env.APP_TIMEZONE || "America/Vancouver";
+      const timeResult = parseTaskDateTime(dueDate, dueTime, userTz);
       
       const updateData: any = {
         title,
         description,
         status,
         priority,
-        dueDate: dueDate ? new Date(dueDate) : undefined,
-        dueTime,
-        dueAt: dueAt ? new Date(dueAt) : undefined,
+        dueDate: timeResult.due_date_db ? new Date(timeResult.due_date_db) : undefined,
+        dueTime: timeResult.due_time_db || undefined, // Store 24-hour format
+        dueAt: timeResult.due_at ? new Date(timeResult.due_at) : undefined,
       };
       
       // Remove undefined values
@@ -1745,12 +1739,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { selectedTeamMembers = [], ...bodyData } = req.body;
       
-      // Compute due_at from dueDate, dueTime, and timezone using enhanced parsing
-      let dueAt = null;
-      if (bodyData.dueDate && bodyData.dueTime) {
-        const userTz = bodyData.timezone || process.env.APP_TIMEZONE || "America/Vancouver";
-        dueAt = buildDueAtUTC(bodyData.dueDate, bodyData.dueTime, userTz);
-      }
+      // Enhanced time parsing with multiple format support
+      const userTz = bodyData.timezone || process.env.APP_TIMEZONE || "America/Vancouver";
+      const timeResult = parseTaskDateTime(bodyData.dueDate, bodyData.dueTime, userTz);
       
       const taskData = insertTaskSchema.parse({
         ...bodyData,
@@ -1760,12 +1751,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         serviceId: null, // Organization tasks don't require service
       });
       
-      // Prepare final task data with computed due_at
+      // Prepare final task data with enhanced time handling
       const finalTaskData = {
         ...taskData,
-        dueAt: dueAt ? new Date(dueAt) : null,
-        // Keep dueDate as Date for backward compatibility
-        dueDate: taskData.dueDate ? new Date(taskData.dueDate) : null,
+        dueAt: timeResult.due_at ? new Date(timeResult.due_at) : null,
+        dueDate: timeResult.due_date_db ? new Date(timeResult.due_date_db) : null,
+        dueTime: timeResult.due_time_db || null, // Store 24-hour format in DB
       };
       
       // Remove timezone from the final data (not a database field)

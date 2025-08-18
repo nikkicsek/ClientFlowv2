@@ -51,16 +51,26 @@ export default function CreateTaskModal({
   
   const [selectedTeamMembers, setSelectedTeamMembers] = useState<string[]>([]);
 
-  // Initialize form with task data in edit mode
+  // Initialize form with task data in edit mode - avoid Date conversion issues
   useState(() => {
     if (mode === 'edit' && task) {
+      let dueDateStr = "";
+      if (task.dueDate) {
+        // Handle various date input formats without converting to Date
+        if (typeof task.dueDate === 'string') {
+          dueDateStr = task.dueDate.split('T')[0]; // Extract YYYY-MM-DD from ISO string
+        } else {
+          dueDateStr = new Date(task.dueDate).toISOString().split('T')[0];
+        }
+      }
+      
       setFormData({
         title: task.title || "",
         description: task.description || "",
         status: task.status || "in_progress",
         priority: task.priority || "medium",
-        dueDate: task.dueDate ? new Date(task.dueDate).toISOString().split('T')[0] : "",
-        dueTime: task.dueTime || "",
+        dueDate: dueDateStr,
+        dueTime: task.dueTime || "", // Keep raw time string from database
         googleDriveLink: task.googleDriveLink || "",
       });
       setSelectedTeamMembers(task.assigneeUserIds || []);

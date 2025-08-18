@@ -1,0 +1,86 @@
+Fix task time handling + calendar sync (PM→AM bug, missing events)
+
+Goal
+- When a user types "9:55 PM", store:
+  - due_date: "YYYY-MM-DD"
+  - due_time: "21:55"
+  - due_at (UTC): correct ISO for that local time
+- On create/update, if due_at and an assignee exist AND sync is enabled, create/update ONE Google Calendar event.
+- Show the user’s local time in the UI (not UTC).
+
+1) Client (TaskForm / TaskEdit)
+- Do NOT coerce the time into a Date before submit.
+- Keep the exact user string (e.g., "9:55 PM" or "21:55") and send it as `dueTime`.
+- Send `dueDate` as "YYYY-MM-DD".
+- Use dayjs with customParseFormat ONLY for display; never stringify a JS Date for dueTime.
+  Example change:
+    const dueDateStr = dayjs(dueDate).format("YYYY-MM-DD");
+    const dueTimeStr = rawTimeInput; // the text in the field, e.g., "9:55 PM" or "21:55"
+    await api.tasks.create({ title, description, dueDate: dueDateStr, dueTime: dueTimeStr, ... });
+
+2) Server (routes + validation)
+- In the task create/update handlers, use Zod schema expecting strings (not Date):
+    const schema = z.object({
+      title: z.string().min(1),
+      description: z.string().optional(),
+      dueDate: z.string().nullable().optional(),  // "YYYY-MM-DD"
+      dueTime: z.string().nullable().optional(),  // e.g., "9:55 PM" | "21:55" | "9 PM"
+      assigneeUserIds: z.array(z.string()).optional(),
+      projectId: z.string().nullable().optional(),
+    });
+
+- Parse local datetime with dayjs.tz and multiple formats:
+    dayjs.extend(customParseFormat);
+    dayjs.extend(utc);
+    dayjs.extend(timezone);
+
+    const tz = await getUserTimeZone(userId) ?? "America/Vancouver";
+    let due_at: string | null = null;
+    let due_time_db: string | null = null;
+    let due_date_db: string | null = null;
+
+    if (dueDate && dueTime) {
+      const local = dayjs.tz(
+        `${dueDate} ${dueTime}`,
+        ["YYYY-MM-DD h:mm A","YYYY-MM-DD H:mm","YYYY-MM-DD h A","YYYY-MM-DD H"],
+        tz
+      );
+      if (local.isValid()) {
+        due_at = local.utc().toISOString();        // for scheduling/sync
+        due_time_db = local.format("HH:mm");       // e.g., "21:55"
+        due_date_db = dayjs(dueDate).format("YYYY-MM-DD");
+      }
+    }
+
+- Store to DB using existing columns (due_date, due_time, due_at). Do not convert due_time to Date.
+
+3) Google Calendar sync
+- On task create/update, if (due_at && hasAssignee && calendarSyncEnabled(userId)):
+  - Upsert event with a mapping table tasks_calendar_events(task_id PK, event_id UNIQUE).
+  - Set start/end using the user’s local time & tz:
+      const local = dayjs.utc(due_at).tz(tz);
+      const start = local.format();             // RFC3339 local
+      const end   = local.add(60,"minute").format();
+      events.insert/update({
+        summary: task.title,
+        start: { dateTime: start, timeZone: tz },
+        end:   { dateTime: end,   timeZone: tz },
+      });
+  - Never create duplicates: use the mapping to update when an event already exists.
+
+4) UI display
+- In the My Tasks card, render:
+    `${dayjs.utc(task.due_at).tz(userTz).format("M/D/YYYY [at] h:mm A")}`
+  (Stop showing "at 06:00" when it’s actually a PM time.)
+
+5) Debug endpoints (protected, keep ?as= support)
+- /debug/my-tasks should return due_time and due_at so we can verify "21:xx" and correct UTC.
+- /debug/calendar-create-from-task?id=<taskId> to force a one-off upsert for a task (helpful for testing).
+
+6) Tests (quick)
+- Input "2025-08-18" + "9:55 PM" should yield:
+    due_time: "21:55"
+    due_at (UTC): 2025-08-18T04:55:00.000Z (for America/Vancouver)
+- Creating that task should produce exactly one calendar event at 9:55 PM local.
+
+Please implement the above and push. 
