@@ -63,11 +63,47 @@ async function resolveUserAndTokens(req: any) {
     throw new Error('User not found');
   }
   
-  // Get OAuth tokens
+  // Get OAuth tokens (use user_id column)
   const tokenResult = await pool.query('SELECT * FROM oauth_tokens WHERE user_id = $1', [user.id]);
   const tokens = tokenResult.rows[0] || null;
   
   return { user, tokens };
+}
+
+// Resolve user from email with team member info
+async function resolveUserFromEmail(email: string | undefined, req: any) {
+  if (!email) {
+    const user = await getSessionOrImpersonatedUser(req);
+    if (!user) throw new Error('No user session or impersonation email provided');
+    
+    // Get team member ID if exists (matching by email since no user_id FK)
+    const teamMemberResult = await pool.query('SELECT id FROM team_members WHERE email = $1', [user.email]);
+    const teamMemberId = teamMemberResult.rows[0]?.id || null;
+    
+    return { user, teamMemberId };
+  }
+  
+  // Try user table first
+  let userResult = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+  let user = userResult.rows[0];
+  
+  // If no user, try team_members table (some users may only exist as team members)
+  if (!user) {
+    const teamMemberResult = await pool.query('SELECT * FROM team_members WHERE email = $1', [email]);
+    if (teamMemberResult.rows.length === 0) {
+      throw new Error(`User not found for email: ${email}`);
+    }
+    
+    // Use team member as user for the purpose of this operation
+    user = teamMemberResult.rows[0];
+    return { user, teamMemberId: user.id };
+  }
+  
+  // Get team member ID if exists
+  const teamMemberResult = await pool.query('SELECT id FROM team_members WHERE email = $1', [user.email]);
+  const teamMemberId = teamMemberResult.rows[0]?.id || null;
+  
+  return { user, teamMemberId };
 }
 
 export function registerDebugRoutes(app: Express) {
@@ -76,15 +112,21 @@ export function registerDebugRoutes(app: Express) {
   // Debug routes registry endpoint
   app.get('/debug/routes', (req, res) => {
     res.json({
-      available_endpoints: [
-        'GET /debug/routes',
-        'GET /debug/calendar-status', 
-        'GET /debug/calendar-create-test',
-        'GET /debug/my-tasks',
-        'GET /debug/sync/status',
-        'POST /debug/sync/enable',
-        'POST /debug/sync/disable', 
-        'GET /debug/sync/flush'
+      debugRoutes: [
+        'GET /debug/routes - List all debug routes',
+        'GET /debug/calendar-status?as=<email> - Check calendar tokens for user',
+        'GET /debug/tokens/dump?as=<email> - Show token information',
+        'GET /debug/my-tasks?as=<email> - Get tasks assigned to user',
+        'POST /debug/create-test-task - Create test task with timezone',
+        'POST /debug/sync/disable - Emergency disable calendar sync',
+        'POST /debug/sync/enable - Re-enable calendar sync',
+        'GET /debug/backfill-due-at?as=<email> - Backfill missing due_at timestamps',
+        'POST /debug/sync/run-once?as=<email> - Run calendar sync for user tasks',
+        'GET /debug/test-time-parsing?dueDate=2025-08-18&dueTime=9:55 PM&timezone=America/Vancouver - Test time parsing',
+        'GET /debug/calendar-create-from-task?id=<taskId>&as=<email> - Force calendar sync for task',
+        'GET /debug/sync/flush?taskId=<id> - Single-task calendar flush',
+        'GET /debug/sync/upsert-task?taskId=<id>&as=<email> - Push this task now (direct upsert)',
+        'GET /debug/sync/run?hours=12&as=<email> - Run once sync sweep for user'
       ]
     });
   });
@@ -242,7 +284,210 @@ export function registerDebugRoutes(app: Express) {
       });
     } catch (error: any) {
       console.error('Debug flush error:', error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: error.message, taskId });
+    }
+  });
+
+  // Push this task now - Direct calendar upsert for single task
+  app.get('/debug/sync/upsert-task', async (req, res) => {
+    const taskId = req.query.taskId as string;
+    const impersonateAs = req.query.as as string;
+    
+    if (!taskId) {
+      return res.status(400).json({ error: 'taskId parameter required' });
+    }
+
+    try {
+      // Get user info for impersonation
+      const { user, teamMemberId } = await resolveUserFromEmail(impersonateAs, req);
+      
+      // Load the task directly from database
+      const taskResult = await pool.query('SELECT * FROM tasks WHERE id = $1', [taskId]);
+      if (taskResult.rows.length === 0) {
+        return res.status(404).json({ error: `Task ${taskId} not found` });
+      }
+      const task = taskResult.rows[0];
+
+      if (!task.due_at) {
+        return res.status(400).json({ error: 'Task has no due_at timestamp for calendar sync' });
+      }
+
+      // Build start/end times (end = start + 60 minutes)
+      const startTime = new Date(task.due_at);
+      const endTime = new Date(startTime.getTime() + 60 * 60 * 1000); // Add 1 hour
+
+      console.log(`Direct upsert for task ${taskId}: ${startTime.toISOString()} -> ${endTime.toISOString()}`);
+
+      // Get Google Calendar service  
+      const { googleCalendarService } = await import('./googleCalendar');
+      const calendarService = googleCalendarService;
+      
+      let eventId: string;
+      
+      if (task.google_calendar_event_id) {
+        // Update existing event
+        console.log(`Updating existing calendar event ${task.google_calendar_event_id}`);
+        const updateResult = await calendarService.updateTaskEvent(teamMemberId || user.id, task.google_calendar_event_id, {
+          title: task.title,
+          description: task.description || undefined,
+          dueDate: startTime,
+          status: task.status || 'pending',
+          priority: task.priority || 'medium'
+        });
+        eventId = task.google_calendar_event_id; // Keep existing event ID
+        console.log(`Update result: ${updateResult}`);
+      } else {
+        // Create new event
+        console.log(`Creating new calendar event for task ${taskId}`);
+        eventId = await calendarService.createTaskEvent(teamMemberId || user.id, {
+          title: task.title,
+          description: task.description || undefined,
+          dueDate: startTime,
+          status: task.status || 'pending',
+          priority: task.priority || 'medium'
+        });
+        
+        if (!eventId) {
+          throw new Error('Failed to create calendar event - no event ID returned');
+        }
+        
+        // Save the event ID back to the task
+        await pool.query('UPDATE tasks SET google_calendar_event_id = $1 WHERE id = $2', [eventId, taskId]);
+        console.log(`Saved event ID ${eventId} to task ${taskId}`);
+      }
+
+      res.json({ 
+        ok: true, 
+        taskId, 
+        eventId,
+        startTime: startTime.toISOString(),
+        endTime: endTime.toISOString(),
+        action: task.google_calendar_event_id ? 'updated' : 'created'
+      });
+    } catch (error: any) {
+      console.error('Task upsert failed:', error);
+      res.status(500).json({ 
+        error: 'Task upsert failed', 
+        details: error.message,
+        taskId
+      });
+    }
+  });
+
+  // Run once - Execute sync sweep for impersonated user
+  app.get('/debug/sync/run', async (req, res) => {
+    const hours = parseInt(req.query.hours as string) || 12;
+    const impersonateAs = req.query.as as string;
+    
+    try {
+      // Get user info for impersonation
+      const { user, teamMemberId } = await resolveUserFromEmail(impersonateAs, req);
+      
+      // Calculate time window
+      const cutoffTime = new Date(Date.now() - hours * 60 * 60 * 1000);
+      console.log(`Running sync sweep for user ${user.id} (team member ${teamMemberId}), last ${hours} hours since ${cutoffTime.toISOString()}`);
+
+      // Get tasks for sync - either assigned directly OR via team member assignment
+      const tasksQuery = `
+        SELECT DISTINCT tasks.*, 
+               tm.id as team_member_id
+        FROM tasks 
+        LEFT JOIN task_assignments ta ON ta.task_id = tasks.id
+        LEFT JOIN team_members tm ON tm.id = ta.team_member_id
+        WHERE (
+          tasks.assigned_to = $1
+          OR ta.team_member_id = $2
+        )
+        AND tasks.due_at IS NOT NULL
+        AND tasks.status != 'completed'
+        AND tasks.updated_at >= $3
+        ORDER BY tasks.due_at ASC
+      `;
+      
+      const tasksResult = await pool.query(tasksQuery, [user.id, teamMemberId, cutoffTime]);
+      const tasks = tasksResult.rows as any[];
+      
+      console.log(`Found ${tasks.length} tasks for sync sweep`);
+
+      let scanned = 0;
+      let created = 0;
+      let updated = 0;
+      let skipped = 0;
+
+      // Get Google Calendar service
+      const { googleCalendarService } = await import('./googleCalendar');
+      const calendarService = googleCalendarService;
+
+      for (const task of tasks) {
+        scanned++;
+        
+        try {
+          if (!task.due_at) {
+            skipped++;
+            continue;
+          }
+
+          const startTime = new Date(task.due_at);
+          const endTime = new Date(startTime.getTime() + 60 * 60 * 1000);
+          
+          if (task.google_calendar_event_id) {
+            // Update existing
+            const updateResult = await calendarService.updateTaskEvent(task.team_member_id || user.id, task.google_calendar_event_id, {
+              title: task.title,
+              description: task.description || undefined,
+              dueDate: startTime,
+              status: task.status || 'pending',
+              priority: task.priority || 'medium'
+            });
+            if (updateResult) {
+              updated++;
+              console.log(`Updated calendar event ${task.google_calendar_event_id} for task ${task.id}`);
+            } else {
+              skipped++;
+              console.log(`Failed to update calendar event ${task.google_calendar_event_id} for task ${task.id}`);
+            }
+          } else {
+            // Create new
+            const eventId = await calendarService.createTaskEvent(task.team_member_id || user.id, {
+              title: task.title,
+              description: task.description || undefined,
+              dueDate: startTime,
+              status: task.status || 'pending',
+              priority: task.priority || 'medium'
+            });
+            
+            if (eventId) {
+              // Save event ID back to task
+              await pool.query('UPDATE tasks SET google_calendar_event_id = $1 WHERE id = $2', [eventId, task.id]);
+              created++;
+              console.log(`Created calendar event ${eventId} for task ${task.id}`);
+            } else {
+              skipped++;
+              console.log(`Failed to create calendar event for task ${task.id}`);
+            }
+          }
+        } catch (taskError: any) {
+          console.error(`Failed to sync task ${task.id}:`, taskError);
+          skipped++;
+        }
+      }
+
+      res.json({ 
+        ok: true, 
+        scanned, 
+        created, 
+        updated, 
+        skipped,
+        hours,
+        userId: user.id,
+        teamMemberId
+      });
+    } catch (error: any) {
+      console.error('Sync run failed:', error);
+      res.status(500).json({ 
+        error: 'Sync run failed', 
+        details: error.message
+      });
     }
   });
   

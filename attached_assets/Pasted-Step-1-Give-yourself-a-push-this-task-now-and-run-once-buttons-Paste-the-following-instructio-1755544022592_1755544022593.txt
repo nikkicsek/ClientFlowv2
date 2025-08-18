@@ -1,0 +1,81 @@
+Step 1 — Give yourself a “push this task now” and “run once” buttons
+
+Paste the following instruction to the Replit agent:
+
+Add two debug routes:
+
+GET /debug/sync/upsert-task?taskId=...&as=...
+
+Resolve user/tokens from ?as.
+
+Load the task by taskId.
+
+Build start/end from task.due_at (end = start + 60m).
+
+Upsert the Google event (insert if none, update if google_event_id exists).
+
+Save google_event_id back to the task.
+
+Return { ok:true, taskId, eventId }.
+
+GET /debug/sync/run?hours=12&as=...
+
+Execute the same sync sweep the interval job uses, but once.
+
+Limit to the impersonated user and the last hours (default 12).
+
+Return a small report { ok:true, scanned, created, updated, skipped }.
+
+Also fix the existing /debug/sync/flush page so it actually reads the textbox value:
+const taskId = new FormData(form).get('taskId') as string;
+and echo the real taskId in the JSON (not “PASTE_ID_HERE”).
+
+As soon as the agent adds those:
+
+Hit
+/debug/sync/upsert-task?taskId=def42661-adc0-48f8-812d-1420bddcdfa5&as=nikki@csekcreative.com
+Then refresh Google Calendar. You should see “10:22 Sanity set for 10:30”.
+
+If you want to process everything in your horizon:
+/debug/sync/run?hours=24&as=nikki@csekcreative.com
+
+Step 2 — Make the sweep include assignment-based owners
+
+Ask the agent to update the “my tasks for sync” query so it treats you as the owner if either:
+
+tasks.assigned_to = userId OR
+
+there’s a row in task_assignments for your team_member_id.
+
+Example SQL fragment:
+
+WHERE (tasks.assigned_to = $userId
+       OR EXISTS (
+         SELECT 1 FROM task_assignments ta
+         WHERE ta.task_id = tasks.id
+           AND ta.team_member_id = $teamMemberId
+       ))
+  AND tasks.due_at IS NOT NULL
+  AND tasks.status <> 'completed'
+
+
+This matches your current task, which has assignment_id but assigned_to: null.
+
+(Bonus) Fix the 1-hour offset
+
+Your task shows due_time:"10:30" but due_at:"18:30Z" (= 11:30 local). That’s a classic “combine date + time without the user’s timezone” bug. Have the agent:
+
+Send the client’s IANA tz with the form:
+
+const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+body.tz = tz; // include with create/update payload
+
+
+On the server, compute UTC correctly:
+
+import { zonedTimeToUtc } from 'date-fns-tz';
+// dueDate = '2025-08-18', dueTime = '10:30', tz = e.g. 'America/Vancouver'
+const dueAtUtc = zonedTimeToUtc(`${dueDate}T${dueTime}`, tz).toISOString();
+
+
+Save that to tasks.due_at.
