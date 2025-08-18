@@ -162,38 +162,61 @@ export function registerDebugRoutes(app: Express) {
   app.get('/debug/my-tasks', async (req: any, res) => {
     try {
       const { user } = await resolveUserAndTokens(req);
+      const session = req.session?.userId;
+      const impersonated = req.query.as;
       
       // Find team member record
       const memberResult = await pool.query('SELECT * FROM team_members WHERE email = $1', [user.email]);
       const teamMember = memberResult.rows[0];
+      const teamMemberId = teamMember?.id;
       
-      if (!teamMember) {
-        return res.json({
-          tasks: [],
-          teamMemberId: null,
-          userId: user.id,
-          email: user.email,
-          sessionExists: !!req.session?.userId,
-          impersonated: !!req.query.as
-        });
+      // Guard against missing team member
+      if (!teamMemberId) {
+        return res.status(400).json({ message: "No team member found for this user" });
       }
       
-      // Get tasks assigned to this team member
-      const taskResult = await pool.query(`
-        SELECT t.*, ta.id as assignment_id, ta.status as assignment_status
+      // Get tasks assigned to this team member with explicit select and safe aggregation
+      const rows = await pool.query(`
+        SELECT
+          t.id,
+          t.title,
+          t.status,                 -- status from tasks table
+          t.due_date,
+          t.due_time,
+          t.due_at,
+          t.organization_id,
+          t.project_id,
+          t.created_at,
+          COALESCE(
+            json_agg(ta.team_member_id) FILTER (WHERE ta.team_member_id IS NOT NULL),
+            '[]'
+          ) AS assignee_team_member_ids
         FROM tasks t
-        JOIN task_assignments ta ON t.id = ta.task_id
-        WHERE ta.team_member_id = $1 AND t.deleted_at IS NULL
-        ORDER BY t.due_at ASC NULLS LAST, t.created_at DESC
-      `, [teamMember.id]);
+        LEFT JOIN task_assignments ta ON ta.task_id = t.id
+        WHERE ta.team_member_id = $1  -- tasks assigned to this team member
+        GROUP BY t.id
+        ORDER BY t.due_at NULLS LAST, t.created_at DESC
+        LIMIT 200
+      `, [teamMemberId]);
       
       res.json({
-        tasks: taskResult.rows,
-        teamMemberId: teamMember.id,
+        tasks: rows.rows.map(r => ({
+          id: r.id,
+          title: r.title,
+          status: r.status,
+          due_date: r.due_date,
+          due_time: r.due_time,
+          due_at: r.due_at,
+          organization_id: r.organization_id,
+          project_id: r.project_id,
+          created_at: r.created_at,
+          assigneeTeamMemberIds: r.assignee_team_member_ids
+        })),
+        teamMemberId,
         userId: user.id,
         email: user.email,
-        sessionExists: !!req.session?.userId,
-        impersonated: !!req.query.as
+        sessionExists: !!session,
+        impersonated: !!impersonated
       });
     } catch (error) {
       console.error('Error in debug/my-tasks:', error);
