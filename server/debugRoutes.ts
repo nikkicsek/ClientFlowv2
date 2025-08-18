@@ -383,6 +383,8 @@ export function registerDebugRoutes(app: Express) {
   app.get('/debug/sync/upsert-task', async (req, res) => {
     const taskId = req.query.taskId as string;
     const impersonateAs = req.query.as as string;
+    const forceCreate = req.query.forceCreate as string;
+    const verbose = req.query.verbose as string;
     
     if (!taskId) {
       return res.status(400).json({ error: 'taskId parameter required' });
@@ -447,6 +449,28 @@ export function registerDebugRoutes(app: Express) {
           tz: legacyCalendarTz
         });
 
+        // If forceCreate=1, clear existing mappings first
+        if (forceCreate === '1') {
+          console.log(`[DEBUG] forceCreate=1 - clearing existing mappings for task ${taskId}`);
+          
+          // Clear task mapping fields
+          await pool.query(`
+            UPDATE tasks 
+            SET google_event_id = NULL, google_calendar_event_id = NULL
+            WHERE id = $1
+          `, [taskId]);
+          
+          // Clear mapping table rows
+          await pool.query(`
+            DELETE FROM task_google_events 
+            WHERE task_id = $1 AND user_id = $2
+          `, [taskId, userId]);
+          
+          if (verbose === '1') {
+            console.log(`[DEBUG] Cleared mappings for task ${taskId}`);
+          }
+        }
+        
         // Check if this task already has a calendar event for this user (idempotent)
         const existingEventResult = await pool.query(
           'SELECT event_id FROM task_google_events WHERE task_id = $1 AND user_id = $2', 
@@ -505,14 +529,28 @@ export function registerDebugRoutes(app: Express) {
 
         console.log(`[CAL] upsert ok task=${taskId} user=${userId} cal=primary event=${eventId} startLocal=${legacyStartLocal.toISO({ includeOffset: false })} tz=${legacyCalendarTz}`);
 
-        return res.json({ 
+        const operation = forceCreate === '1' ? 'create' : (existingEventResult.rows.length > 0 ? 'update' : 'create');
+        
+        const result = { 
           ok: true, 
+          op: operation,
           taskId, 
           assigneeUserId: userId,
           calendarId: 'primary',
           eventId,
-          htmlLink: htmlLink || ''
-        });
+          htmlLink: htmlLink || '',
+          payload: {
+            start: legacyStartLocal.toFormat("yyyy-MM-dd'T'HH:mm:ss"),
+            end: legacyEndLocal.toFormat("yyyy-MM-dd'T'HH:mm:ss"),
+            timeZone: legacyCalendarTz
+          }
+        };
+        
+        if (verbose === '1') {
+          console.log(`[DEBUG] Enhanced result:`, result);
+        }
+
+        return res.json(result);
       } else {
         // Check task_assignments table
         const assignmentResult = await pool.query('SELECT team_member_id FROM task_assignments WHERE task_id = $1 LIMIT 1', [taskId]);
@@ -1340,6 +1378,108 @@ export function registerDebugRoutes(app: Express) {
     } catch (error: any) {
       console.error('[SIMPLE] Test failed:', error);
       res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Debug route: Get raw Google event JSON
+  app.get('/debug/sync/get-event', async (req, res) => {
+    try {
+      const { eventId, as: impersonateAs } = req.query as { eventId?: string; as?: string };
+      
+      if (!eventId) {
+        return res.status(400).json({ error: 'eventId parameter required' });
+      }
+      
+      if (!impersonateAs) {
+        return res.status(400).json({ error: 'as parameter required for impersonation' });
+      }
+      
+      // Resolve user and tokens
+      const resolution = await resolveUserAndTokensEnhanced({
+        asEmail: impersonateAs
+      });
+      
+      if (!resolution.ok) {
+        return res.status(400).json({ 
+          error: `Token resolution failed: ${resolution.reason}`,
+          details: resolution
+        });
+      }
+      
+      const { userId } = resolution;
+      
+      // Get Google Calendar service
+      const { googleCalendarService } = await import('./googleCalendar');
+      const event = await googleCalendarService.getEvent(userId, eventId, 'primary');
+      
+      if (!event) {
+        return res.json({
+          found: false,
+          eventId,
+          calendarId: 'primary'
+        });
+      }
+      
+      res.json({
+        found: true,
+        eventId: event.id,
+        calendarId: 'primary',
+        start: event.start,
+        end: event.end,
+        htmlLink: event.htmlLink,
+        summary: event.summary,
+        description: event.description
+      });
+      
+    } catch (error) {
+      console.error('Error getting calendar event:', error);
+      res.status(500).json({ 
+        error: 'Failed to get calendar event', 
+        details: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+  
+  // Debug route: Get task mapping information  
+  app.get('/debug/sync/get-mapping', async (req, res) => {
+    try {
+      const { taskId } = req.query as { taskId?: string };
+      
+      if (!taskId) {
+        return res.status(400).json({ error: 'taskId parameter required' });
+      }
+      
+      // Get task basic info
+      const taskResult = await pool.query(`
+        SELECT id, title, google_event_id, google_calendar_event_id, due_at, due_date, due_time
+        FROM tasks 
+        WHERE id = $1
+      `, [taskId]);
+      
+      if (taskResult.rows.length === 0) {
+        return res.status(404).json({ error: `Task ${taskId} not found` });
+      }
+      
+      // Get mapping table entries
+      const mappingResult = await pool.query(`
+        SELECT task_id, user_id, event_id, created_at, updated_at
+        FROM task_google_events 
+        WHERE task_id = $1
+      `, [taskId]);
+      
+      res.json({
+        taskId,
+        task: taskResult.rows[0],
+        mappings: mappingResult.rows,
+        mappingCount: mappingResult.rows.length
+      });
+      
+    } catch (error) {
+      console.error('Error getting task mapping:', error);
+      res.status(500).json({ 
+        error: 'Failed to get task mapping', 
+        details: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
