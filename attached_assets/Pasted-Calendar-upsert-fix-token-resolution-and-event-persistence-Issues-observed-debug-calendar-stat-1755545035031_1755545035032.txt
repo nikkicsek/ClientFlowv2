@@ -1,0 +1,48 @@
+Calendar upsert: fix token resolution and event persistence
+
+Issues observed:
+- /debug/calendar-status?as=nikki@csekcreative.com shows hasTokens:true, but /debug/sync/upsert-task reports that tokens are missing or creates no eventId.
+- The task JSON shows due_at != null, but google_event_id stays null.
+
+Please implement the following:
+
+1) Token resolution (single source of truth)
+- Create a helper resolveUserAndTokens({ asEmail?, sessionUserId?, assigneeTeamMemberId? }) that returns:
+  { userId, email, teamMemberId, tz, tokens }.
+- Token lookup order:
+  a) By userId (oauth_tokens.user_id = app user id)
+  b) If not found and teamMemberId exists, map teamMemberId -> userId, then lookup tokens by userId
+- Do NOT look up tokens by teamMemberId directly; always normalize to userId.
+- If tokens still not found, return a clear error: { ok:false, reason:"no_tokens_for_user", userId, teamMemberId }.
+
+2) Upsert logic (idempotent, per-assignee)
+- Store event ids per (task_id, assignee_user_id). Use a table:
+    CREATE TABLE IF NOT EXISTS task_google_events (
+      task_id UUID NOT NULL,
+      user_id TEXT NOT NULL,
+      event_id TEXT UNIQUE,
+      PRIMARY KEY (task_id, user_id)
+    );
+- On upsert for a given assignee:
+  - If a row exists with event_id → PATCH the event
+  - Else INSERT and save the new event_id in task_google_events
+
+3) Build proper Google event
+- Convert UTC due_at to assignee local time using IANA tz (default "America/Vancouver"):
+    // startLocal = DateTime.fromISO(task.due_at, { zone: 'utc' }).setZone(tz)
+    start = { dateTime: startLocal.toISO(), timeZone: tz }
+    end   = { dateTime: startLocal.plus({ minutes: 60 }).toISO(), timeZone: tz }
+- summary = task.title
+- description = task.description ?? ''
+- calendarId = 'primary' unless overridden per user
+
+4) Debug improvements
+- /debug/sync/upsert-task should return { ok:true, taskId, assigneeUserId, eventId } on success.
+- Log a single concise line on server: 
+  `[CAL] upsert ok task=<id> user=<userId> event=<eventId> start=<local> tz=<tz>`
+  or the failure reason.
+
+5) Run once
+- After changes, run:
+  GET /debug/sync/upsert-task?taskId=def42661-adc0-48f8-812d-1420bddcdfa5&as=nikki@csekcreative.com
+  Expect { ok:true, eventId: "..." } and the event visible in Google Calendar.

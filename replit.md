@@ -54,10 +54,10 @@ AgencyPro is a full-stack TypeScript application featuring a React frontend and 
 - **Project/Organization Management**: Comprehensive project and organization management with various view options (tile/grid, list), direct editing, contact management, and project navigation.
 - **Task Management**: Detailed task tracking linked to projects/services, with soft delete, restore, and comprehensive delete functionality. Includes an enhanced "Edit Task Modal" and assignment display.
 - **Time Management**: Unified timezone handling using Luxon for robust UTC/local time conversions and accurate `due_at` computations.
-- **Google Calendar Integration**: Full OAuth integration for task synchronization, supporting individual calendar management and automatic event creation. Idempotent calendar events prevent duplicates.
-- **Quote Upload System**: Automated quote-to-project conversion workflow.
+- **Google Calendar Integration**: Full OAuth integration for task synchronization, supporting individual calendar management and automatic event creation. **OPERATIONAL STATUS (2025-08-18)**: Individual task calendar sync working end-to-end with proper user/token resolution. Idempotent calendar events prevent duplicates. Enhanced resolver correctly handles team_member → user email matching since no FK relationship exists.
+- **Quote Upload System**: Automated quote-to-project conversion workflow.  
 - **Role Management**: Defined roles like "GHL Lead" and "Strategist".
-- **Debug System**: Robust debugging infrastructure with isolated routes, OAuth state preservation, and kill-switch capabilities for calendar sync.
+- **Debug System**: Robust debugging infrastructure with isolated routes, OAuth state preservation, and kill-switch capabilities for calendar sync. Multiple debug endpoints operational for individual task testing and bulk operations.
 
 ## External Dependencies
 
