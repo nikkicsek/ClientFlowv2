@@ -1,194 +1,83 @@
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Calendar, CalendarCheck, CalendarX, RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { Calendar, ExternalLink, Loader2 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 
 interface TaskCalendarSyncProps {
   taskId: string;
-  taskTitle: string;
-  hasCalendarEvent?: boolean;
   className?: string;
 }
 
-export function TaskCalendarSync({ 
-  taskId, 
-  taskTitle, 
-  hasCalendarEvent = false, 
-  className = "" 
-}: TaskCalendarSyncProps) {
+interface SyncResult {
+  ok: boolean;
+  eventId?: string;
+  htmlLink?: string;
+  startLocalISO?: string;
+  error?: string;
+}
+
+export function TaskCalendarSync({ taskId, className }: TaskCalendarSyncProps) {
+  const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
-  const queryClient = useQueryClient();
 
-  // Check if user has calendar sync available
-  const { data: calendarStatus } = useQuery({
-    queryKey: ["/api/user/calendar-status"],
-  });
+  const handleSyncNow = async () => {
+    setIsLoading(true);
+    try {
+      const response = await apiRequest("POST", `/api/tasks/${taskId}/sync-calendar`);
+      const result: SyncResult = await response.json();
 
-  const syncMutation = useMutation({
-    mutationFn: async () => {
-      return apiRequest(`/api/tasks/${taskId}/sync-calendar`, {
-        method: "POST",
-      });
-    },
-    onSuccess: (data: any) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/team-members"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/task-assignments"] });
-      
-      // Show success toast with optional calendar link
-      if (data.htmlLink) {
+      if (result.ok && result.htmlLink) {
         toast({
-          title: "Calendar Synced",
+          title: "Calendar synced!",
           description: (
-            <div className="flex flex-col gap-2">
-              <span>"{taskTitle}" has been synced to Google Calendar</span>
-              <button
-                onClick={() => window.open(data.htmlLink, '_blank')}
-                className="text-blue-600 hover:text-blue-800 text-sm underline text-left"
+            <div className="flex items-center gap-2">
+              <span>Event created successfully</span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => window.open(result.htmlLink, '_blank')}
+                className="h-6 text-xs"
               >
+                <ExternalLink className="h-3 w-3 mr-1" />
                 Open in Google Calendar
-              </button>
+              </Button>
             </div>
           ),
+          duration: 5000,
         });
       } else {
         toast({
-          title: "Task Synced",
-          description: `"${taskTitle}" has been added to your Google Calendar`,
+          title: "Sync failed",
+          description: result.error || "Unable to sync with calendar",
+          variant: "destructive",
         });
       }
-    },
-    onError: (error: any) => {
+    } catch (error) {
       toast({
-        title: "Sync Failed",
-        description: error?.message || "Failed to sync task to Google Calendar",
+        title: "Sync error",
+        description: "Failed to communicate with calendar service",
         variant: "destructive",
       });
-    },
-  });
-
-  const unsyncMutation = useMutation({
-    mutationFn: async () => {
-      return apiRequest(`/api/tasks/${taskId}/sync-calendar`, {
-        method: "DELETE",
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/team-members"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/task-assignments"] });
-      toast({
-        title: "Sync Removed",
-        description: `"${taskTitle}" has been removed from your Google Calendar`,
-      });
-    },
-    onError: () => {
-      toast({
-        title: "Remove Failed",
-        description: "Failed to remove task from Google Calendar",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const manualSyncMutation = useMutation({
-    mutationFn: async () => {
-      return apiRequest(`/api/tasks/${taskId}/sync-calendar`, {
-        method: "POST",
-      });
-    },
-    onSuccess: (data: any) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/team-members"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/task-assignments"] });
-      
-      // Show success toast with optional calendar link
-      if (data.htmlLink) {
-        toast({
-          title: "Calendar Synced",
-          description: (
-            <div className="flex flex-col gap-2">
-              <span>"{taskTitle}" calendar event updated successfully</span>
-              <button
-                onClick={() => window.open(data.htmlLink, '_blank')}
-                className="text-blue-600 hover:text-blue-800 text-sm underline text-left"
-              >
-                Open in Google Calendar
-              </button>
-            </div>
-          ),
-        });
-      } else {
-        toast({
-          title: "Calendar Synced",
-          description: `"${taskTitle}" calendar event updated successfully`,
-        });
-      }
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Sync Failed", 
-        description: error?.message || "Failed to sync task calendar",
-        variant: "destructive",
-      });
-    },
-  });
-
-  // Don't show if calendar sync is not available
-  if (!calendarStatus?.available) {
-    return null;
-  }
-
-  const isLoading = syncMutation.isPending || unsyncMutation.isPending || manualSyncMutation.isPending;
-
-  if (hasCalendarEvent) {
-    return (
-      <div className="flex gap-1">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => unsyncMutation.mutate()}
-          disabled={isLoading}
-          className={`text-green-600 hover:text-green-700 hover:bg-green-50 ${className}`}
-          title="Remove from Google Calendar"
-        >
-          <CalendarCheck className="h-4 w-4" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => manualSyncMutation.mutate()}
-          disabled={isLoading}
-          className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-          title="Sync to Google Calendar"
-        >
-          <RefreshCw className="h-3 w-3" />
-        </Button>
-      </div>
-    );
-  }
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
-    <div className="flex gap-1">
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => syncMutation.mutate()}
-        disabled={isLoading}
-        className={`text-gray-600 hover:text-blue-600 hover:bg-blue-50 ${className}`}
-        title="Add to Google Calendar"
-      >
-        <Calendar className="h-4 w-4" />
-      </Button>
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => manualSyncMutation.mutate()}
-        disabled={isLoading}
-        className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-        title="Sync to Google Calendar"
-      >
-        <RefreshCw className="h-3 w-3" />
-      </Button>
-    </div>
+    <Button
+      onClick={handleSyncNow}
+      disabled={isLoading}
+      size="sm"
+      variant="outline"
+      className={className}
+    >
+      {isLoading ? (
+        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+      ) : (
+        <Calendar className="h-4 w-4 mr-2" />
+      )}
+      {isLoading ? "Syncing..." : "Sync Calendar"}
+    </Button>
   );
 }
