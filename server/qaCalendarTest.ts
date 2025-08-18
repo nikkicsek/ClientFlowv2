@@ -94,7 +94,7 @@ export class CalendarQATest {
     try {
       // Find a user with Google calendar tokens by checking the user table directly
       const userQuery = `SELECT id, email, google_access_token FROM users WHERE google_access_token IS NOT NULL LIMIT 1`;
-      const { pool } = await import('./storage');
+      const { pool } = await import('./db');
       const result = await pool.query(userQuery);
       const userWithTokens = result.rows[0];
       
