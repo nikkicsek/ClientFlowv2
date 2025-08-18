@@ -1,0 +1,38 @@
+Fix calendar hooks (not firing on create) and correct due_at computation (double-adding time).
+
+A) Calendar hooks must fire on all create/update/delete paths
+1) After inserting a task and its task_assignments, call the calendar hook:
+   - onAssignmentCreated(assignment) after each assignment insert
+   - onTaskUpdated(taskId) when due_date or due_time changes
+   - onAssignmentDeleted(assignmentId) on unassign/delete
+2) These hooks must:
+   - Respect the SYNC toggle (no-ops when disabled)
+   - Be idempotent using task_assignments.calendar_event_id
+     • create if null → save returned event id
+     • update if present → update that event
+     • delete on unassign → delete & clear the id
+3) Ensure the hook looks up Google tokens by the **canonical app user id** (users.id for the assignee’s user), not by team_member_id.
+
+B) Fix due_at calculation (currently double-adding time)
+1) DB stores due_date (DATE) + due_time (TIME). Do NOT insert into tasks.due_at.
+2) In SELECTs, compute due_at once:
+   (t.due_date::timestamp
+      + COALESCE(t.due_time::interval, interval '00:00')) AT TIME ZONE 'UTC'
+   AS due_at
+   (Keep also returning due_date and due_time.)
+3) On the frontend, if you need a local time, convert the UTC due_at in JS using the browser timezone, or have the server also return a `due_at_local` using 'America/Vancouver' for display only.
+
+C) Google event times (no shifts)
+- Build event start/end from due_date + due_time in **America/Vancouver**:
+  start = { dateTime: `${due_date}T${due_time}:00`, timeZone: 'America/Vancouver' }
+  end   = start + defaultDuration (e.g., 30m) with the SAME timeZone
+- Do NOT convert to UTC for the Google payload when you provide `timeZone`.
+
+D) Diagnostics
+- Log once per hook: action ('create','update','delete'), taskId, assignmentId, had_event_id, result.
+- Add GET /debug/sync/logs (last 50) redacting tokens, so we can see if hooks ran.
+
+Acceptance
+1) /debug/create-test-task?as=nikki@csekcreative.com → creates a task assigned to me and triggers exactly ONE calendar event (with correct Vancouver time).
+2) /debug/my-tasks?as=nikki@… shows the task with a correct due_at (no “double time”).
+3) Editing the task time updates the SAME calendar event; unassigning deletes it.
