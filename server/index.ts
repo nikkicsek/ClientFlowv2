@@ -4,7 +4,7 @@ import cookieParser from 'cookie-parser';
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { googleRouter } from './oauth/googleRoutes';
-import { debugRouter } from './debugRoutes';
+import { registerDebugRoutes } from './debugRoutes';
 import { devAuthRouter } from './auth/devAuth';
 import { pool } from './db';
 
@@ -35,7 +35,7 @@ console.log('REDIRECT_URI =', process.env.GOOGLE_REDIRECT_URI);
 console.log('Mounted debug routes at /debug');
 
 // CRITICAL: Mount debug and oauth routes EARLY BEFORE any other routes
-app.use('/debug', debugRouter);
+registerDebugRoutes(app);
 app.use(googleRouter);
 app.use('/api', googleRouter);
 

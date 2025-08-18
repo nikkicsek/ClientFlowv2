@@ -123,22 +123,14 @@ export function EditTaskModal({ isOpen, onClose, task }: EditTaskModalProps) {
       return;
     }
 
-    // Combine date and time for due date if both are provided
-    let dueDateTime = null;
-    if (formData.dueDate) {
-      if (formData.dueTime) {
-        dueDateTime = `${formData.dueDate}T${formData.dueTime}:00`;
-      } else {
-        dueDateTime = `${formData.dueDate}T09:00:00`; // Default to 9 AM if no time specified
-      }
-    }
-
+    // Send separate dueDate and dueTime fields to match unified time handling
     const taskData = {
       title: formData.title,
       description: formData.description || null,
       status: formData.status,
       priority: formData.priority,
-      dueDate: dueDateTime,
+      dueDate: formData.dueDate || null,
+      dueTime: formData.dueTime || null,
       googleDriveLink: formData.googleDriveLink || null,
     };
 

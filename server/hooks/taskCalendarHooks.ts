@@ -1,4 +1,5 @@
-import { googleCalendarService, SYNC_ENABLED } from '../googleCalendar';
+import { googleCalendarService } from '../googleCalendar';
+import { SYNC_ENABLED } from '../debugRoutes';
 import { storage } from '../storage';
 import { shouldCreateTimedEvent, backfillDisplayFields } from '../utils/timeHandling';
 

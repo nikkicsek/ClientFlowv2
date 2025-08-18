@@ -161,7 +161,8 @@ export default function CreateTaskModal({
       return;
     }
 
-    // Send separate dueDate and dueTime fields to match server expectation
+    // Send timezone data along with task data for unified time handling
+    const userTimezone = getUserTimezone();
     const taskData = {
       title: formData.title,
       description: formData.description || null,
@@ -169,7 +170,9 @@ export default function CreateTaskModal({
       priority: formData.priority,
       dueDate: formData.dueDate || null,
       dueTime: formData.dueTime || null,
+      timezone: userTimezone, // Include timezone for server computation
       googleDriveLink: formData.googleDriveLink || null,
+      selectedTeamMembers,
     };
 
     console.log(`${mode === 'edit' ? 'Updating' : 'Creating'} task with data:`, taskData);
