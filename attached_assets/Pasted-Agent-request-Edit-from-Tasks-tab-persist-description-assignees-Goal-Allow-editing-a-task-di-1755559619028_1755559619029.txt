@@ -1,0 +1,54 @@
+Agent request — “Edit from Tasks tab + persist description/assignees”
+
+Goal
+
+Allow editing a task directly from the Tasks tab (not just My Tasks).
+
+Ensure Description and Assignees persist on the very first save (no “second click” needed).
+
+Scope
+
+Edit from Tasks tab
+
+Add an Edit action to each task row/card in the Tasks tab that opens the same modal used in My Tasks.
+
+Preload the task via existing API (or add GET /api/tasks/:id) and hydrate all fields (title, description, status, priority, due date, due time, assignees, project/org).
+
+Show a lightweight loader in the modal until data is ready.
+
+Persist Description & Assignees on first save
+
+Ensure the updateTask request includes description and assigneeTeamMemberIds (or the correct field names your server expects).
+
+If the DB uses a join/assignment table, create/update those rows in the same transaction as the task update.
+
+Confirm the server-side schema/validator (Zod) includes description and assignees and doesn’t drop them when undefined/empty.
+
+Fix any controlled/uncontrolled form issues so the first submit contains the current state.
+
+After save, optimistically update the task in the UI and close the modal.
+
+Add unit/integration test(s) for “first-save persists description & assignees”.
+
+Date/time handling
+
+Keep the single source of truth as due_at (UTC), derived from due_date + due_time using the user’s TZ (America/Vancouver for Nikki).
+
+On modal open, split due_at back into date + time controls in local time.
+
+API & Types
+
+If needed, add/confirm PUT /api/tasks/:id payload includes:
+{ title, description, status, priority, project_id, organization_id, due_date, due_time, assigneeTeamMemberIds } and the server recomputes due_at.
+
+Return the full updated task (including assigneeTeamMemberIds) so the UI can refresh immediately.
+
+Acceptance criteria
+
+From the Tasks tab, clicking Edit opens the modal, fields are prefilled, and one Save persists description + assignees.
+
+Refreshing the page shows the updated description/assignees.
+
+due_at remains correct (no 1-hour drift).
+
+No duplicate assignment rows are created.

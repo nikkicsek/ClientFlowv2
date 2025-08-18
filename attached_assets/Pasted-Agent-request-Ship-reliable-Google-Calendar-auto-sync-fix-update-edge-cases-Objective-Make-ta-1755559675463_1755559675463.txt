@@ -1,0 +1,76 @@
+Agent request — “Ship reliable Google Calendar auto-sync + fix update edge cases”
+
+Objective
+Make task → Google Calendar syncing fire automatically on create/update and be rock-solid (no more manual upserts or 404s). Fix the “update failed” case and expose the working debug endpoints.
+
+Work to do
+
+Auto-sync hooks
+
+After successful createTask and updateTask, call CalendarSync.upsert(taskId, actingUserId) if:
+
+user has calendar tokens
+
+due_at is not null
+
+Skip silently if not eligible.
+
+Upsert logic (idempotent & resilient)
+
+Compute start from due_at in the user’s TZ (America/Vancouver for Nikki) via Luxon:
+
+start = DateTime.fromISO(due_at, { zone: 'utc' }).setZone(user.tz)
+
+end = start.plus({ minutes: 60 }) (default 1-hour event)
+
+Event body: summary = task.title, description includes notes/status/priority and a link back to the task, start/end use dateTime + timeZone.
+
+Use primary calendar.
+
+Mapping table: task_event_mappings(task_id, user_id, event_id, created_at, updated_at).
+
+If mapping exists → try events.update.
+
+If Google returns 404/notFound or invalid ID, create a new event and replace the mapping.
+
+If mapping doesn’t exist → events.insert, save mapping.
+
+If none of the relevant fields changed (title/start), no-op.
+
+Return { ok:true, eventId, htmlLink, startLocalISO }.
+
+Deletion
+
+On task delete, if mapping exists, delete the event and remove the mapping.
+
+Debug routes (wire into router)
+
+GET /debug/sync/get-event?eventId=…&as=… → fetch from Google; return found, start, end, timeZone, htmlLink.
+
+GET /debug/sync/get-payload?taskId=…&as=… → show computed start/end/timeZone that would be sent.
+
+POST/GET /debug/sync/upsert-task?taskId=…&as=…&forceCreate=1&verbose=1 (already exists) – ensure it never 404s.
+
+Keep /debug/sync/get-mapping?taskId=… as is.
+
+UI confirmation (tiny)
+
+After save, if upsert succeeded, show a small “Added to calendar” pill with link (htmlLink) in the toast or on the task card.
+
+On edit that moves time, toast “Calendar updated”.
+
+Tests
+
+Unit tests for UTC↔local conversion (America/Vancouver; check DST boundary).
+
+Integration test: create → update → delete keeps mapping consistent.
+
+Acceptance criteria
+
+Creating or editing a task with a due time immediately creates/updates a Google event (no manual debug call).
+
+Moving the due time moves the event (same eventId unless Google returned notFound).
+
+/debug/sync/get-event returns the event with the correct local times.
+
+No 404s from debug routes; failed updates auto-recreate and refresh the mapping.
