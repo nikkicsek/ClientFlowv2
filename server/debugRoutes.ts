@@ -1710,5 +1710,129 @@ export function registerDebugRoutes(app: Express) {
     }
   });
 
+  // Enhanced debug endpoint to get calendar event by ID
+  app.get('/debug/sync/get-event', async (req, res) => {
+    try {
+      const { eventId, as: userId } = req.query;
+      
+      if (!eventId || !userId) {
+        return res.status(400).json({ error: 'eventId and as (userId) required' });
+      }
+
+      const { calendarAutoSync } = await import('./calendarAutoSync');
+      const result = await calendarAutoSync.getEventFromGoogle(eventId as string, userId as string);
+      res.json(result);
+    } catch (error) {
+      console.error('Debug get-event error:', error);
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : 'Unknown error',
+        eventId: req.query.eventId,
+        userId: req.query.as
+      });
+    }
+  });
+
+  // Debug endpoint to show computed start/end/timeZone payload
+  app.get('/debug/sync/get-payload', async (req, res) => {
+    try {
+      const { taskId, as: userId } = req.query;
+      
+      if (!taskId || !userId) {
+        return res.status(400).json({ error: 'taskId and as (userId) required' });
+      }
+
+      const { calendarAutoSync } = await import('./calendarAutoSync');
+      const result = await calendarAutoSync.getComputedPayload(taskId as string, userId as string);
+      res.json(result);
+    } catch (error) {
+      console.error('Debug get-payload error:', error);
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : 'Unknown error',
+        taskId: req.query.taskId,
+        userId: req.query.as
+      });
+    }
+  });
+
+  // Enhanced upsert endpoint with verbose logging and force-create option
+  app.all('/debug/sync/upsert-task', async (req, res) => {
+    try {
+      const { taskId, as: userId, forceCreate, verbose } = req.query;
+      
+      if (!taskId || !userId) {
+        return res.status(400).json({ error: 'taskId and as (userId) required' });
+      }
+
+      const { calendarAutoSync } = await import('./calendarAutoSync');
+      
+      if (forceCreate === '1') {
+        // Force create new event by clearing existing mapping
+        const mappingDeleted = await pool.query(
+          'DELETE FROM task_event_mappings WHERE task_id = $1 AND user_id = $2',
+          [taskId, userId]
+        );
+        if (verbose === '1') {
+          console.log('Force create: deleted', mappingDeleted.rowCount, 'existing mappings');
+        }
+      }
+      
+      const result = await calendarAutoSync.upsertTaskEvent(taskId as string, userId as string);
+      
+      if (verbose === '1') {
+        const mapping = await pool.query(
+          'SELECT * FROM task_event_mappings WHERE task_id = $1 AND user_id = $2',
+          [taskId, userId]
+        );
+        result.mapping = mapping.rows[0] || null;
+      }
+      
+      res.json(result);
+    } catch (error) {
+      console.error('Debug upsert-task error:', error);
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : 'Unknown error',
+        taskId: req.query.taskId,
+        userId: req.query.as
+      });
+    }
+  });
+
+  // Get task-event mapping for debugging
+  app.get('/debug/sync/get-mapping', async (req, res) => {
+    try {
+      const { taskId, as: userId } = req.query;
+      
+      if (!taskId) {
+        return res.status(400).json({ error: 'taskId required' });
+      }
+
+      let query: string;
+      let params: any[];
+
+      if (userId) {
+        query = 'SELECT * FROM task_event_mappings WHERE task_id = $1 AND user_id = $2';
+        params = [taskId, userId];
+      } else {
+        query = 'SELECT * FROM task_event_mappings WHERE task_id = $1';
+        params = [taskId];
+      }
+
+      const result = await pool.query(query, params);
+      res.json({
+        taskId,
+        userId: userId || 'all',
+        mappings: result.rows,
+        count: result.rows.length
+      });
+    } catch (error) {
+      console.error('Debug get-mapping error:', error);
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : 'Unknown error',
+        taskId: req.query.taskId,
+        userId: req.query.as
+      });
+    }
+  });
+
   return app;
 }

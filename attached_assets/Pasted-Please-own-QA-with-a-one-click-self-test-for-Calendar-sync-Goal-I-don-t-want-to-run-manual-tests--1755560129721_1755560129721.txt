@@ -1,0 +1,70 @@
+Please own QA with a one-click self-test for Calendar sync
+
+Goal: I don’t want to run manual tests. Create an automated, one-click self-test that proves task→Google Calendar sync works on create, update, and delete with the correct timezone. Return a single JSON report and the live Google calendar links.
+
+Build a self-test endpoint
+
+Create GET /debug/sync/self-test?as=<email>&tz=America/Vancouver that:
+
+Create a temporary task (title prefixed [CAL TEST]) due 10 minutes from now in the provided tz.
+
+Auto-sync via the normal path (not manual upsert). If needed, call the same upsert the UI uses.
+
+Verify create
+
+Fetch mapping (/debug/sync/get-mapping?taskId=...)
+
+Fetch event (/debug/sync/get-event?eventId=...)
+
+Assert event exists, start ≈ due time, timeZone set, and htmlLink present.
+
+Update the task to +15 minutes and re-sync.
+
+Verify the same eventId moved (unless Google returned notFound, in which case recreate and update mapping).
+
+Delete the task and verify the event is gone and mapping removed.
+
+Return a single JSON report, e.g.:
+
+{
+  "ok": true,
+  "tz": "America/Vancouver",
+  "create": { "ok": true, "taskId": "...", "eventId": "...", "htmlLink": "..." , "startLocal": "2025-08-18T10:30:00-07:00"},
+  "update": { "ok": true, "eventIdUnchanged": true, "newStartLocal": "..." },
+  "delete": { "ok": true, "eventDeleted": true },
+  "logs": [ "brief, human-readable steps" ]
+}
+
+
+Important: make this endpoint idempotent and clean up test data. Use Luxon consistently, and compute startLocal = DateTime.fromISO(task.due_at, { zone: 'utc' }).setZone(tz); endLocal = startLocal.plus({ minutes: 60 }).
+
+Fix/confirm these behaviors
+
+Auto-sync runs on task create and update; no manual debug calls required.
+
+Update path: if events.update returns 404/invalid ID, insert a new event and replace mapping.
+
+/debug/sync/get-event and /debug/sync/get-mapping must never 404.
+
+All start/end payloads use dateTime + timeZone (no all-day date fields).
+
+Default event duration = 60 minutes unless we support task duration.
+
+Acceptance Criteria (Definition of Done)
+
+I can open one URL:
+
+/debug/sync/self-test?as=nikki@csekcreative.com&tz=America/Vancouver
+
+
+and see "ok": true, with htmlLink to the live calendar event(s).
+
+Creating/editing a task in the normal UI immediately adds/updates the calendar event (no debug steps).
+
+Timezone is correct (America/Vancouver; DST respected).
+
+Mapping remains stable across updates (same eventId unless Google notFound).
+
+Deleting a task removes its event.
+
+Please run the self-test yourself and paste the JSON report plus the htmlLink here.

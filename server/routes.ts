@@ -575,12 +575,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
         
-        // Sync all calendar events for the task using new unified system
+        // Auto-sync calendar event if eligible
         try {
-          await syncAllCalendarEventsForTask(task.id);
-          console.log(`Synced calendar events for task ${task.id}`);
+          const { calendarAutoSync } = await import('./calendarAutoSync');
+          const syncResult = await calendarAutoSync.syncTaskIfEligible(task.id, userId);
+          if (syncResult.ok) {
+            console.log(`Auto-synced calendar for task ${task.id}:`, syncResult.eventId);
+          } else {
+            console.log(`Auto-sync skipped for task ${task.id}:`, syncResult.error);
+          }
         } catch (calendarError) {
-          console.error('Calendar sync error for task:', task.id, calendarError);
+          console.error('Auto-sync error for task:', task.id, calendarError);
           // Don't fail task creation if calendar sync fails
         }
 
@@ -626,6 +631,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Error fetching task:', error);
       res.status(500).json({ message: 'Failed to fetch task' });
+    }
+  });
+
+  // Lightweight manual sync endpoint for UI integration
+  app.post('/api/tasks/:id/sync-calendar', isAuthenticated, async (req: any, res) => {
+    try {
+      const taskId = req.params.id;
+      const userId = req.user.claims.sub;
+      
+      // Get task and verify access
+      const task = await storage.getTask(taskId);
+      if (!task) {
+        return res.status(404).json({ message: 'Task not found' });
+      }
+      
+      const assignments = await storage.getTaskAssignments(taskId);
+      const user = await storage.getUser(userId);
+      const isAssigned = assignments.some(assignment => 
+        assignment.teamMember?.email === user.email
+      );
+      
+      if (user.role !== 'admin' && !isAssigned) {
+        return res.status(403).json({ message: 'Not authorized to sync this task' });
+      }
+      
+      // Use new auto-sync system
+      const { calendarAutoSync } = await import('./calendarAutoSync');
+      const result = await calendarAutoSync.syncTaskIfEligible(taskId, userId);
+      res.json(result);
+    } catch (error) {
+      console.error('Manual sync error:', error);
+      res.status(500).json({ message: 'Failed to sync calendar' });
     }
   });
 
@@ -678,6 +715,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Update the task
       const updatedTask = await storage.updateTask(taskId, updateData);
+
+      // Auto-sync calendar event if eligible
+      try {
+        const { calendarAutoSync } = await import('./calendarAutoSync');
+        const syncResult = await calendarAutoSync.syncTaskIfEligible(taskId, userId);
+        if (syncResult.ok) {
+          console.log(`Auto-synced calendar for updated task ${taskId}:`, syncResult.eventId);
+        } else {
+          console.log(`Auto-sync skipped for updated task ${taskId}:`, syncResult.error);
+        }
+      } catch (calendarError) {
+        console.error('Auto-sync error for updated task:', taskId, calendarError);
+        // Don't fail task update if calendar sync fails
+      }
 
       // Handle assignment changes if provided
       if (assigneeUserIds && Array.isArray(assigneeUserIds)) {
@@ -1149,6 +1200,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error creating message:", error);
       res.status(500).json({ message: "Failed to create message" });
+    }
+  });
+
+  // QA Calendar Test route - One-click self-test
+  app.get('/api/qa/calendar-test', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Only admins can run QA tests" });
+      }
+
+      const { qaCalendarTest } = await import('./qaCalendarTest');
+      const results = await qaCalendarTest.runFullQATest();
+      
+      res.json({
+        success: true,
+        timestamp: new Date().toISOString(),
+        ...results
+      });
+    } catch (error) {
+      console.error('QA Calendar Test error:', error);
+      res.status(500).json({ 
+        success: false,
+        message: 'QA test failed',
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 

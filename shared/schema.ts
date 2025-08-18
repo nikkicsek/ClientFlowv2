@@ -304,6 +304,20 @@ export const quotes = pgTable("quotes", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Task-event mapping table for Google Calendar sync (idempotent & resilient)
+export const taskEventMappings = pgTable("task_event_mappings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  taskId: varchar("task_id").notNull().references(() => tasks.id),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  eventId: varchar("event_id").notNull(), // Google Calendar event ID
+  calendarId: varchar("calendar_id").default("primary"), // Usually "primary"
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_task_event_mappings_task_user").on(table.taskId, table.userId),
+  index("idx_task_event_mappings_event").on(table.eventId),
+]);
+
 // Quote line items for detailed breakdown
 export const quoteLineItems = pgTable("quote_line_items", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
