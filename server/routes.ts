@@ -443,6 +443,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         task = await storage.createTask(finalTaskData);
         console.log('Created task:', { taskId: task.id, title: task.title, dueDate: task.dueDate, dueTime: task.dueTime });
         
+        // Calendar upsert if due_at is set (idempotent)
+        if (task.dueAt) {
+          const { calendarUpsert } = await import('./calendarUpsert');
+          const upsertResult = await calendarUpsert(task, userId, userTz);
+          
+          if (upsertResult.success && upsertResult.eventId) {
+            // Update task with calendar event ID
+            await storage.updateTask(task.id, { googleCalendarEventId: upsertResult.eventId });
+            console.log('Calendar event created/updated:', { taskId: task.id, eventId: upsertResult.eventId });
+          } else {
+            console.warn('Calendar upsert failed:', upsertResult.error);
+          }
+        }
+        
         // Create task assignments for each selected team member
         for (const teamMemberId of selectedTeamMembers) {
           const assignment = await storage.createTaskAssignment({
@@ -2943,6 +2957,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
         due_date_db: result.due_date_db
       });
     } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Backfill helper for calendar events (as specified)
+  app.get('/debug/calendar/backfill', async (req, res) => {
+    try {
+      const { hours = "24", as } = req.query as { hours?: string, as?: string };
+      
+      if (!as) {
+        return res.status(400).json({ error: 'Missing ?as=email parameter' });
+      }
+
+      // Get user by email
+      const user = await storage.getUserByEmail(as);
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      // Find tasks assigned to user where due_at exists but calendar_event_id is null
+      const { pool } = await import('./db');
+      const hoursAgo = new Date(Date.now() - parseInt(hours) * 60 * 60 * 1000);
+      
+      const query = `
+        SELECT t.* FROM tasks t 
+        JOIN task_assignments ta ON t.id = ta.task_id 
+        JOIN team_members tm ON ta.team_member_id = tm.id 
+        WHERE tm.email = $1 
+          AND t.due_at IS NOT NULL 
+          AND t.google_calendar_event_id IS NULL 
+          AND t.updated_at >= $2
+      `;
+      
+      const result = await pool.query(query, [as, hoursAgo]);
+      const tasksToBackfill = result.rows;
+      
+      const { calendarUpsert } = await import('./calendarUpsert');
+      let backfilled = 0;
+      
+      for (const task of tasksToBackfill) {
+        const upsertResult = await calendarUpsert(task, user.id);
+        
+        if (upsertResult.success && upsertResult.eventId) {
+          await storage.updateTask(task.id, { googleCalendarEventId: upsertResult.eventId });
+          backfilled++;
+          console.log('Backfilled calendar event:', { taskId: task.id, eventId: upsertResult.eventId });
+        }
+      }
+      
+      res.json({
+        success: true,
+        user: as,
+        tasksFound: tasksToBackfill.length,
+        backfilled
+      });
+    } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
   });
