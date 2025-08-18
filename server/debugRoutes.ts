@@ -631,4 +631,91 @@ router.delete('/cleanup-test-tasks', async (req: any, res) => {
   }
 });
 
+// Debug endpoint to create test task with assignments
+router.get('/create-test-task', async (req, res) => {
+  try {
+    const asEmail = req.query.as as string;
+    if (!asEmail) {
+      return res.status(400).json({ error: 'Missing ?as=email parameter' });
+    }
+
+    // Find team member by email
+    const pool = req.app.get('db');
+    const teamMemberResult = await pool.query('SELECT id FROM team_members WHERE email = $1', [asEmail]);
+    
+    if (teamMemberResult.rows.length === 0) {
+      return res.status(404).json({ error: `Team member not found for email: ${asEmail}` });
+    }
+
+    const teamMemberId = teamMemberResult.rows[0].id;
+    
+    // Get a sample project for testing
+    const projectResult = await pool.query('SELECT id FROM projects LIMIT 1');
+    if (projectResult.rows.length === 0) {
+      return res.status(404).json({ error: 'No projects found for testing' });
+    }
+
+    const projectId = projectResult.rows[0].id;
+
+    // Create test task with due time ~10 minutes from now
+    const now = new Date();
+    const dueAt = new Date(now.getTime() + 10 * 60 * 1000); // 10 minutes from now
+    
+    const taskData = {
+      title: `Test Task ${now.getTime()}`,
+      description: 'Debug test task created automatically',
+      projectId,
+      status: 'in_progress',
+      priority: 'medium',
+      dueAt,
+      dueDate: dueAt,
+      dueTime: `${dueAt.getHours().toString().padStart(2, '0')}:${dueAt.getMinutes().toString().padStart(2, '0')}`,
+    };
+
+    // Create task using storage
+    const storage = req.app.get('storage');
+    const task = await storage.createTask(taskData);
+
+    // Create assignment
+    const assignment = await storage.createTaskAssignment({
+      taskId: task.id,
+      teamMemberId: teamMemberId,
+      assignedBy: 'debug-system',
+    });
+
+    // Fire calendar hook
+    const { onTaskCreatedOrUpdated } = require('./hooks/taskCalendarHooks');
+    try {
+      await onTaskCreatedOrUpdated(task.id);
+    } catch (calendarError) {
+      console.error('Calendar hook error in debug:', calendarError);
+    }
+
+    res.json({
+      success: true,
+      task: {
+        id: task.id,
+        title: task.title,
+        dueAt: task.dueAt,
+        projectId: task.projectId,
+      },
+      assignments: [{
+        id: assignment.id,
+        teamMemberId: assignment.teamMemberId,
+        taskId: assignment.taskId,
+      }],
+      debug: {
+        teamMemberEmail: asEmail,
+        teamMemberId,
+        projectId,
+        dueAtFormatted: dueAt.toISOString(),
+      }
+    });
+
+  } catch (error) {
+    console.error('Debug create-test-task error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export { router as debugRouter };
