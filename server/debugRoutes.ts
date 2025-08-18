@@ -106,6 +106,97 @@ async function resolveUserFromEmail(email: string | undefined, req: any) {
   return { user, teamMemberId };
 }
 
+// Enhanced user and token resolution (single source of truth)
+async function resolveUserAndTokensEnhanced(params: { 
+  asEmail?: string, 
+  sessionUserId?: string, 
+  assigneeTeamMemberId?: string 
+}) {
+  const { asEmail, sessionUserId, assigneeTeamMemberId } = params;
+  
+  let userId: string;
+  let email: string;
+  let teamMemberId: string | undefined;
+  let tz = 'America/Vancouver'; // Default timezone
+
+  // Step 1: Resolve userId and email
+  if (asEmail) {
+    // First check if it's a team member email
+    const teamMemberResult = await pool.query('SELECT * FROM team_members WHERE email = $1', [asEmail]);
+    if (teamMemberResult.rows.length > 0) {
+      const teamMember = teamMemberResult.rows[0];
+      teamMemberId = teamMember.id;
+      
+      // Get the app user that corresponds to this team member (by email matching)
+      const userResult = await pool.query('SELECT * FROM users WHERE email = $1', [teamMember.email]);
+      if (userResult.rows.length === 0) {
+        return { ok: false, reason: "no_user_for_team_member", teamMemberId, teamMemberEmail: teamMember.email };
+      }
+      const user = userResult.rows[0];
+      userId = user.id;
+      email = user.email;
+      tz = teamMember.timezone || tz;
+    } else {
+      // Direct user lookup by email
+      const userResult = await pool.query('SELECT * FROM users WHERE email = $1', [asEmail]);
+      if (userResult.rows.length === 0) {
+        return { ok: false, reason: "user_not_found", email: asEmail };
+      }
+      const user = userResult.rows[0];
+      userId = user.id;
+      email = user.email;
+    }
+  } else if (assigneeTeamMemberId) {
+    // Lookup team member, then resolve to userId by email (no FK relationship)
+    const teamMemberResult = await pool.query('SELECT * FROM team_members WHERE id = $1', [assigneeTeamMemberId]);
+    if (teamMemberResult.rows.length === 0) {
+      return { ok: false, reason: "team_member_not_found", teamMemberId: assigneeTeamMemberId };
+    }
+    const teamMember = teamMemberResult.rows[0];
+    teamMemberId = teamMember.id;
+    
+    // Find user by matching email (no FK relationship exists)
+    console.log(`[ENHANCED] Looking for user with email: ${teamMember.email}`);
+    const userResult = await pool.query('SELECT * FROM users WHERE email = $1', [teamMember.email]);
+    console.log(`[ENHANCED] User lookup result: ${userResult.rows.length} rows`);
+    if (userResult.rows.length === 0) {
+      console.log(`[ENHANCED] FAILED: No user found for team member email ${teamMember.email}`);
+      return { ok: false, reason: "no_user_for_team_member", teamMemberId, teamMemberEmail: teamMember.email };
+    }
+    const user = userResult.rows[0];
+    userId = user.id.toString(); // Ensure string type
+    email = user.email;
+    tz = teamMember.timezone || tz;
+  } else if (sessionUserId) {
+    const userResult = await pool.query('SELECT * FROM users WHERE id = $1', [sessionUserId]);
+    if (userResult.rows.length === 0) {
+      return { ok: false, reason: "user_not_found", userId: sessionUserId };
+    }
+    const user = userResult.rows[0];
+    userId = user.id;
+    email = user.email;
+  } else {
+    return { ok: false, reason: "no_user_context" };
+  }
+
+  // Step 2: Get OAuth tokens by userId (single source of truth)
+  const tokenResult = await pool.query('SELECT * FROM oauth_tokens WHERE user_id = $1', [userId]);
+  const tokens = tokenResult.rows[0] || null;
+  
+  if (!tokens) {
+    return { ok: false, reason: "no_tokens_for_user", userId, teamMemberId };
+  }
+
+  return { 
+    ok: true, 
+    userId, 
+    email, 
+    teamMemberId, 
+    tz, 
+    tokens 
+  };
+}
+
 export function registerDebugRoutes(app: Express) {
   console.log('Mounted debug routes at /debug');
 
@@ -288,7 +379,7 @@ export function registerDebugRoutes(app: Express) {
     }
   });
 
-  // Push this task now - Direct calendar upsert for single task
+  // Push this task now - Direct calendar upsert for single task (with proper token resolution)
   app.get('/debug/sync/upsert-task', async (req, res) => {
     const taskId = req.query.taskId as string;
     const impersonateAs = req.query.as as string;
@@ -298,9 +389,6 @@ export function registerDebugRoutes(app: Express) {
     }
 
     try {
-      // Get user info for impersonation
-      const { user, teamMemberId } = await resolveUserFromEmail(impersonateAs, req);
-      
       // Load the task directly from database
       const taskResult = await pool.query('SELECT * FROM tasks WHERE id = $1', [taskId]);
       if (taskResult.rows.length === 0) {
@@ -312,37 +400,156 @@ export function registerDebugRoutes(app: Express) {
         return res.status(400).json({ error: 'Task has no due_at timestamp for calendar sync' });
       }
 
-      // Build start/end times (end = start + 60 minutes)
-      const startTime = new Date(task.due_at);
-      const endTime = new Date(startTime.getTime() + 60 * 60 * 1000); // Add 1 hour
+      // Get assignee info - check who this task is assigned to
+      let assigneeTeamMemberId: string | undefined;
+      
+      if (task.assigned_to) {
+        // Direct user assignment - we still need to resolve through the enhanced method
+        const resolution = await resolveUserAndTokensEnhanced({
+          asEmail: impersonateAs,
+          sessionUserId: task.assigned_to
+        });
+        
+        if (!resolution.ok) {
+          return res.status(400).json({ 
+            error: `Token resolution failed: ${resolution.reason}`,
+            details: resolution
+          });
+        }
+        
+        const { userId, tz, tokens } = resolution;
+        
+        // Convert UTC due_at to assignee local time using IANA timezone
+        const dueAtUtc = DateTime.fromISO(task.due_at, { zone: 'utc' });
+        const startLocal = dueAtUtc.setZone(tz);
+        const endLocal = startLocal.plus({ minutes: 60 });
 
-      console.log(`Direct upsert for task ${taskId}: ${startTime.toISOString()} -> ${endTime.toISOString()}`);
+        console.log(`[CAL] upsert task=${taskId} user=${userId} start=${startLocal.toISO()} tz=${tz}`);
 
-      // Get Google Calendar service  
+        // Check if this task already has a calendar event for this user (idempotent)
+        const existingEventResult = await pool.query(
+          'SELECT event_id FROM task_google_events WHERE task_id = $1 AND user_id = $2', 
+          [taskId, userId]
+        );
+        
+        // Get Google Calendar service
+        const { googleCalendarService } = await import('./googleCalendar');
+        
+        let eventId: string;
+        
+        if (existingEventResult.rows.length > 0) {
+          // PATCH existing event
+          eventId = existingEventResult.rows[0].event_id;
+          console.log(`Updating existing calendar event ${eventId}`);
+          
+          const updateResult = await googleCalendarService.updateTaskEvent(userId, eventId, {
+            title: task.title,
+            description: task.description || '',
+            dueDate: new Date(startLocal.toISO()),
+            status: task.status || 'pending',
+            priority: task.priority || 'medium'
+          });
+          
+          if (!updateResult) {
+            throw new Error(`Failed to update calendar event ${eventId}`);
+          }
+        } else {
+          // CREATE new event and store mapping
+          console.log(`Creating new calendar event for task ${taskId}`);
+          
+          eventId = await googleCalendarService.createTaskEvent(userId, {
+            title: task.title,
+            description: task.description || '',
+            dueDate: new Date(startLocal.toISO()),
+            status: task.status || 'pending',
+            priority: task.priority || 'medium'
+          });
+          
+          if (!eventId) {
+            throw new Error('Failed to create calendar event - no event ID returned');
+          }
+          
+          // Store event mapping in task_google_events table
+          await pool.query(
+            'INSERT INTO task_google_events (task_id, user_id, event_id) VALUES ($1, $2, $3) ON CONFLICT (task_id, user_id) DO UPDATE SET event_id = $3, updated_at = now()',
+            [taskId, userId, eventId]
+          );
+        }
+
+        console.log(`[CAL] upsert ok task=${taskId} user=${userId} event=${eventId} start=${startLocal.toISO()} tz=${tz}`);
+
+        return res.json({ 
+          ok: true, 
+          taskId, 
+          assigneeUserId: userId,
+          eventId 
+        });
+      } else {
+        // Check task_assignments table
+        const assignmentResult = await pool.query('SELECT team_member_id FROM task_assignments WHERE task_id = $1 LIMIT 1', [taskId]);
+        if (assignmentResult.rows.length === 0) {
+          return res.status(400).json({ error: 'Task has no assignee - cannot sync to calendar' });
+        }
+        assigneeTeamMemberId = assignmentResult.rows[0].team_member_id;
+      }
+
+      // Resolve user and tokens using enhanced resolution with team member
+      const resolution = await resolveUserAndTokensEnhanced({
+        asEmail: impersonateAs,
+        assigneeTeamMemberId
+      });
+      
+      if (!resolution.ok) {
+        return res.status(400).json({ 
+          error: `Token resolution failed: ${resolution.reason}`,
+          details: resolution
+        });
+      }
+      
+      const { userId, email, tz, tokens } = resolution;
+      
+      // Convert UTC due_at to assignee local time using IANA timezone
+      const dueAtUtc = DateTime.fromISO(task.due_at, { zone: 'utc' });
+      const startLocal = dueAtUtc.setZone(tz);
+      const endLocal = startLocal.plus({ minutes: 60 });
+
+      console.log(`[CAL] upsert task=${taskId} user=${userId} start=${startLocal.toISO()} tz=${tz}`);
+
+      // Check if this task already has a calendar event for this user (idempotent)
+      const existingEventResult = await pool.query(
+        'SELECT event_id FROM task_google_events WHERE task_id = $1 AND user_id = $2', 
+        [taskId, userId]
+      );
+      
+      // Get Google Calendar service
       const { googleCalendarService } = await import('./googleCalendar');
-      const calendarService = googleCalendarService;
       
       let eventId: string;
       
-      if (task.google_calendar_event_id) {
-        // Update existing event
-        console.log(`Updating existing calendar event ${task.google_calendar_event_id}`);
-        const updateResult = await calendarService.updateTaskEvent(teamMemberId || user.id, task.google_calendar_event_id, {
+      if (existingEventResult.rows.length > 0) {
+        // PATCH existing event
+        eventId = existingEventResult.rows[0].event_id;
+        console.log(`Updating existing calendar event ${eventId}`);
+        
+        const updateResult = await googleCalendarService.updateTaskEvent(userId, eventId, {
           title: task.title,
-          description: task.description || undefined,
-          dueDate: startTime,
+          description: task.description || '',
+          dueDate: new Date(startLocal.toISO()),
           status: task.status || 'pending',
           priority: task.priority || 'medium'
         });
-        eventId = task.google_calendar_event_id; // Keep existing event ID
-        console.log(`Update result: ${updateResult}`);
+        
+        if (!updateResult) {
+          throw new Error(`Failed to update calendar event ${eventId}`);
+        }
       } else {
-        // Create new event
+        // CREATE new event and store mapping
         console.log(`Creating new calendar event for task ${taskId}`);
-        eventId = await calendarService.createTaskEvent(teamMemberId || user.id, {
+        
+        eventId = await googleCalendarService.createTaskEvent(userId, {
           title: task.title,
-          description: task.description || undefined,
-          dueDate: startTime,
+          description: task.description || '',
+          dueDate: new Date(startLocal.toISO()),
           status: task.status || 'pending',
           priority: task.priority || 'medium'
         });
@@ -351,25 +558,27 @@ export function registerDebugRoutes(app: Express) {
           throw new Error('Failed to create calendar event - no event ID returned');
         }
         
-        // Save the event ID back to the task
-        await pool.query('UPDATE tasks SET google_calendar_event_id = $1 WHERE id = $2', [eventId, taskId]);
-        console.log(`Saved event ID ${eventId} to task ${taskId}`);
+        // Store event mapping in task_google_events table
+        await pool.query(
+          'INSERT INTO task_google_events (task_id, user_id, event_id) VALUES ($1, $2, $3) ON CONFLICT (task_id, user_id) DO UPDATE SET event_id = $3, updated_at = now()',
+          [taskId, userId, eventId]
+        );
       }
+
+      console.log(`[CAL] upsert ok task=${taskId} user=${userId} event=${eventId} start=${startLocal.toISO()} tz=${tz}`);
 
       res.json({ 
         ok: true, 
         taskId, 
-        eventId,
-        startTime: startTime.toISOString(),
-        endTime: endTime.toISOString(),
-        action: task.google_calendar_event_id ? 'updated' : 'created'
+        assigneeUserId: userId,
+        eventId 
       });
     } catch (error: any) {
       console.error('Task upsert failed:', error);
       res.status(500).json({ 
         error: 'Task upsert failed', 
-        details: error.message,
-        taskId
+        details: error.message, 
+        taskId 
       });
     }
   });
@@ -972,6 +1181,107 @@ export function registerDebugRoutes(app: Express) {
     } catch (error) {
       console.error('Error in sync/run-once:', error);
       res.status(500).json({ message: 'Failed to run calendar sync', stack: error.stack });
+    }
+  });
+
+  // Simple test route for debugging calendar upsert
+  app.get('/debug/test-upsert', async (req, res) => {
+    const taskId = req.query.taskId as string;
+    
+    try {
+      console.log(`[SIMPLE] Testing upsert for task ${taskId}`);
+      
+      // 1. Load task
+      const taskResult = await pool.query('SELECT * FROM tasks WHERE id = $1', [taskId]);
+      if (taskResult.rows.length === 0) {
+        return res.status(404).json({ error: 'Task not found' });
+      }
+      const task = taskResult.rows[0];
+      
+      // 2. Load task assignment
+      const assignmentResult = await pool.query('SELECT team_member_id FROM task_assignments WHERE task_id = $1', [taskId]);
+      if (assignmentResult.rows.length === 0) {
+        return res.status(400).json({ error: 'Task has no assignment' });
+      }
+      const teamMemberId = assignmentResult.rows[0].team_member_id;
+      
+      // 3. Load team member
+      const teamMemberResult = await pool.query('SELECT * FROM team_members WHERE id = $1', [teamMemberId]);
+      if (teamMemberResult.rows.length === 0) {
+        return res.status(400).json({ error: 'Team member not found' });
+      }
+      const teamMember = teamMemberResult.rows[0];
+      
+      // 4. Load user by email match
+      const userResult = await pool.query('SELECT * FROM users WHERE email = $1', [teamMember.email]);
+      if (userResult.rows.length === 0) {
+        return res.status(400).json({ error: 'User not found for team member email', teamMemberEmail: teamMember.email });
+      }
+      const user = userResult.rows[0];
+      
+      // 5. Load OAuth tokens
+      const tokenResult = await pool.query('SELECT * FROM oauth_tokens WHERE user_id = $1', [user.id]);
+      if (tokenResult.rows.length === 0) {
+        return res.status(400).json({ error: 'No OAuth tokens for user', userId: user.id });
+      }
+      
+      // 6. Check for existing event mapping
+      const eventResult = await pool.query('SELECT event_id FROM task_google_events WHERE task_id = $1 AND user_id = $2', [taskId, user.id]);
+      
+      // 7. Convert timezone properly - handle various date formats
+      let dueAtUtc: DateTime;
+      if (typeof task.due_at === 'string') {
+        dueAtUtc = DateTime.fromISO(task.due_at, { zone: 'utc' });
+      } else {
+        dueAtUtc = DateTime.fromJSDate(new Date(task.due_at), { zone: 'utc' });
+      }
+      const startLocal = dueAtUtc.setZone('America/Vancouver');
+      
+      console.log(`[SIMPLE] due_at type: ${typeof task.due_at}, value: ${task.due_at}`);
+      console.log(`[SIMPLE] dueAtUtc valid: ${dueAtUtc.isValid}, startLocal valid: ${startLocal.isValid}`);
+      console.log(`[SIMPLE] Timezone conversion: ${task.due_at} UTC -> ${startLocal.toISO()} Vancouver`);
+      
+      // 8. Test Google Calendar creation
+      const { googleCalendarService } = await import('./googleCalendar');
+      
+      let eventId: string | null = null;
+      if (eventResult.rows.length > 0) {
+        eventId = eventResult.rows[0].event_id;
+        console.log(`[SIMPLE] Found existing event: ${eventId}`);
+      } else {
+        console.log(`[SIMPLE] Creating new calendar event...`);
+        eventId = await googleCalendarService.createTaskEvent(user.id, {
+          title: task.title,
+          description: task.description || '',
+          dueDate: new Date(startLocal.toISO()),
+          status: task.status || 'pending',
+          priority: task.priority || 'medium'
+        });
+        
+        if (eventId) {
+          // Store the mapping
+          await pool.query(
+            'INSERT INTO task_google_events (task_id, user_id, event_id) VALUES ($1, $2, $3)',
+            [taskId, user.id, eventId]
+          );
+          console.log(`[SIMPLE] Created event ${eventId} and stored mapping`);
+        }
+      }
+      
+      res.json({
+        ok: true,
+        task: { id: task.id, title: task.title, due_at: task.due_at },
+        teamMember: { id: teamMember.id, email: teamMember.email },
+        user: { id: user.id, email: user.email },
+        startLocal: startLocal.isValid ? startLocal.toISO() : 'INVALID_DATETIME',
+        hasTokens: true,
+        eventId,
+        action: eventResult.rows.length > 0 ? 'found_existing' : 'created_new'
+      });
+      
+    } catch (error: any) {
+      console.error('[SIMPLE] Test failed:', error);
+      res.status(500).json({ error: error.message });
     }
   });
 
