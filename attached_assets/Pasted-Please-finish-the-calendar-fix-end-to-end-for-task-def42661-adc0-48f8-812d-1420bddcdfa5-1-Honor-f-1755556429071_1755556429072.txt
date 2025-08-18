@@ -1,0 +1,34 @@
+Please finish the calendar fix end-to-end for task def42661-adc0-48f8-812d-1420bddcdfa5.
+
+1) Honor forceCreate on /debug/sync/upsert-task:
+   - If forceCreate=1, ignore any stored mappings and ALWAYS call Google Calendar events.insert.
+   - After a successful insert, (a) persist the new eventId mapping, and (b) return JSON like:
+     { ok:true, op:"create", calendarId:"primary", eventId:"...", htmlLink:"...", payload:{start,end,timeZone} }
+
+2) Make /debug/sync/flush fully clear mappings:
+   - Remove google_event_id / google_calendar_event_id fields on the task and ANY mapping-table rows.
+   - Optionally delete the remote event if an id exists.
+   - Return {success:true, cleared:true, removedEventId:"..."}.
+
+3) Add & mount diagnostics:
+   - GET /debug/sync/get-event?eventId=...&as=... -> returns raw Google event JSON.
+   - GET /debug/sync/get-mapping?taskId=... -> returns DB rows/fields for that task mapping.
+
+4) Timezone correctness:
+   - Resolve my local TZ as America/Vancouver (PT) unless overridden by user settings.
+   - For a task with due date 2025-08-18 and due time 10:30 AM PT, build:
+     start.dateTime = "2025-08-18T10:30:00", timeZone = "America/Vancouver"
+     end.dateTime   = "2025-08-18T11:30:00", timeZone = "America/Vancouver"
+   - Log the computed UTC equivalents (should be 17:30Z–18:30Z).
+
+5) Run the fix on the specific task:
+   - Call /debug/sync/flush?taskId=def42661-adc0-48f8-812d-1420bddcdfa5&as=nikki@csekcreative.com
+   - Then call /debug/sync/upsert-task?taskId=def42661-adc0-48f8-812d-1420bddcdfa5&as=nikki@csekcreative.com&forceCreate=1&verbose=1
+   - Post the returned JSON (should include op:"create", new eventId, and htmlLink).
+   - Verify htmlLink opens on Aug 18 with 10:30–11:30 AM on Nikki Csek calendar.
+   - Re-run upsert without forceCreate and confirm op:"update" (no duplicate).
+
+ACCEPTANCE:
+- Visiting /debug/sync/get-mapping?taskId=def42661-adc0-48f8-812d-1420bddcdfa5 shows the new eventId.
+- Visiting /debug/sync/get-event?eventId=<newId>&as=nikki@csekcreative.com shows start/end with timeZone America/Vancouver.
+- The event shows correctly at 10:30–11:30 AM PT in Google Calendar.

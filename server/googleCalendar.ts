@@ -170,27 +170,46 @@ class GoogleCalendarService {
       const { DateTime } = await import('luxon');
       const TZ = 'America/Vancouver';
       
-      // Expect task.dueDate to be the stored UTC due_at timestamp
-      const startLocal = DateTime.fromISO(task.dueDate, { zone: 'utc' }).setZone(TZ);
+      // Handle different dueDate formats (string ISO, Date object, or null)
+      let startLocal: DateTime;
+      if (!task.dueDate) {
+        console.warn('[CAL CREATE] No dueDate provided, using current time');
+        startLocal = DateTime.now().setZone(TZ);
+      } else if (typeof task.dueDate === 'string') {
+        startLocal = DateTime.fromISO(task.dueDate, { zone: 'utc' }).setZone(TZ);
+      } else if (task.dueDate instanceof Date) {
+        startLocal = DateTime.fromJSDate(task.dueDate, { zone: 'utc' }).setZone(TZ);
+      } else {
+        startLocal = DateTime.now().setZone(TZ);
+      }
+      
       const endLocal = startLocal.plus({ minutes: 60 });
+      
+      // Build clean datetime strings for Google Calendar API
+      const startDateTime = startLocal.toFormat("yyyy-MM-dd'T'HH:mm:ss");
+      const endDateTime = endLocal.toFormat("yyyy-MM-dd'T'HH:mm:ss");
 
       console.info('[CAL CREATE]', { 
         taskId: task.title, 
         originalDueDate: task.dueDate,
-        startLocal: startLocal.toISO({ suppressMilliseconds: true, includeOffset: false }),
-        endLocal: endLocal.toISO({ suppressMilliseconds: true, includeOffset: false }),
-        tz: TZ
+        startDateTime,
+        endDateTime,
+        timeZone: TZ,
+        utcEquivalent: {
+          start: startLocal.toUTC().toISO(),
+          end: endLocal.toUTC().toISO()
+        }
       });
 
       const event = {
         summary: task.title,
         description: `${task.description || ''}\n\n${task.projectName ? `Project: ${task.projectName}` : 'Organization Task'}\nStatus: ${task.status}\nPriority: ${task.priority || 'medium'}${task.googleDriveLink ? `\nDrive Link: ${task.googleDriveLink}` : ''}`,
         start: {
-          dateTime: startLocal.toISO({ suppressMilliseconds: true, includeOffset: false }),
+          dateTime: startDateTime,
           timeZone: TZ,
         },
         end: {
-          dateTime: endLocal.toISO({ suppressMilliseconds: true, includeOffset: false }),
+          dateTime: endDateTime,
           timeZone: TZ,
         },
         reminders: {
@@ -234,27 +253,46 @@ class GoogleCalendarService {
       const { DateTime } = await import('luxon');
       const TZ = 'America/Vancouver';
       
-      // Expect task.dueDate to be the stored UTC due_at timestamp
-      const startLocal = DateTime.fromISO(task.dueDate, { zone: 'utc' }).setZone(TZ);
+      // Handle different dueDate formats (string ISO, Date object, or null)
+      let startLocal: DateTime;
+      if (!task.dueDate) {
+        console.warn('[CAL UPDATE] No dueDate provided, using current time');
+        startLocal = DateTime.now().setZone(TZ);
+      } else if (typeof task.dueDate === 'string') {
+        startLocal = DateTime.fromISO(task.dueDate, { zone: 'utc' }).setZone(TZ);
+      } else if (task.dueDate instanceof Date) {
+        startLocal = DateTime.fromJSDate(task.dueDate, { zone: 'utc' }).setZone(TZ);
+      } else {
+        startLocal = DateTime.now().setZone(TZ);
+      }
+      
       const endLocal = startLocal.plus({ minutes: 60 });
+      
+      // Build clean datetime strings for Google Calendar API
+      const startDateTime = startLocal.toFormat("yyyy-MM-dd'T'HH:mm:ss");
+      const endDateTime = endLocal.toFormat("yyyy-MM-dd'T'HH:mm:ss");
 
       console.info('[CAL UPDATE]', { 
         taskId: task.title, 
         originalDueDate: task.dueDate,
-        startLocal: startLocal.toISO({ suppressMilliseconds: true, includeOffset: false }),
-        endLocal: endLocal.toISO({ suppressMilliseconds: true, includeOffset: false }),
-        tz: TZ
+        startDateTime,
+        endDateTime,
+        timeZone: TZ,
+        utcEquivalent: {
+          start: startLocal.toUTC().toISO(),
+          end: endLocal.toUTC().toISO()
+        }
       });
 
       const event = {
         summary: task.title,
         description: `${task.description || ''}\n\n${task.projectName ? `Project: ${task.projectName}` : 'Organization Task'}\nStatus: ${task.status}\nPriority: ${task.priority || 'medium'}${task.googleDriveLink ? `\nDrive Link: ${task.googleDriveLink}` : ''}`,
         start: {
-          dateTime: startLocal.toISO({ suppressMilliseconds: true, includeOffset: false }),
+          dateTime: startDateTime,
           timeZone: TZ,
         },
         end: {
-          dateTime: endLocal.toISO({ suppressMilliseconds: true, includeOffset: false }),
+          dateTime: endDateTime,
           timeZone: TZ,
         },
       };
@@ -303,6 +341,22 @@ class GoogleCalendarService {
     } catch (error) {
       console.error('Error listing calendars:', error);
       return [];
+    }
+  }
+  
+  async getEvent(userId: string, eventId: string, calendarId: string = 'primary'): Promise<any | null> {
+    try {
+      const calendar = await this.getAuthenticatedClient(userId);
+      
+      const response = await calendar.events.get({
+        calendarId,
+        eventId
+      });
+      
+      return response.data;
+    } catch (error) {
+      console.error('Error getting calendar event:', error);
+      return null;
     }
   }
 
