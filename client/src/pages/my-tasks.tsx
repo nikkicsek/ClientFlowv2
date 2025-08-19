@@ -44,11 +44,8 @@ export function MyTasksPage() {
     }
   }, [location, toast]);
 
-  // Get current user info only if session exists
-  const { data: user, isLoading: userLoading } = useQuery({
-    queryKey: ["/api/auth/user"],
-    enabled: (authStatus as any)?.sessionExists
-  });
+  // Get user from auth status (no separate query needed)
+  const user = (authStatus as any)?.user;
 
   // Get team members to find the current user's team member record
   const { data: teamMembers = [], isLoading: teamLoading } = useQuery({
@@ -56,7 +53,7 @@ export function MyTasksPage() {
     enabled: !!(user as any)?.email,
   });
 
-  if (authLoading || ((authStatus as any)?.sessionExists && userLoading) || teamLoading) {
+  if (authLoading || teamLoading) {
     return (
       <div className="min-h-screen bg-gray-50 p-6">
         <div className="max-w-6xl mx-auto">
@@ -81,11 +78,11 @@ export function MyTasksPage() {
               <h3 className="text-lg font-medium text-gray-900 mb-2">Sign In Required</h3>
               <p className="text-gray-600 mb-6">Sign in with Google to view your tasks and manage your calendar sync.</p>
               <Button 
-                onClick={() => window.location.href = `/auth/login?returnTo=${encodeURIComponent('/my-tasks')}`}
+                onClick={() => window.location.href = `/auth/replit/start?returnTo=${encodeURIComponent('/my-tasks')}`}
                 className="bg-blue-600 hover:bg-blue-700"
               >
                 <LogIn className="h-4 w-4 mr-2" />
-                Sign in with Google
+                Sign in with Replit
               </Button>
             </CardContent>
           </Card>
