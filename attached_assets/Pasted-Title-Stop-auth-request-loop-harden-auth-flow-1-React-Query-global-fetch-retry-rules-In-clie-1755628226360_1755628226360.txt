@@ -1,0 +1,60 @@
+Title: Stop auth request loop & harden auth flow
+
+1) React Query global fetch + retry rules
+
+In client/src/lib/queryClient.ts, ensure our apiRequest (or the queryFn wrapper) does not throw on 401. Return { __unauthorized: true } so React Query won’t retry.
+
+In the QueryClient defaults set:
+
+defaultOptions: {
+  queries: {
+    retry: (failureCount, error) => {
+      // never retry on 401
+      if (error?.status === 401 || error?.__unauthorized) return false;
+      return failureCount < 1;
+    },
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    refetchOnReconnect: false,
+    staleTime: 60_000,
+  }
+}
+
+
+Make apiRequest attach error.status from the Response and set __unauthorized on 401 instead of throwing.
+
+2) useAuth hook: single gate, then user
+
+In client/src/hooks/useAuth.ts, split into two queries with strict enables:
+
+statusQuery → GET /auth/status (returns {sessionExists: boolean}).
+
+userQuery → GET /api/auth/user, enabled only when statusQuery.data?.sessionExists === true.
+
+Both queries must have retry: false. On userQuery receiving {__unauthorized:true}, do not re-enable it; show the “Sign in” UI instead.
+
+(Your package already outlines this two-step logic; we just need to make the enables and retry behavior bullet-proof.)
+
+3) Server contract
+
+Keep /api/auth/user protected with isAuthenticated and return 401 when no session (not 302/HTML). That’s what the My Tasks page expects.
+
+Verify /auth/status stays a light, cacheable check that returns {sessionExists:boolean, user?:{id,email}}.
+
+4) Quick regression tests
+
+Clear site data. Hit /auth/status → expect {sessionExists:false}.
+
+Complete OIDC sign-in. Hit /auth/status again → {sessionExists:true, user:{ id:'45577581', email:'nikki@csekcreative.com'}}.
+
+Load /my-tasks. In DevTools Network:
+
+Exactly one GET /auth/status and one GET /api/auth/user, no retries/infinite polling.
+
+While signed out, load /my-tasks. You should see one GET /auth/status and zero /api/auth/user calls; UI shows “Sign in required”.
+
+5) Optional (nice-to-have)
+
+Add a tiny health page /debug/auth/diag dumping {hasCookie, sessionExists} to help support.
+
+In my-tasks.tsx, guard the team-members query with enabled: !!user?.email (already present) and keep it non-retrying as well.

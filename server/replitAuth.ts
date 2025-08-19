@@ -357,6 +357,31 @@ export async function setupAuth(app: Express) {
       sessionUser: (req.session as any).user
     });
   });
+
+  // Health/diagnostic page for support
+  app.get("/debug/auth/diag", (req, res) => {
+    try {
+      const hasCookie = !!req.cookies?.sid;
+      const sessionUser = (req.session as any)?.user;
+      const replitUser = (req.user as any)?.claims;
+      const sessionExists = !!sessionUser || !!replitUser;
+      
+      res.json({
+        hasCookie,
+        sessionExists,
+        timestamp: new Date().toISOString(),
+        sessionId: req.sessionID,
+        userAgent: req.headers['user-agent']?.substring(0, 100) || 'unknown'
+      });
+    } catch (error) {
+      res.json({
+        hasCookie: false,
+        sessionExists: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date().toISOString()
+      });
+    }
+  });
 }
 
 export const isAuthenticated: RequestHandler = async (req, res, next) => {

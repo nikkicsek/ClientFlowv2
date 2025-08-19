@@ -3,7 +3,12 @@ import { QueryClient, QueryFunction } from "@tanstack/react-query";
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
-    throw new Error(`${res.status}: ${text}`);
+    const error = new Error(`${res.status}: ${text}`) as any;
+    error.status = res.status;
+    if (res.status === 401) {
+      error.__unauthorized = true;
+    }
+    throw error;
   }
 }
 
@@ -34,10 +39,19 @@ export const getQueryFn: <T>(options: {
     });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {
-      return null;
+      return { __unauthorized: true } as any;
     }
 
-    await throwIfResNotOk(res);
+    if (!res.ok) {
+      const text = (await res.text()) || res.statusText;
+      const error = new Error(`${res.status}: ${text}`) as any;
+      error.status = res.status;
+      if (res.status === 401) {
+        error.__unauthorized = true;
+      }
+      throw error;
+    }
+
     return await res.json();
   };
 
@@ -45,11 +59,15 @@ export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       queryFn: getQueryFn({ on401: "returnNull" }),
-      refetchInterval: false,
+      retry: (failureCount, error: any) => {
+        // never retry on 401
+        if (error?.status === 401 || error?.__unauthorized) return false;
+        return failureCount < 1;
+      },
       refetchOnWindowFocus: false,
       refetchOnMount: false,
-      staleTime: 10 * 60 * 1000, // 10 minutes
-      retry: false,
+      refetchOnReconnect: false,
+      staleTime: 60_000,
     },
     mutations: {
       retry: false,

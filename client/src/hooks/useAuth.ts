@@ -1,30 +1,27 @@
 import { useQuery } from "@tanstack/react-query";
 
 export function useAuth() {
-  // Check session status first
-  const { data: authStatus, isLoading: authLoading, error: authError } = useQuery({
+  // Check session status first - light, cacheable check
+  const statusQuery = useQuery({
     queryKey: ["/auth/status"],
     retry: false,
-    refetchInterval: false,
-    refetchOnWindowFocus: false,
-    refetchOnMount: false,
   });
 
-  // Get user data only if session exists and no auth errors
-  const { data: user, isLoading: userLoading, error: userError } = useQuery({
+  // Get user data only when session confirmed to exist
+  const userQuery = useQuery({
     queryKey: ["/api/auth/user"],
     retry: false,
-    refetchInterval: false,
-    refetchOnWindowFocus: false,
-    refetchOnMount: false,
-    enabled: !!(authStatus as any)?.sessionExists && !authError
+    enabled: (statusQuery.data as any)?.sessionExists === true
   });
 
+  // Don't re-enable userQuery if it receives unauthorized response
+  const isUnauthorized = (userQuery.data as any)?.__unauthorized === true;
+
   return {
-    user,
-    isLoading: authLoading || ((authStatus as any)?.sessionExists && userLoading),
-    isAuthenticated: (authStatus as any)?.sessionExists && !!user,
-    authStatus,
-    error: authError || userError
+    user: isUnauthorized ? null : userQuery.data,
+    isLoading: statusQuery.isLoading || ((statusQuery.data as any)?.sessionExists && userQuery.isLoading),
+    isAuthenticated: (statusQuery.data as any)?.sessionExists && !!userQuery.data && !isUnauthorized,
+    authStatus: statusQuery.data,
+    error: statusQuery.error || userQuery.error
   };
 }
