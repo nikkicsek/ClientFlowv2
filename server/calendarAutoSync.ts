@@ -22,6 +22,10 @@ class CalendarAutoSync {
   private oauth2Client: any;
 
   constructor() {
+    console.log('CalendarAutoSync constructor called');
+    console.log('GOOGLE_CLIENT_ID exists:', !!process.env.GOOGLE_CLIENT_ID);
+    console.log('GOOGLE_CLIENT_SECRET exists:', !!process.env.GOOGLE_CLIENT_SECRET);
+    
     if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
       console.warn('Calendar auto-sync disabled - missing OAuth credentials');
       return;
@@ -32,6 +36,7 @@ class CalendarAutoSync {
       process.env.GOOGLE_CLIENT_SECRET,
       process.env.GOOGLE_REDIRECT_URI
     );
+    console.log('OAuth2Client created successfully');
   }
 
   // Main entry point: Auto-sync after task create/update
@@ -53,9 +58,16 @@ class CalendarAutoSync {
         return { ok: false, error: 'No due date' };
       }
 
-      // Get user and check for calendar tokens
+      // Get user and check for calendar tokens (using OAuth tokens table)
       const user = await storage.getUser(actingUserId);
-      if (!user || !user.googleAccessToken) {
+      if (!user) {
+        console.log('Auto-sync skipped - user not found', actingUserId);
+        return { ok: false, error: 'User not found' };
+      }
+
+      // Check for OAuth tokens in database
+      const tokenResult = await pool.query('SELECT access_token FROM oauth_tokens WHERE user_id = $1', [actingUserId]);
+      if (!tokenResult.rows.length || !tokenResult.rows[0].access_token) {
         console.log('Auto-sync skipped - no calendar tokens for user', actingUserId);
         return { ok: false, error: 'No calendar tokens' };
       }
@@ -86,7 +98,18 @@ class CalendarAutoSync {
 
       // Compute start/end times in user timezone
       const userTz = process.env.APP_TIMEZONE || "America/Vancouver";
-      const start = DateTime.fromISO(task.dueAt.toISOString(), { zone: 'utc' }).setZone(userTz);
+      
+      // Handle task.dueAt which could be a Date object or ISO string
+      let dueAtISO: string;
+      if (task.dueAt instanceof Date) {
+        dueAtISO = task.dueAt.toISOString();
+      } else if (typeof task.dueAt === 'string') {
+        dueAtISO = task.dueAt;
+      } else {
+        return { ok: false, error: 'Invalid dueAt format' };
+      }
+      
+      const start = DateTime.fromISO(dueAtISO, { zone: 'utc' }).setZone(userTz);
       const end = start.plus({ minutes: 60 });
 
       // Check if existing mapping exists
@@ -244,28 +267,60 @@ class CalendarAutoSync {
   // Helper: Get authenticated calendar client
   private async getAuthenticatedCalendar(user: any) {
     try {
+      console.log('getAuthenticatedCalendar called for user:', user.id);
       if (!this.oauth2Client) {
+        console.log('No oauth2Client available');
         return null;
       }
 
-      // Set user tokens
-      this.oauth2Client.setCredentials({
-        access_token: user.googleAccessToken,
-        refresh_token: user.googleRefreshToken,
-        expiry_date: user.googleTokenExpiry?.getTime(),
+      // Get tokens from oauth_tokens table (not user table)
+      const tokenResult = await pool.query(
+        'SELECT access_token, refresh_token, expiry FROM oauth_tokens WHERE user_id = $1', 
+        [user.id]
+      );
+
+      if (!tokenResult.rows.length) {
+        console.log('No OAuth tokens found for user:', user.id);
+        return null;
+      }
+
+      const tokens = tokenResult.rows[0];
+      console.log('Retrieved tokens for user:', user.id, {
+        hasAccessToken: !!tokens.access_token,
+        hasRefreshToken: !!tokens.refresh_token,
+        expiry: tokens.expiry
       });
+      
+      // Set user tokens from oauth_tokens table
+      const credentials = {
+        access_token: tokens.access_token,
+        refresh_token: tokens.refresh_token,
+        expiry_date: tokens.expiry ? new Date(tokens.expiry).getTime() : undefined,
+      };
+      
+      console.log('Setting credentials:', {
+        hasAccessToken: !!credentials.access_token,
+        hasRefreshToken: !!credentials.refresh_token,
+        expiryDate: credentials.expiry_date
+      });
+      
+      this.oauth2Client.setCredentials(credentials);
 
       // Check if token needs refresh
-      if (user.googleTokenExpiry && new Date() >= user.googleTokenExpiry) {
+      if (tokens.expiry && new Date() >= new Date(tokens.expiry)) {
         console.log('Refreshing expired token for user:', user.id);
         const { credentials } = await this.oauth2Client.refreshAccessToken();
         
-        // Update stored tokens
-        await storage.updateUser(user.id, {
-          googleAccessToken: credentials.access_token,
-          googleRefreshToken: credentials.refresh_token,
-          googleTokenExpiry: credentials.expiry_date ? new Date(credentials.expiry_date) : null,
-        });
+        // Update stored tokens in oauth_tokens table
+        await pool.query(
+          'UPDATE oauth_tokens SET access_token = $1, refresh_token = $2, expiry = $3 WHERE user_id = $4',
+          [
+            credentials.access_token,
+            credentials.refresh_token,
+            credentials.expiry_date ? new Date(credentials.expiry_date) : null,
+            user.id
+          ]
+        );
 
         this.oauth2Client.setCredentials(credentials);
       }
