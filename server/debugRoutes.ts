@@ -179,25 +179,9 @@ async function resolveUserAndTokensEnhanced(params: {
     return { ok: false, reason: "no_user_context" };
   }
 
-  // Step 2: Get OAuth tokens with dual key support (userId first, teamMemberId fallback)
-  let tokens = null;
-  let keyType = '';
-  
-  // Primary lookup by userId
-  const userTokenResult = await pool.query('SELECT * FROM oauth_tokens WHERE user_id = $1', [userId]);
-  if (userTokenResult.rows.length > 0) {
-    tokens = userTokenResult.rows[0];
-    keyType = 'userId';
-  }
-  
-  // Fallback to teamMemberId for backward compatibility
-  if (!tokens && teamMemberId) {
-    const teamTokenResult = await pool.query('SELECT * FROM oauth_tokens WHERE team_member_id = $1', [teamMemberId]);
-    if (teamTokenResult.rows.length > 0) {
-      tokens = teamTokenResult.rows[0];
-      keyType = 'teamMemberId';
-    }
-  }
+  // Step 2: Get OAuth tokens by userId (single source of truth)
+  const tokenResult = await pool.query('SELECT * FROM oauth_tokens WHERE user_id = $1', [userId]);
+  const tokens = tokenResult.rows[0] || null;
   
   if (!tokens) {
     return { ok: false, reason: "no_tokens_for_user", userId, teamMemberId };
@@ -210,12 +194,58 @@ async function resolveUserAndTokensEnhanced(params: {
     teamMemberId, 
     tz, 
     tokens,
-    keyType
+    keyType: 'userId'
   };
 }
 
 export function registerDebugRoutes(app: Express) {
   console.log('Mounted debug routes at /debug');
+
+  // Dev-only session recovery route (NODE_ENV !== 'production')
+  app.get('/debug/session/impersonate', async (req, res) => {
+    if (process.env.NODE_ENV === 'production') {
+      return res.status(403).json({ error: 'Not available in production' });
+    }
+    
+    const email = req.query.email as string;
+    if (!email) {
+      return res.status(400).json({ error: 'Missing email parameter' });
+    }
+    
+    try {
+      // Hard-coded for nikki@csekcreative.com as requested
+      if (email === 'nikki@csekcreative.com') {
+        const userId = '45577581';
+        const teamMemberId = '5d398f53-fed7-4182-8657-d9e93fe5c35f';
+        
+        // Set session
+        (req.session as any).user = {
+          userId,
+          email,
+          teamMemberId
+        };
+        
+        // Also set Replit-style session for compatibility
+        (req.session as any).passport = {
+          user: {
+            claims: { sub: userId, email },
+            access_token: 'dev-token',
+            expires_at: Math.floor(Date.now() / 1000) + 3600
+          }
+        };
+        
+        res.json({ 
+          success: true, 
+          session: { userId, email, teamMemberId },
+          message: 'Dev session created for nikki@csekcreative.com'
+        });
+      } else {
+        res.status(400).json({ error: 'Dev impersonation only available for nikki@csekcreative.com' });
+      }
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
 
   // Debug routes registry endpoint
   app.get('/debug/routes', (req, res) => {
