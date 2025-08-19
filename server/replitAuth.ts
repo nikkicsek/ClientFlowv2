@@ -38,11 +38,12 @@ export function getSession() {
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      secure: false, // Set to false for development/preview
+      secure: process.env.NODE_ENV === 'production', // Secure cookies in production only
       maxAge: sessionTtl,
       sameSite: 'lax',
       path: '/'
     },
+    name: 'sid', // Explicit cookie name
   });
 }
 
@@ -109,18 +110,26 @@ export async function setupAuth(app: Express) {
     verified(null, user);
   };
 
-  for (const domain of process.env
-    .REPLIT_DOMAINS!.split(",")) {
+  // Get all domains from REPLIT_DOMAINS and add localhost for development
+  const configuredDomains = process.env.REPLIT_DOMAINS!.split(",");
+  const allDomains = [...configuredDomains, "localhost"];
+  
+  for (const domain of allDomains) {
+    const callbackURL = domain === "localhost" 
+      ? `http://${domain}:5000/api/callback`
+      : `https://${domain}/api/callback`;
+      
     const strategy = new Strategy(
       {
         name: `replitauth:${domain}`,
         config,
         scope: "openid email profile offline_access",
-        callbackURL: `https://${domain}/api/callback`,
+        callbackURL,
       },
       verify,
     );
     passport.use(strategy);
+    console.log(`Registered Passport strategy for domain: ${domain} with callback: ${callbackURL}`);
   }
 
   passport.serializeUser((user: Express.User, cb) => cb(null, user));
@@ -142,9 +151,102 @@ export async function setupAuth(app: Express) {
 
   app.get("/api/callback", (req, res, next) => {
     console.log(`Callback for hostname: ${req.hostname}`);
+    passport.authenticate(`replitauth:${req.hostname}`, (err: any, user: any, info: any) => {
+      if (err) {
+        console.error('Authentication error:', err);
+        return res.redirect("/api/login");
+      }
+      if (!user) {
+        console.error('No user returned from authentication:', info);
+        return res.redirect("/api/login");
+      }
+
+      // Log in the user with Passport
+      req.logIn(user, (err) => {
+        if (err) {
+          console.error('Login error:', err);
+          return res.redirect("/api/login");
+        }
+
+        // Also set session.user for compatibility with our custom auth system
+        (req.session as any).user = {
+          userId: user.claims.sub,
+          email: user.claims.email,
+          firstName: user.claims.first_name,
+          lastName: user.claims.last_name,
+          profileImageUrl: user.claims.profile_image_url
+        };
+
+        console.log('User authenticated and session set:', { userId: user.claims.sub, email: user.claims.email });
+
+        // Redirect to the returnTo URL or default
+        const returnTo = (req.session as any)?.returnTo || "/my-tasks";
+        delete (req.session as any).returnTo; // Clean up
+        return res.redirect(returnTo);
+      });
+    })(req, res, next);
+  });
+
+  // Alternative auth route for Replit OAuth with proper callback handling
+  app.get("/auth/replit/start", (req, res, next) => {
+    console.log(`Replit auth start for hostname: ${req.hostname}`);
+    
+    // For localhost development, redirect to the actual Replit domain for auth
+    if (req.hostname === 'localhost') {
+      const replitDomain = process.env.REPLIT_DOMAINS!.split(",")[0]; // Use the first configured Replit domain
+      const returnTo = req.query.returnTo || '/auth/status';
+      const authUrl = `https://${replitDomain}/auth/replit/start?returnTo=${encodeURIComponent(returnTo as string)}`;
+      console.log(`Redirecting from localhost to Replit domain for auth: ${authUrl}`);
+      return res.redirect(authUrl);
+    }
+    
+    // Store returnTo in session for callback
+    if (req.query.returnTo) {
+      (req.session as any).returnTo = req.query.returnTo;
+    }
+    
     passport.authenticate(`replitauth:${req.hostname}`, {
-      successReturnToOrRedirect: (req.session as any)?.returnTo || "/my-tasks",
-      failureRedirect: "/api/login",
+      prompt: "login consent",
+      scope: ["openid", "email", "profile", "offline_access"],
+    })(req, res, next);
+  });
+
+  // Alternative callback route for Replit OAuth
+  app.get("/auth/replit/callback", (req, res, next) => {
+    console.log(`Replit auth callback for hostname: ${req.hostname}`);
+    passport.authenticate(`replitauth:${req.hostname}`, (err: any, user: any, info: any) => {
+      if (err) {
+        console.error('Authentication error:', err);
+        return res.redirect("/auth/replit/start");
+      }
+      if (!user) {
+        console.error('No user returned from authentication:', info);
+        return res.redirect("/auth/replit/start");
+      }
+
+      // Log in the user with Passport
+      req.logIn(user, (err) => {
+        if (err) {
+          console.error('Login error:', err);
+          return res.redirect("/auth/replit/start");
+        }
+
+        // Also set session.user for compatibility with our custom auth system
+        (req.session as any).user = {
+          userId: user.claims.sub,
+          email: user.claims.email,
+          firstName: user.claims.first_name,
+          lastName: user.claims.last_name,
+          profileImageUrl: user.claims.profile_image_url
+        };
+
+        console.log('User authenticated and session set:', { userId: user.claims.sub, email: user.claims.email });
+
+        // Redirect to the returnTo URL or default
+        const returnTo = (req.session as any)?.returnTo || "/my-tasks";
+        delete (req.session as any).returnTo; // Clean up
+        return res.redirect(returnTo);
+      });
     })(req, res, next);
   });
 
@@ -156,6 +258,55 @@ export async function setupAuth(app: Express) {
           post_logout_redirect_uri: `${req.protocol}://${req.hostname}`,
         }).href
       );
+    });
+  });
+
+  // Debug route for session information
+  app.get("/debug/auth/session", (req, res) => {
+    try {
+      const cookieKeys = Object.keys(req.cookies || {});
+      const sessionUser = (req.session as any)?.user;
+      const replitUser = req.user?.claims;
+      
+      res.json({
+        cookieKeys,
+        rawCookieValue: req.cookies?.sid ? 'Present (HttpOnly)' : 'Missing',
+        sessionUser,
+        replitUser: replitUser ? {
+          id: replitUser.sub,
+          email: replitUser.email,
+          firstName: replitUser.first_name,
+          lastName: replitUser.last_name
+        } : null,
+        sessionExists: !!(sessionUser || replitUser),
+        authenticationMethod: sessionUser ? 'session' : (replitUser ? 'passport' : 'none')
+      });
+    } catch (error) {
+      res.json({
+        error: error instanceof Error ? error.message : 'Unknown error',
+        cookieKeys: Object.keys(req.cookies || {}),
+        rawCookieValue: 'Error parsing',
+        sessionExists: false
+      });
+    }
+  });
+
+  // Debug route to manually set session for testing
+  app.get("/debug/auth/set-test-session", (req, res) => {
+    const email = req.query.email as string || 'nikki@csekcreative.com';
+    const userId = req.query.userId as string || '45577581';
+    
+    // Set session.user for compatibility with our custom auth system
+    (req.session as any).user = {
+      userId,
+      email,
+      firstName: 'Test',
+      lastName: 'User'
+    };
+    
+    res.json({
+      message: 'Test session set successfully',
+      sessionUser: (req.session as any).user
     });
   });
 }
