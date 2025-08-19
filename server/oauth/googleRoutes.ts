@@ -13,10 +13,10 @@ function oauth2(redirectUri?: string) {
   );
 }
 
-async function saveTokens(db: Pool, canonicalUserId: string, tokens: any, scopes: string) {
+async function saveTokens(db: Pool, canonicalUserId: string, tokens: any, scopes: string, teamMemberId?: string) {
   const expiry = tokens.expiry_date ? new Date(tokens.expiry_date) : new Date(Date.now() + 55 * 60 * 1000);
   
-  // Only upsert by canonical userId - this is the source of truth
+  // Upsert by canonical userId (primary key)
   await db.query(`
     INSERT INTO oauth_tokens (user_id, access_token, refresh_token, expiry, scopes, created_at, updated_at)
     VALUES ($1,$2,$3,$4,$5, now(), now())
@@ -27,6 +27,24 @@ async function saveTokens(db: Pool, canonicalUserId: string, tokens: any, scopes
       scopes = EXCLUDED.scopes,
       updated_at = now()
   `, [canonicalUserId, tokens.access_token, tokens.refresh_token || null, expiry, scopes]);
+
+  // Also save by teamMemberId for backward compatibility if available
+  if (teamMemberId) {
+    try {
+      await db.query(`
+        INSERT INTO oauth_tokens (team_member_id, access_token, refresh_token, expiry, scopes, created_at, updated_at)
+        VALUES ($1,$2,$3,$4,$5, now(), now())
+        ON CONFLICT (team_member_id) DO UPDATE SET
+          access_token = EXCLUDED.access_token,
+          refresh_token = COALESCE(EXCLUDED.refresh_token, oauth_tokens.refresh_token),
+          expiry = EXCLUDED.expiry,
+          scopes = EXCLUDED.scopes,
+          updated_at = now()
+      `, [teamMemberId, tokens.access_token, tokens.refresh_token || null, expiry, scopes]);
+    } catch (err) {
+      console.warn('Failed to save tokens by teamMemberId (expected if column does not exist):', err);
+    }
+  }
 }
 
 googleRouter.get('/oauth/google/connect', async (req: any, res) => {
@@ -101,12 +119,14 @@ googleRouter.get('/oauth/google/callback', async (req: any, res) => {
     let canonicalUserId: string | null = null;
     let targetEmail = email;
 
-    // If state contains ?as=<email>, resolve that email instead
+    // Parse state parameters properly
     const state = req.query.state as string;
-    if (state && state.startsWith('as=')) {
-      const asEmail = decodeURIComponent(state.substring(3));
-      targetEmail = asEmail;
-      console.log('OAuth callback: Resolving impersonated email', { googleEmail: email, targetEmail: asEmail });
+    const stateParams = new URLSearchParams(state || '');
+    
+    // If state contains as=<email>, resolve that email instead
+    if (stateParams.get('as')) {
+      targetEmail = stateParams.get('as') as string;
+      console.log('OAuth callback: Resolving impersonated email', { googleEmail: email, targetEmail });
     }
 
     // Always resolve canonical user ID from the target email
@@ -138,17 +158,18 @@ googleRouter.get('/oauth/google/callback', async (req: any, res) => {
     }
 
     const scopes = (tokens.scope as string) || 'https://www.googleapis.com/auth/calendar.events openid email profile';
-    await saveTokens(db, canonicalUserId, tokens, scopes);
+    await saveTokens(db, canonicalUserId, tokens, scopes, teamMemberId);
 
-    // Look up team member ID for the resolved user
-    let teamMemberId = null;
-    try {
-      const teamResult = await db.query('SELECT id FROM team_members WHERE email = $1', [targetEmail]);
-      if (teamResult.rows.length > 0) {
-        teamMemberId = teamResult.rows[0].id;
+    // Look up team member ID for the resolved user (but avoid duplicate assignment)
+    if (!teamMemberId) {
+      try {
+        const teamResult = await db.query('SELECT id FROM team_members WHERE email = $1', [targetEmail]);
+        if (teamResult.rows.length > 0) {
+          teamMemberId = teamResult.rows[0].id;
+        }
+      } catch (err) {
+        console.error('Error querying team_members for session:', err);
       }
-    } catch (err) {
-      console.error('Error querying team_members for session:', err);
     }
 
     // Establish user session after successful OAuth
@@ -158,17 +179,31 @@ googleRouter.get('/oauth/google/callback', async (req: any, res) => {
       teamMemberId
     };
 
-    // Determine redirect location
+    // Determine redirect location - preserve exact returnTo URL
     let redirectTo = '/my-tasks';
+    let addCalendarFlag = true;
+    
     if (state) {
       const stateParams = new URLSearchParams(state);
       if (stateParams.get('returnTo')) {
         redirectTo = stateParams.get('returnTo') as string;
+        // Don't add calendar=connected to debug/test URLs
+        if (redirectTo.includes('/debug/') || redirectTo.includes('?')) {
+          addCalendarFlag = false;
+        }
       }
     }
 
     const origin = `${req.protocol}://${req.headers.host}`;
-    return res.redirect(303, `${origin}${redirectTo}?calendar=connected`);
+    
+    if (addCalendarFlag) {
+      // Add calendar=connected only if returnTo doesn't have query params already
+      const separator = redirectTo.includes('?') ? '&' : '?';
+      return res.redirect(303, `${origin}${redirectTo}${separator}calendar=connected`);
+    } else {
+      // Preserve exact returnTo URL without modification
+      return res.redirect(303, `${origin}${redirectTo}`);
+    }
   } catch (e: any) {
     const redirect = `${req.protocol}://${req.headers.host}/oauth/google/callback`;
     console.error('OAuth callback failure', { 

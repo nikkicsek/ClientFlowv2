@@ -179,9 +179,25 @@ async function resolveUserAndTokensEnhanced(params: {
     return { ok: false, reason: "no_user_context" };
   }
 
-  // Step 2: Get OAuth tokens by userId (single source of truth)
-  const tokenResult = await pool.query('SELECT * FROM oauth_tokens WHERE user_id = $1', [userId]);
-  const tokens = tokenResult.rows[0] || null;
+  // Step 2: Get OAuth tokens with dual key support (userId first, teamMemberId fallback)
+  let tokens = null;
+  let keyType = '';
+  
+  // Primary lookup by userId
+  const userTokenResult = await pool.query('SELECT * FROM oauth_tokens WHERE user_id = $1', [userId]);
+  if (userTokenResult.rows.length > 0) {
+    tokens = userTokenResult.rows[0];
+    keyType = 'userId';
+  }
+  
+  // Fallback to teamMemberId for backward compatibility
+  if (!tokens && teamMemberId) {
+    const teamTokenResult = await pool.query('SELECT * FROM oauth_tokens WHERE team_member_id = $1', [teamMemberId]);
+    if (teamTokenResult.rows.length > 0) {
+      tokens = teamTokenResult.rows[0];
+      keyType = 'teamMemberId';
+    }
+  }
   
   if (!tokens) {
     return { ok: false, reason: "no_tokens_for_user", userId, teamMemberId };
@@ -193,7 +209,8 @@ async function resolveUserAndTokensEnhanced(params: {
     email, 
     teamMemberId, 
     tz, 
-    tokens 
+    tokens,
+    keyType
   };
 }
 
@@ -228,18 +245,51 @@ export function registerDebugRoutes(app: Express) {
   // Calendar status for session user or ?as=email
   app.get('/debug/calendar-status', async (req, res) => {
     try {
-      const { user, tokens } = await resolveUserAndTokens(req);
+      const email = req.query.as as string;
       
-      res.json({
-        hasTokens: !!tokens,
-        keyType: req.query.as ? 'impersonated' : 'session',
-        user: user.email,
-        tokenInfo: tokens ? {
-          access_token: tokens.access_token ? 'REDACTED' : null,
-          refresh_token: tokens.refresh_token ? 'REDACTED' : null,
-          expires_at: tokens.expires_at
-        } : null
-      });
+      if (email) {
+        // Enhanced resolution for impersonated users
+        const resolution = await resolveUserAndTokensEnhanced({ asEmail: email });
+        
+        if (!resolution.ok) {
+          return res.json({
+            hasTokens: false,
+            keyType: 'impersonated',
+            user: email,
+            error: resolution.reason,
+            details: resolution
+          });
+        }
+        
+        const { tokens, keyType, userId, teamMemberId } = resolution;
+        
+        res.json({
+          hasTokens: !!tokens,
+          keyType: keyType || 'impersonated',
+          user: email,
+          userId,
+          teamMemberId,
+          tokenInfo: tokens ? {
+            access_token: tokens.access_token ? 'REDACTED' : null,
+            refresh_token: tokens.refresh_token ? 'REDACTED' : null,
+            expires_at: tokens.expires_at
+          } : null
+        });
+      } else {
+        // Session user (legacy path)
+        const { user, tokens } = await resolveUserAndTokens(req);
+        
+        res.json({
+          hasTokens: !!tokens,
+          keyType: 'session',
+          user: user.email,
+          tokenInfo: tokens ? {
+            access_token: tokens.access_token ? 'REDACTED' : null,
+            refresh_token: tokens.refresh_token ? 'REDACTED' : null,
+            expires_at: tokens.expires_at
+          } : null
+        });
+      }
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
