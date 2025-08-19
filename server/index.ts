@@ -13,19 +13,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 
-// Session middleware
-app.use(session({
-  name: 'sid', // Cookie name
-  secret: process.env.SESSION_SECRET || 'dev-session-secret-change-in-production',
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    secure: false, // Set to true in production with HTTPS
-    httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000, // 24 hours
-    sameSite: 'lax'
-  }
-}));
+// Session middleware will be handled by setupAuth() which includes proper PostgreSQL store
 
 // Attach database pool to app for Google OAuth
 app.set('db', pool);
