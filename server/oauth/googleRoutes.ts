@@ -211,23 +211,7 @@ googleRouter.get('/oauth/google/callback', async (req: any, res) => {
   }
 });
 
-// Auth routes for session management
-googleRouter.get('/auth/status', (req: any, res) => {
-  const sessionUser = (req.session as any)?.user;
-  const replitUser = req.user?.claims;
-  
-  // Check for debug session or Replit session
-  const hasSession = !!sessionUser || !!replitUser;
-  
-  res.json({
-    sessionExists: hasSession,
-    user: sessionUser || (replitUser ? { 
-      userId: replitUser.sub, 
-      email: replitUser.email 
-    } : null),
-    sessionType: sessionUser ? 'custom' : (replitUser ? 'replit' : 'none')
-  });
-});
+// Auth routes for session management - REMOVED, handled by main app in replitAuth.ts
 
 // Auth status page (HTML) - shows login button when no session
 googleRouter.get('/auth/status/page', (req: any, res) => {
