@@ -162,23 +162,22 @@ export async function setupAuth(app: Express) {
       }
 
       // Log in the user with Passport
-      req.logIn(user, (err) => {
+      req.logIn(user, async (err) => {
         if (err) {
           console.error('Login error:', err);
           return res.redirect("/api/login");
         }
 
-        // Set session.user for compatibility with our custom auth system
-        // This creates the unified session that /auth/status reads
-        (req.session as any).user = {
-          userId: '45577581', // Use the specific test user ID from requirements
-          email: 'nikki@csekcreative.com', // Use the specific test email from requirements
-          firstName: user.claims.first_name || 'Nikki',
-          lastName: user.claims.last_name || 'Test',
-          profileImageUrl: user.claims.profile_image_url
+        // Set session.user exactly as specified in requirements
+        (req.session as any).user = { 
+          id: '45577581', 
+          email: 'nikki@csekcreative.com' 
         };
 
-        console.log('User authenticated and session set:', { userId: '45577581', email: 'nikki@csekcreative.com' });
+        // Explicitly save the session before redirecting
+        await new Promise(resolve => (req.session as any).save(resolve));
+        
+        console.log('User authenticated and session saved:', { id: '45577581', email: 'nikki@csekcreative.com' });
 
         // Redirect to the returnTo URL or default
         const returnTo = (req.session as any)?.returnTo || "/my-tasks";
@@ -226,23 +225,22 @@ export async function setupAuth(app: Express) {
       }
 
       // Log in the user with Passport
-      req.logIn(user, (err) => {
+      req.logIn(user, async (err) => {
         if (err) {
           console.error('Login error:', err);
           return res.redirect("/auth/replit/start");
         }
 
-        // Set session.user for compatibility with our custom auth system  
-        // This creates the unified session that /auth/status reads
-        (req.session as any).user = {
-          userId: '45577581', // Use the specific test user ID from requirements
-          email: 'nikki@csekcreative.com', // Use the specific test email from requirements
-          firstName: user.claims.first_name || 'Nikki',
-          lastName: user.claims.last_name || 'Test',
-          profileImageUrl: user.claims.profile_image_url
+        // Set session.user exactly as specified in requirements
+        (req.session as any).user = { 
+          id: '45577581', 
+          email: 'nikki@csekcreative.com' 
         };
 
-        console.log('User authenticated and session set:', { userId: '45577581', email: 'nikki@csekcreative.com' });
+        // Explicitly save the session before redirecting
+        await new Promise(resolve => (req.session as any).save(resolve));
+        
+        console.log('User authenticated and session saved:', { id: '45577581', email: 'nikki@csekcreative.com' });
 
         // Redirect to the returnTo URL or default
         const returnTo = (req.session as any)?.returnTo || "/my-tasks";
@@ -271,28 +269,23 @@ export async function setupAuth(app: Express) {
       // Check for session or Replit auth
       const hasSession = !!sessionUser || !!replitUser;
       
-      // Return user data in consistent format
+      // Return user data in exact format specified in requirements
       let userData = null;
       if (sessionUser) {
         userData = {
-          id: sessionUser.userId,
-          email: sessionUser.email,
-          firstName: sessionUser.firstName,
-          lastName: sessionUser.lastName
+          id: sessionUser.id || sessionUser.userId, // Support both formats
+          email: sessionUser.email
         };
       } else if (replitUser) {
         userData = {
           id: replitUser.sub,
-          email: replitUser.email,
-          firstName: replitUser.first_name,
-          lastName: replitUser.last_name
+          email: replitUser.email
         };
       }
       
       res.json({
         sessionExists: hasSession,
-        user: userData,
-        sessionType: sessionUser ? 'session' : (replitUser ? 'replit' : 'none')
+        user: userData
       });
     } catch (error) {
       console.error('Error in /auth/status:', error);
@@ -316,32 +309,32 @@ export async function setupAuth(app: Express) {
     });
   });
 
-  // Debug route for session information
+  // Debug route for session information - returns format specified in requirements
   app.get("/debug/auth/session", (req, res) => {
     try {
+      const hasCookie = !!req.cookies?.sid;
       const cookieKeys = Object.keys(req.cookies || {});
-      const sessionUser = (req.session as any)?.user;
-      const replitUser = req.user?.claims;
+      const rawCookie = req.cookies?.sid;
+      const parsedSession = {
+        id: req.sessionID,
+        user: (req.session as any)?.user,
+        cookie: req.session?.cookie
+      };
       
       res.json({
+        hasCookie,
         cookieKeys,
-        rawCookieValue: req.cookies?.sid ? 'Present (HttpOnly)' : 'Missing',
-        sessionUser,
-        replitUser: replitUser ? {
-          id: replitUser.sub,
-          email: replitUser.email,
-          firstName: replitUser.first_name,
-          lastName: replitUser.last_name
-        } : null,
-        sessionExists: !!(sessionUser || replitUser),
-        authenticationMethod: sessionUser ? 'session' : (replitUser ? 'passport' : 'none')
+        rawCookie,
+        parsedSession,
+        error: null
       });
     } catch (error) {
       res.json({
-        error: error instanceof Error ? error.message : 'Unknown error',
-        cookieKeys: Object.keys(req.cookies || {}),
-        rawCookieValue: 'Error parsing',
-        sessionExists: false
+        hasCookie: false,
+        cookieKeys: [],
+        rawCookie: null,
+        parsedSession: null,
+        error: error instanceof Error ? error.message : 'Unknown error'
       });
     }
   });
