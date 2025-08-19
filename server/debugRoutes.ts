@@ -9,6 +9,8 @@ import { googleCalendarService } from "./googleCalendar";
 import { computeDueAt, getDebugTimeInfo } from "./utils/timeHandling";
 import { syncAllCalendarEventsForTask, getTaskCalendarDebugInfo } from "./calendarEvents";
 import { DateTime } from 'luxon';
+import { getMyTasks } from './lib/tasks';
+import type { Identity } from './middleware/identity';
 
 // Environment variable for sync control
 export let CALENDAR_SYNC_ENABLED = process.env.CALENDAR_SYNC_ENABLED !== 'false';
@@ -247,14 +249,83 @@ export function registerDebugRoutes(app: Express) {
     }
   });
 
+  // Probe endpoint for identity resolution 
+  app.get('/debug/auth/whoami', async (req, res) => {
+    try {
+      const sessUser = (req.session as any)?.user ?? null;
+      
+      // Simple identity resolution inline
+      let dbUser = null;
+      let teamMemberId = null;
+      
+      if (sessUser?.id && sessUser?.email) {
+        const userId = String(sessUser.id);
+        const email = String(sessUser.email).toLowerCase();
+        
+        // Check if user exists in DB
+        const userResult = await pool.query('SELECT * FROM users WHERE id = $1', [userId]);
+        if (userResult.rows.length > 0) {
+          dbUser = { id: userId, email };
+          
+          // Find team member
+          const teamResult = await pool.query('SELECT id FROM team_members WHERE email = $1', [email]);
+          teamMemberId = teamResult.rows[0]?.id || null;
+        }
+      }
+
+      return res.json({
+        hasSession: Boolean(sessUser),
+        sessionUser: sessUser ? { id: String(sessUser.id || sessUser.userId), email: String(sessUser.email) } : null,
+        dbUser,
+        teamMemberId,
+      });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to resolve identity' });
+    }
+  });
+
+  // My tasks WITHOUT identity middleware - use existing resolution
+  app.get('/debug/my-tasks-new', async (req, res) => {
+    try {
+      const asEmail = req.query.as as string;
+      
+      if (!asEmail) {
+        return res.status(400).json({ error: 'Missing ?as=email parameter' });
+      }
+      
+      // Use existing task resolution
+      const resolution = await resolveUserAndTokensEnhanced({ asEmail });
+      
+      if (!resolution.ok) {
+        return res.json({ error: 'User resolution failed', details: resolution });
+      }
+      
+      const { userId, email, teamMemberId } = resolution;
+      
+      // Get tasks using team member ID
+      const tasks = await storage.getTasks();
+      const myTasks = tasks.filter(task => {
+        // Check if task is assigned to this team member
+        if (task.teamMemberId === teamMemberId) return true;
+        if (task.assignees && task.assignees.includes(email)) return true;
+        return false;
+      });
+      
+      return res.json(myTasks);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Debug routes registry endpoint
   app.get('/debug/routes', (req, res) => {
     res.json({
       debugRoutes: [
         'GET /debug/routes - List all debug routes',
+        'GET /debug/auth/whoami - Show session and DB identity mapping',
+        'GET /debug/my-tasks?as=<email> - Get tasks assigned to user (with identity resolution)',
         'GET /debug/calendar-status?as=<email> - Check calendar tokens for user',
         'GET /debug/tokens/dump?as=<email> - Show token information',
-        'GET /debug/my-tasks?as=<email> - Get tasks assigned to user',
         'POST /debug/create-test-task - Create test task with timezone',
         'POST /debug/sync/disable - Emergency disable calendar sync',
         'POST /debug/sync/enable - Re-enable calendar sync',
