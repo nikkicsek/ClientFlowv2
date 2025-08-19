@@ -1,0 +1,104 @@
+here’s a tight, copy-paste post-fix verification checklist the Replit agent can run end-to-end. It’s “one-click” style: open each URL, confirm the expected JSON/UI, and move to the next.
+
+Replace <BASE> with your app URL (the long …riker.replit.dev host).
+Use the same browser tab for all steps.
+
+Auth & Session
+
+Logged-out sanity check
+<BASE>/auth/status → Expect {"sessionExists": false}
+
+Establish session
+<BASE>/auth/replit/start?returnTo=%2Fauth%2Fstatus → Expect
+{"sessionExists": true, "user": {"id":"45577581","email":"nikki@csekcreative.com"}}
+
+Auth diagnostics
+<BASE>/debug/auth/diag → Expect { hasCookie: true, sessionExists: true, ... }
+
+My Tasks page loads without loops
+Open <BASE>/my-tasks
+
+DevTools → Network: exactly one GET /auth/status and one GET /api/auth/user (no retries).
+
+Google OAuth (Calendar Tokens)
+
+Connect Google (only if tokens not present)
+<BASE>/oauth/google/connect?returnTo=%2Fdebug%2Fcalendar-status%3Fas%3Dnikki%40csekcreative.com&prompt=consent&access_type=offline&include_granted_scopes=true
+When it finishes, it should land on step 6.
+
+Token status
+<BASE>/debug/calendar-status?as=nikki@csekcreative.com → Expect
+{"hasTokens": true, "keyType": "userId" or "impersonated", ... }
+
+Self-Test & Timezone
+
+Calendar self-test
+<BASE>/debug/sync/self-test?as=nikki@csekcreative.com&tz=America/Vancouver → Expect
+{"ok": true, "htmlLink": "...google.com/calendar/event..." }
+Click the link → opens Google Calendar on today, with a test event at the correct local time (America/Vancouver).
+
+Real Task → Calendar (E2E)
+
+Create a fresh test task via UI
+In the app (Projects → a test project): create
+
+Title: E2E Sync Test
+
+Due date: today
+
+Due time: in ~30 min
+
+Assignee: Nikki
+Save → confirm it appears in My Tasks with the correct local time.
+
+Find the taskId
+Open: <BASE>/debug/my-tasks?as=nikki@csekcreative.com
+Locate the new task; copy its "id" as TASK_ID.
+
+Upsert to Google
+<BASE>/debug/sync/upsert-task?taskId=TASK_ID&as=nikki@csekcreative.com → Expect
+{"ok": true, "eventId": "...", "htmlLink": "https://www.google.com/calendar/event?..."}
+
+Click htmlLink → shows the event at the correct local time.
+
+Optional: verify raw event exists:
+<BASE>/debug/sync/event?eventId=EVENT_ID&as=nikki@csekcreative.com → Expect { "found": true, "start": "...", "end": "..." }
+
+Mapping is stable
+<BASE>/debug/sync/get-mapping?taskId=TASK_ID&as=nikki@csekcreative.com → Expect exactly one mapping row for the task/user.
+
+Idempotent update
+Edit the task (change title only).
+Re-run step 10 with same TASK_ID → Expect ok:true and the same eventId (no duplicate events). Title updates on the same Google event.
+
+Time update correctness
+Edit the task time (e.g., +15 min).
+Re-run step 10 → Expect same eventId, and Google shows the new time.
+(For Vancouver in August (PDT, UTC-7): due_at should equal local time + 7h, e.g., 10:30 → 17:30Z.)
+
+Delete behavior (optional)
+Delete the task (or use flush):
+<BASE>/debug/sync/flush?taskId=TASK_ID&as=nikki@csekcreative.com → Expect {"success": true,...}
+Then:
+<BASE>/debug/sync/event?eventId=EVENT_ID&as=nikki@csekcreative.com → Expect { "found": false }
+
+Quick UI Checks
+
+My Tasks shows local time (America/Vancouver) and no off-by-1h issues.
+
+Edit modal opens with the same date/time just saved (no resets).
+(If description/assignees still don’t persist on first save, note it—we’ll file a separate UI patch.)
+
+If any step fails, here’s what it usually means
+
+/auth/status stays false → Session cookie not set/read; unify cookie name & secret; set sid host-only; SameSite=Lax; Secure; HttpOnly.
+
+calendar-status hasTokens:false → Run step 5; ensure callback upserts tokens by userId (45577581) and teamMemberId.
+
+self-test ok:false (no tokens) → Token resolve path still wrong; confirm DB upsert/read keys + scopes include calendar.events.
+
+htmlLink opens 1969 or wrong day/time → Payload missing dateTime with timeZone:"America/Vancouver" (Luxon formatting), or using date instead of dateTime.
+
+event lookup 404 → Wrong calendarId or eventId; verify you’re using returned eventId and calendarId:"primary".
+
+Duplicate events → Upsert must reuse the same mapping; ensure you read mapping first and call events.update (not insert) when it exists.
