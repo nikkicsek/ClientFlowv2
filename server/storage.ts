@@ -460,15 +460,39 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createTask(task: InsertTask & { dueAt?: string }): Promise<Task> {
-    // Do NOT use splitDueAt anymore - it causes UTC time conversion bugs
-    // The task creation route now properly handles time computation
-    
-    // Handle input format - trust the route computation for time fields
-    const { dueAt, ...restData } = task as any;
-    const finalData = {
-      ...restData,
+    // Handle input format - convert string fields to proper Date objects for database
+    const finalData: any = {
+      ...task,
       taskScope: task.taskScope || 'project', // Default to project scope if not specified
     };
+    
+    // Convert ISO string timestamps to Date objects for database
+    if (task.dueAt) {
+      finalData.dueAt = new Date(task.dueAt);
+    }
+    
+    // Convert dueDate string to Date object if present - handle YYYY-MM-DD format
+    if (task.dueDate && typeof task.dueDate === 'string') {
+      // For YYYY-MM-DD format, append time to make it a valid date
+      const dateStr = task.dueDate.includes('T') ? task.dueDate : `${task.dueDate}T00:00:00.000Z`;
+      const parsedDate = new Date(dateStr);
+      if (!isNaN(parsedDate.getTime())) {
+        finalData.dueDate = parsedDate;
+      } else {
+        console.warn('Invalid dueDate string:', task.dueDate);
+        finalData.dueDate = null;
+      }
+    }
+    
+    // Remove timezone from the final data (not a database field)
+    delete finalData.timezone;
+    
+    // Remove auto-generated timestamp fields that should be handled by the database
+    delete finalData.createdAt;
+    delete finalData.updatedAt;
+    delete finalData.completedAt;
+    
+    console.log('Final task data being inserted:', JSON.stringify(finalData, null, 2));
     
     const [newTask] = await db.insert(tasks).values(finalData).returning();
     return newTask;
