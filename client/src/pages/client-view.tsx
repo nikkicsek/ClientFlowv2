@@ -14,6 +14,7 @@ import { apiRequest } from "@/lib/queryClient";
 import type { Project, Task, ProjectFile, Message, Service, Kpi } from "@shared/schema";
 import { ClientWelcomeSection } from "@/components/client-welcome-section";
 import ProjectProgressCard from "@/components/project-progress-card";
+import { DashboardToggle } from "@/components/dashboard-toggle";
 
 export default function ClientView() {
   const [, setLocation] = useLocation();

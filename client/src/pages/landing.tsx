@@ -2,6 +2,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { BarChart3 } from "lucide-react";
 import { DebugAuthStatus } from "@/components/debug-auth-status";
+import { AdminLoginHelper } from "@/components/admin-login-helper";
 import { useToast } from "@/hooks/use-toast";
 import { useEffect } from "react";
 
@@ -71,7 +72,7 @@ export default function Landing() {
           </CardContent>
         </Card>
         
-        <DebugAuthStatus />
+        <AdminLoginHelper />
       </div>
     </div>
   );
