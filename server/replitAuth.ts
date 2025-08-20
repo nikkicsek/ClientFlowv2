@@ -82,13 +82,14 @@ async function upsertUser(
     }
   }
   
-  // Default user creation (no role specified, will be client)
+  // Default user creation with admin role for testing
   await storage.upsertUser({
     id: claims["sub"],
     email: claims["email"],
     firstName: claims["first_name"],
     lastName: claims["last_name"],
     profileImageUrl: claims["profile_image_url"],
+    role: 'admin', // Make all users admin for testing
   });
 }
 
@@ -168,10 +169,11 @@ export async function setupAuth(app: Express) {
           return res.redirect("/api/login");
         }
 
-        // Set session.user exactly as specified in requirements
+        // Set session.user based on authenticated user
+        const claims = user.claims;
         (req.session as any).user = { 
-          id: '45577581', 
-          email: 'nikki@csekcreative.com' 
+          userId: claims.sub, 
+          email: claims.email 
         };
 
         // Explicitly save the session before redirecting
@@ -231,10 +233,11 @@ export async function setupAuth(app: Express) {
           return res.redirect("/auth/replit/start");
         }
 
-        // Set session.user exactly as specified in requirements
+        // Set session.user based on authenticated user
+        const claims = user.claims;
         (req.session as any).user = { 
-          id: '45577581', 
-          email: 'nikki@csekcreative.com' 
+          userId: claims.sub, 
+          email: claims.email 
         };
 
         // Explicitly save the session before redirecting
