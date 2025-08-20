@@ -179,12 +179,23 @@ export async function setupAuth(app: Express) {
         // Explicitly save the session before redirecting
         await new Promise(resolve => (req.session as any).save(resolve));
         
-        console.log('User authenticated and session saved:', { id: '45577581', email: 'nikki@csekcreative.com' });
+        // Get user from database to check role
+        const dbUser = await storage.getUser(claims.sub);
+        
+        console.log('User authenticated and session saved:', { 
+          userId: claims.sub, 
+          email: claims.email, 
+          role: dbUser?.role 
+        });
 
-        // Redirect to the returnTo URL or default
-        const returnTo = (req.session as any)?.returnTo || "/my-tasks";
+        // Redirect based on user role or returnTo URL
+        let redirectPath = (req.session as any)?.returnTo;
+        if (!redirectPath) {
+          // Default redirect based on role
+          redirectPath = dbUser?.role === 'admin' ? '/' : '/my-tasks';
+        }
         delete (req.session as any).returnTo; // Clean up
-        return res.redirect(returnTo);
+        return res.redirect(redirectPath);
       });
     })(req, res, next);
   });
