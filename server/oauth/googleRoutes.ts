@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { google } from 'googleapis';
 import { Pool } from 'pg';
 import { storage } from '../storage';
+import { CalendarService } from '../services/CalendarService';
 
 export const googleRouter = Router();
 

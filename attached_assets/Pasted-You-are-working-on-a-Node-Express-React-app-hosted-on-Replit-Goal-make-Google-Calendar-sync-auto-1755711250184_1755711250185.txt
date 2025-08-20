@@ -1,0 +1,149 @@
+You are working on a Node/Express + React app hosted on Replit. Goal: make Google Calendar sync automatic, robust, and timezone-correct. Implement everything below exactly.
+
+CONTEXT
+- Base URL (prod): https://35daa16a-7c22-4e46-b19e-646cbc7a5364-00-3bho0sf6uh6va.riker.replit.dev
+- Nikki’s app identity:
+  userId: 45577581
+  email:  nikki@csekcreative.com
+  teamMemberId: 5d398f53-fed7-4182-8657-d9e93fe5c35f
+- OAuth redirect URIs to accept:
+  {BASE}/oauth/google/callback
+  {BASE}/auth/google/callback
+- Secrets exist in env:
+  GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI, SESSION_SECRET
+- Known debug routes to keep stable (must appear in /debug/routes):
+  /auth/status
+  /debug/
+  /debug/oauth-info
+  /debug/calendar-status
+  /debug/my-tasks
+  /debug/sync/status
+  /debug/sync/enable (POST)
+  /debug/sync/disable (POST)
+  /debug/sync/flush
+  /debug/sync/upsert-task
+  /debug/sync/get-mapping
+  /debug/sync/get-event
+  /debug/self-test  <-- NEW (implement)
+
+REQUIREMENTS
+
+A) TIME NORMALIZATION (Luxon; America/Vancouver)
+1. Every task has due_date (YYYY-MM-DD) and optional due_time (HH:mm). Compute a canonical UTC field due_at on create/update.
+2. Use Luxon:
+   - const { DateTime } = require('luxon')
+   - const ZONE = 'America/Vancouver'
+   - If due_date && due_time:
+       const dtLocal = DateTime.fromISO(`${due_date}T${due_time}`, { zone: ZONE })
+       const due_at = dtLocal.toUTC().toISO()
+     If only due_date:
+       set due_at = DateTime.fromISO(due_date, { zone: ZONE }).startOf('day').toUTC().toISO()
+3. When building Google Calendar event payloads:
+   - If due_time exists (timed event):
+     start: { dateTime: dtLocal.toISO(), timeZone: ZONE }
+     end:   { dateTime: dtLocal.plus({ minutes: 60 }).toISO(), timeZone: ZONE }
+   - If no due_time (all-day):
+     start: { date: due_date }        // all-day
+     end:   { date: DateTime.fromISO(due_date).plus({ days: 1 }).toISODate() }
+   Never send null dateTime. Handle DST via Luxon; do not hand-roll offsets.
+
+B) AUTO-SYNC HOOKS (no manual buttons)
+1. On task CREATE and UPDATE (including assignment changes), call:
+   await CalendarService.upsertTaskEvent(taskId, assigneeUserIdArray)
+   - If multiple assignees, loop and upsert per user.
+2. Implement idempotency with a mapping table:
+   Table: calendar_event_mappings
+     id (pk)
+     task_id (string, indexed)
+     user_id (string, indexed)
+     event_id (string, indexed)
+     calendar_id (string, default='primary')
+     created_at, updated_at
+   Unique composite index (task_id, user_id).
+   On upsert:
+     - If a mapping exists → update that Google event.
+     - Else create event → store mapping.
+3. When a task is deleted, if mapping exists, delete the event and remove the mapping. Add a helper CalendarService.deleteTaskEvent(taskId, userId).
+
+C) TOKEN RESOLUTION
+1. Store tokens after OAuth callback keyed by app userId. Also duplicate records keyed by teamMemberId for compatibility.
+   Table: google_tokens
+     id (pk)
+     owner_type ('userId' | 'teamMemberId')
+     owner_id (string)   // 45577581 or 5d398f53-...
+     email (string)
+     access_token, refresh_token, scope, token_type, expiry_date
+     created_at, updated_at
+   Upsert by (owner_type, owner_id).
+2. CalendarService.getOAuthClientFor(userId, teamMemberId) should:
+   - Try google_tokens with owner_type='userId' AND owner_id=userId.
+   - Else try owner_type='teamMemberId' AND owner_id=teamMemberId.
+   - Else throw a “Missing tokens” error that the debug endpoints surface clearly.
+
+D) GOOGLE CLIENT (googleapis)
+1. Use googleapis (calendar v3).
+2. OAuth2 client: set credentials with access_token/refresh_token; refresh when expired; persist new tokens to DB on refresh event.
+
+E) STABLE ROUTES & DEBUG (ensure existing; add missing; list in /debug/routes)
+1. /auth/status → returns { sessionExists, user: { id, email } }.
+2. /debug/calendar-status?as=<email>
+   - Finds Nikki’s tokens by userId (45577581) or teamMemberId fallback.
+   - Returns { hasTokens, ownerType, ownerId, email, scopes, expiry }.
+3. /debug/my-tasks?as=<email> → Returns tasks visible to the given user including due_date, due_time, due_at.
+4. /debug/sync/upsert-task?taskId=...&as=...
+   - Resolves the as-user; runs CalendarService.upsertTaskEvent(taskId, userId).
+   - Returns { ok, eventId, htmlLink } or error with message/stack (do NOT swallow errors).
+5. /debug/sync/get-mapping?taskId=...&as=...
+6. /debug/sync/get-event?eventId=...&as=...
+7. NEW: /debug/self-test?as=...
+   - a) Verifies session + tokens.
+   - b) Creates or updates a test task: title "Calendar Sync Self-Test", due in 10 minutes from now (local America/Vancouver), duration 60 min, assignee=as-user.
+   - c) Calls upsertTaskEvent.
+   - d) Returns { ok:true, taskId, eventId, htmlLink, localTime: dtLocal.toISO() }.
+
+F) UI QUICK WINS
+1. In the **Tasks** tab, reuse the same edit modal/form used in **My Tasks**.
+   - Ensure fields: Title, Description, Due Date, Due Time, Assignees, Status.
+2. On SAVE:
+   - Persist Description and Assignees on the FIRST save. Audit the data layer: the API should accept and commit these fields in one request. Remove any race between separate PATCHes.
+3. After successful save, the server’s CREATE/UPDATE hook triggers auto-sync; the UI should not do any Calendar calls directly.
+4. React Query / fetch:
+   - Disable auto-retry for 401 to avoid auth loops.
+   - Surface a single toast on auth errors with a “Sign in again” CTA.
+   - Do not refetch in a tight loop.
+
+G) EDGE CASES
+1. If due_time missing → all-day event as specified.
+2. If title missing → default to "Untitled Task".
+3. If assignment changes, ensure we create/delete per-user events accordingly:
+   - Newly added assignee → create or update event + mapping.
+   - Removed assignee → delete event + remove mapping.
+4. Server logs: info-level logs around upsert with {taskId, userId, eventId, start, end, zone}.
+
+H) ACCEPTANCE (these must pass)
+1. /auth/status → sessionExists:true with Nikki’s id/email.
+2. /debug/calendar-status?as=nikki@csekcreative.com → hasTokens:true.
+3. Creating/editing a task in the UI automatically creates/updates a Google Calendar event within seconds; no manual debug step needed.
+4. Event times exactly match UI (no DST/off-by-one). Vancouver zone used in payload.
+5. Tasks tab allows edit; Description and Assignees persist on the first save.
+6. /debug/self-test?as=nikki@csekcreative.com → returns { ok:true, taskId, eventId, htmlLink, localTime } and the link opens the correct event.
+
+IMPLEMENTATION HINTS (feel free to adjust filenames)
+- /server/services/CalendarService.js
+- /server/routes/debugSync.js (self-test + other debug)
+- /server/routes/debug.js (routes registry)
+- /server/routes/auth.js (status)
+- /server/routes/oauthGoogle.js (callback that upserts tokens twice: by userId and by teamMemberId)
+- /server/db/migrations/xxx_calendar_mapping_and_tokens.sql
+- /client/components/Tasks/EditTaskModal.tsx (reuse from MyTasks)
+- /client/state/tasks.ts (ensure single save includes desc + assignees)
+- Ensure Luxon used consistently server-side for due_at and payload generation.
+
+Deliverables:
+- DB migrations for calendar_event_mappings and google_tokens with indexes.
+- All routes working and listed in /debug/routes.
+- Self-test endpoint implemented and passing.
+- Auto-sync working for create/edit/delete and assignment changes.
+- Logs added as described.
+
+Return when complete.
