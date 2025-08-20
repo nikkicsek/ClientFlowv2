@@ -1,24 +1,24 @@
 import { useQuery } from "@tanstack/react-query";
 
 export function useAuth() {
-  // Check session status first - light, cacheable check
+  // Use the working auth status route
   const { data: authStatus, isLoading: authLoading } = useQuery({
     queryKey: ["/auth/status"],
-    retry: false,
-    staleTime: 60_000,
-    refetchOnMount: false,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
+    retry: 2,
+    staleTime: 30_000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   });
 
-  // COMPLETELY DISABLE user query - since /auth/status already returns user data
   const sessionExists = (authStatus as any)?.sessionExists === true;
   const user = (authStatus as any)?.user || null;
+  const isAuthenticated = (authStatus as any)?.isAuthenticated === true;
 
   return {
     user,
     isLoading: authLoading,
-    isAuthenticated: sessionExists && !!user,
+    isAuthenticated,
     authStatus,
     error: null
   };

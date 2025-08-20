@@ -40,6 +40,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
   await setupAuth(app);
 
+  // Auth status route - lightweight check
+  app.get('/auth/status', async (req: any, res) => {
+    try {
+      console.log('AUTH STATUS DEBUG:', {
+        cookieKeys: Object.keys(req.cookies || {}),
+        sessionId: req.session?.id,
+        sessionUser: req.session?.user,
+        replitUser: req.user
+      });
+
+      // Check if we have a valid session
+      const sessionExists = !!(req.session?.id);
+      let user = null;
+
+      // Try to get user from session first, then from Replit auth
+      if (req.session?.user?.userId) {
+        user = await storage.getUser(req.session.user.userId);
+      } else if (req.user?.claims?.sub) {
+        // User is authenticated via Replit but not in session
+        const replitUser = req.user.claims;
+        
+        // Create/update user in database
+        await storage.upsertUser({
+          id: replitUser.sub,
+          email: replitUser.email,
+          firstName: replitUser.first_name || '',
+          lastName: replitUser.last_name || '',
+          profileImageUrl: replitUser.profile_image_url || '',
+          role: 'admin' // Default to admin for testing
+        });
+        
+        user = await storage.getUser(replitUser.sub);
+        
+        // Update session with user info
+        req.session.user = { 
+          userId: user.id, 
+          email: user.email 
+        };
+      }
+
+      res.json({
+        sessionExists,
+        user,
+        isAuthenticated: sessionExists && !!user
+      });
+    } catch (error) {
+      console.error("Error checking auth status:", error);
+      res.json({
+        sessionExists: false,
+        user: null,
+        isAuthenticated: false
+      });
+    }
+  });
+
   // Auth routes - check session first, then Replit auth
   app.get('/api/auth/user', requireAuth, async (req: any, res) => {
     try {
