@@ -2090,10 +2090,11 @@ export function registerDebugRoutes(app: Express) {
       
       const teamMember = memberResult.rows[0];
       
+      // Use the existing authorized redirect URI
+      const redirect = process.env.GOOGLE_REDIRECT_URI || `${req.protocol}://${req.headers.host}/oauth/google/callback`;
+      
       // Create OAuth2 client
       const { google } = await import('googleapis');
-      const redirect = `${req.protocol}://${req.headers.host}/debug/team-member-callback`;
-      
       const oauth2Client = new google.auth.OAuth2(
         process.env.GOOGLE_CLIENT_ID,
         process.env.GOOGLE_CLIENT_SECRET,
@@ -2107,11 +2108,11 @@ export function registerDebugRoutes(app: Express) {
         'profile'
       ];
       
-      // Generate auth URL with team member state
+      // Generate auth URL with team member state - use existing callback system
       const authUrl = oauth2Client.generateAuthUrl({
         access_type: 'offline',
         scope: scopes,
-        state: `team_member_id=${teamMember.id}&email=${email}`
+        state: `team_member_auth=true&team_member_id=${teamMember.id}&email=${encodeURIComponent(email)}&returnTo=/debug/team-member-success`
       });
       
       res.json({ 
@@ -2185,6 +2186,61 @@ export function registerDebugRoutes(app: Express) {
       console.error('Team member callback error:', error);
       res.status(500).json({ error: error.message });
     }
+  });
+
+  // Team member success page
+  app.get('/debug/team-member-success', (req: any, res) => {
+    const { email, connected, error } = req.query;
+    
+    if (error) {
+      return res.send(`
+        <html>
+          <head><title>Calendar Connection Error</title></head>
+          <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px;">
+            <div style="background: #fee; border: 1px solid #fcc; padding: 20px; border-radius: 5px;">
+              <h2 style="color: #c33;">❌ Calendar Connection Failed</h2>
+              <p>There was an error connecting your Google Calendar for <strong>${decodeURIComponent(email || 'unknown')}</strong>.</p>
+              <p>Error: ${error}</p>
+              <p>Please try again or contact support if the issue persists.</p>
+            </div>
+          </body>
+        </html>
+      `);
+    }
+    
+    if (connected === 'true') {
+      return res.send(`
+        <html>
+          <head><title>Calendar Connected Successfully</title></head>
+          <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px;">
+            <div style="background: #efe; border: 1px solid #cfc; padding: 20px; border-radius: 5px;">
+              <h2 style="color: #393;">✅ Google Calendar Connected!</h2>
+              <p><strong>Success!</strong> Your Google Calendar has been connected for <strong>${decodeURIComponent(email || 'your account')}</strong>.</p>
+              <p>From now on:</p>
+              <ul>
+                <li>Tasks assigned to you will automatically appear in your Google Calendar</li>
+                <li>Task updates will sync to your calendar in real-time</li>
+                <li>You'll see all your work deadlines alongside your other events</li>
+              </ul>
+              <p style="margin-top: 30px;">
+                <strong>You can close this window now.</strong> The next time a task is created or assigned to you, it will automatically sync to your calendar!
+              </p>
+            </div>
+          </body>
+        </html>
+      `);
+    }
+    
+    // Default fallback
+    return res.send(`
+      <html>
+        <head><title>Team Member Calendar Setup</title></head>
+        <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px;">
+          <h2>Team Member Calendar Setup</h2>
+          <p>Invalid request parameters. Please use the proper authentication link provided by your administrator.</p>
+        </body>
+      </html>
+    `);
   });
 
   return app;

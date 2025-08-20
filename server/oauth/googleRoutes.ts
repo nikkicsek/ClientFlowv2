@@ -164,6 +164,42 @@ googleRouter.get('/oauth/google/callback', async (req: any, res) => {
       console.error('Error querying team_members for session:', err);
     }
 
+    // Check if this is team member authentication from debug route
+    const teamMemberStateParams = new URLSearchParams(state || '');
+    const isTeamMemberAuth = teamMemberStateParams.get('team_member_auth') === 'true';
+    const teamMemberIdFromState = teamMemberStateParams.get('team_member_id');
+    const teamMemberEmailFromState = teamMemberStateParams.get('email');
+    
+    if (isTeamMemberAuth && teamMemberIdFromState && teamMemberEmailFromState) {
+      // Store tokens specifically for team member
+      try {
+        const expiry = tokens.expiry_date ? new Date(tokens.expiry_date) : new Date(Date.now() + 55 * 60 * 1000);
+        const scopes = 'https://www.googleapis.com/auth/calendar.events openid email profile';
+        
+        await db.query(`
+          INSERT INTO google_tokens (owner_type, owner_id, email, access_token, refresh_token, scope, expiry_date, created_at, updated_at)
+          VALUES ('team_member', $1, $2, $3, $4, $5, $6, now(), now())
+          ON CONFLICT (owner_type, owner_id) DO UPDATE SET
+            access_token = EXCLUDED.access_token,
+            refresh_token = COALESCE(EXCLUDED.refresh_token, google_tokens.refresh_token),
+            scope = EXCLUDED.scope,
+            expiry_date = EXCLUDED.expiry_date,
+            updated_at = now()
+        `, [teamMemberIdFromState, decodeURIComponent(teamMemberEmailFromState), tokens.access_token, tokens.refresh_token || null, scopes, expiry]);
+        
+        console.log(`Successfully stored Google Calendar tokens for team member ${teamMemberIdFromState} (${decodeURIComponent(teamMemberEmailFromState)})`);
+        
+        // Redirect to success page
+        const origin = `${req.protocol}://${req.headers.host}`;
+        return res.redirect(303, `${origin}/debug/team-member-success?email=${teamMemberEmailFromState}&connected=true`);
+        
+      } catch (error) {
+        console.error('Error storing team member tokens:', error);
+        const origin = `${req.protocol}://${req.headers.host}`;
+        return res.redirect(303, `${origin}/debug/team-member-success?email=${teamMemberEmailFromState}&error=token_storage_failed`);
+      }
+    }
+
     const scopes = (tokens.scope as string) || 'https://www.googleapis.com/auth/calendar.events openid email profile';
     await saveTokens(db, canonicalUserId, tokens, scopes, teamMemberId);
 
