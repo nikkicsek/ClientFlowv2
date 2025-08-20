@@ -1,14 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
 
 export function useAuth() {
-  // Use the existing working auth/user endpoint
+  // Use the existing working auth/user endpoint with conservative settings
   const { data: user, isLoading: authLoading, error } = useQuery({
     queryKey: ["/api/auth/user"],
-    retry: 2,
-    staleTime: 30_000,
-    refetchOnMount: true,
-    refetchOnWindowFocus: true,
-    refetchOnReconnect: true,
+    retry: 1,
+    staleTime: 60_000, // Cache for 1 minute
+    refetchOnMount: false, // Prevent excessive requests
+    refetchOnWindowFocus: false, // Prevent excessive requests
+    refetchOnReconnect: false, // Prevent excessive requests
+    refetchInterval: false, // No automatic polling
   });
 
   const isAuthenticated = !!user && !error;
