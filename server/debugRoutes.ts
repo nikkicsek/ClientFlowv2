@@ -2074,5 +2074,118 @@ export function registerDebugRoutes(app: Express) {
     }
   });
 
+  // Team member Google Calendar authentication
+  app.get('/debug/team-member-auth', async (req: any, res) => {
+    try {
+      const email = req.query.email;
+      if (!email) {
+        return res.status(400).json({ error: 'Email required' });
+      }
+      
+      // Look up team member by email
+      const memberResult = await pool.query('SELECT * FROM team_members WHERE email = $1', [email]);
+      if (memberResult.rows.length === 0) {
+        return res.status(404).json({ error: 'Team member not found' });
+      }
+      
+      const teamMember = memberResult.rows[0];
+      
+      // Create OAuth2 client
+      const { google } = await import('googleapis');
+      const redirect = `${req.protocol}://${req.headers.host}/debug/team-member-callback`;
+      
+      const oauth2Client = new google.auth.OAuth2(
+        process.env.GOOGLE_CLIENT_ID,
+        process.env.GOOGLE_CLIENT_SECRET,
+        redirect
+      );
+      
+      const scopes = [
+        'https://www.googleapis.com/auth/calendar.events',
+        'openid',
+        'email', 
+        'profile'
+      ];
+      
+      // Generate auth URL with team member state
+      const authUrl = oauth2Client.generateAuthUrl({
+        access_type: 'offline',
+        scope: scopes,
+        state: `team_member_id=${teamMember.id}&email=${email}`
+      });
+      
+      res.json({ 
+        authUrl, 
+        teamMemberId: teamMember.id,
+        email: teamMember.email,
+        message: `Click the URL below to connect ${teamMember.name}'s Google Calendar`
+      });
+      
+    } catch (error) {
+      console.error('Team member auth error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+  
+  // Team member OAuth callback
+  app.get('/debug/team-member-callback', async (req: any, res) => {
+    try {
+      const { code, state } = req.query;
+      if (!code || !state) {
+        return res.status(400).json({ error: 'Missing code or state' });
+      }
+      
+      // Parse state to get team member info
+      const stateParams = new URLSearchParams(state);
+      const teamMemberId = stateParams.get('team_member_id');
+      const email = stateParams.get('email');
+      
+      if (!teamMemberId || !email) {
+        return res.status(400).json({ error: 'Invalid state parameters' });
+      }
+      
+      // Create OAuth2 client and get tokens
+      const { google } = await import('googleapis');
+      const redirect = `${req.protocol}://${req.headers.host}/debug/team-member-callback`;
+      
+      const oauth2Client = new google.auth.OAuth2(
+        process.env.GOOGLE_CLIENT_ID,
+        process.env.GOOGLE_CLIENT_SECRET,
+        redirect
+      );
+      
+      const { tokens } = await oauth2Client.getToken(code);
+      
+      // Store tokens in google_tokens table
+      const expiry = tokens.expiry_date ? new Date(tokens.expiry_date) : new Date(Date.now() + 55 * 60 * 1000);
+      const scopes = 'https://www.googleapis.com/auth/calendar.events openid email profile';
+      
+      await pool.query(`
+        INSERT INTO google_tokens (owner_type, owner_id, email, access_token, refresh_token, scope, expiry_date, created_at, updated_at)
+        VALUES ('team_member', $1, $2, $3, $4, $5, $6, now(), now())
+        ON CONFLICT (owner_type, owner_id) DO UPDATE SET
+          access_token = EXCLUDED.access_token,
+          refresh_token = COALESCE(EXCLUDED.refresh_token, google_tokens.refresh_token),
+          scope = EXCLUDED.scope,
+          expiry_date = EXCLUDED.expiry_date,
+          updated_at = now()
+      `, [teamMemberId, email, tokens.access_token, tokens.refresh_token || null, scopes, expiry]);
+      
+      console.log(`Saved Google Calendar tokens for team member ${teamMemberId} (${email})`);
+      
+      res.json({ 
+        success: true,
+        message: `Google Calendar connected successfully for ${email}`,
+        teamMemberId,
+        email,
+        hasTokens: true
+      });
+      
+    } catch (error) {
+      console.error('Team member callback error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   return app;
 }
