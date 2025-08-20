@@ -46,8 +46,8 @@ googleRouter.get('/oauth/google/connect', async (req: any, res) => {
     return res.redirect(303, `${origin}/api/login?returnTo=${encodeURIComponent(returnTo as string)}`);
   }
   
-  // Compute redirect at runtime (authoritative)
-  const redirect = `${req.protocol}://${req.headers.host}/oauth/google/callback`;
+  // Use environment-specified redirect URI to match Google OAuth configuration
+  const redirect = process.env.GOOGLE_REDIRECT_URI || `${req.protocol}://${req.headers.host}/auth/google/callback`;
   console.log('AUTH redirect_uri =', redirect);
   
   // Create OAuth2 client with computed redirect
@@ -89,8 +89,8 @@ googleRouter.get('/oauth/google/connect', async (req: any, res) => {
 googleRouter.get('/oauth/google/callback', async (req: any, res) => {
   console.log('>> HIT', req.path, req.query);
   try {
-    // Compute redirect at runtime (must match the value used in connect)
-    const redirect = `${req.protocol}://${req.headers.host}/oauth/google/callback`;
+    // Use environment-specified redirect URI to match Google OAuth configuration
+    const redirect = process.env.GOOGLE_REDIRECT_URI || `${req.protocol}://${req.headers.host}/auth/google/callback`;
     
     // Create OAuth2 client with the same computed redirect
     const client = oauth2(redirect);
