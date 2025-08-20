@@ -558,8 +558,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let assignments: any[] = [];
       
       try {
-        // Create the task
-        task = await storage.createTask(finalTaskData);
+        // Create the task (pass the validated taskData, not finalTaskData)
+        task = await storage.createTask(taskData);
         console.log('Created task:', { taskId: task.id, title: task.title, dueDate: task.dueDate, dueTime: task.dueTime });
         
         // Auto-sync calendar events for task using new system

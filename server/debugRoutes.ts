@@ -1193,14 +1193,14 @@ export function registerDebugRoutes(app: Express) {
       const { title = 'Debug Test Task', dueDate, dueTime, timezone = 'America/Vancouver' } = req.body;
       
       // Compute due_at using unified time handling
-      const dueAt = computeDueAt(dueDate, dueTime, timezone);
+      const dueAtResult = computeDueAt(dueDate, dueTime, timezone);
       
       const taskData = {
         title,
         description: 'Created via debug endpoint for testing',
-        dueDate: dueDate ? dueDate : null,
+        dueDate: dueDate || null,
         dueTime: dueTime || null,
-        dueAt: dueAt ? dueAt : null,
+        dueAt: dueAtResult?.due_at || null,
         status: 'in_progress' as const,
         priority: 'medium' as const,
         taskScope: 'project' as const,
@@ -1208,6 +1208,8 @@ export function registerDebugRoutes(app: Express) {
         organizationId: null,
         serviceId: null
       };
+      
+      console.log('Debug route taskData before createTask:', JSON.stringify(taskData, null, 2));
       
       const task = await storage.createTask(taskData);
       
