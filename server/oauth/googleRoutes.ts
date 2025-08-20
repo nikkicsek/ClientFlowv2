@@ -135,43 +135,16 @@ googleRouter.get('/oauth/google/callback', async (req: any, res) => {
       console.error('Error querying users table:', err);
     }
 
-    // If not found in users, try to resolve via team_members.user_id
-    if (!canonicalUserId) {
-      try {
-        const teamResult = await db.query('SELECT user_id FROM team_members WHERE email = $1', [targetEmail]);
-        if (teamResult.rows.length > 0 && teamResult.rows[0].user_id) {
-          canonicalUserId = teamResult.rows[0].user_id;
-        }
-      } catch (err) {
-        console.error('Error querying team_members table:', err);
-      }
-    }
-
-    if (!canonicalUserId) {
-      console.error('OAuth callback failure: Email not recognized', { email, targetEmail, query: req.query, state });
-      const origin = `${req.protocol}://${req.headers.host}`;
-      return res.redirect(303, `${origin}/my-tasks?calendar=error`);
-    }
-
-    // Look up team member ID for the resolved user
-    let teamMemberId = null;
-    try {
-      const teamResult = await db.query('SELECT id FROM team_members WHERE email = $1', [targetEmail]);
-      if (teamResult.rows.length > 0) {
-        teamMemberId = teamResult.rows[0].id;
-      }
-    } catch (err) {
-      console.error('Error querying team_members for session:', err);
-    }
-
-    // Check if this is team member authentication from debug route
+    // Check if this is team member authentication from debug route FIRST
     const teamMemberStateParams = new URLSearchParams(state || '');
     const isTeamMemberAuth = teamMemberStateParams.get('team_member_auth') === 'true';
     const teamMemberIdFromState = teamMemberStateParams.get('team_member_id');
     const teamMemberEmailFromState = teamMemberStateParams.get('email');
     
     if (isTeamMemberAuth && teamMemberIdFromState && teamMemberEmailFromState) {
-      // Store tokens specifically for team member
+      // Handle team member authentication - bypass user lookup
+      console.log('Processing team member authentication for:', decodeURIComponent(teamMemberEmailFromState));
+      
       try {
         const expiry = tokens.expiry_date ? new Date(tokens.expiry_date) : new Date(Date.now() + 55 * 60 * 1000);
         const scopes = 'https://www.googleapis.com/auth/calendar.events openid email profile';
@@ -199,6 +172,26 @@ googleRouter.get('/oauth/google/callback', async (req: any, res) => {
         return res.redirect(303, `${origin}/debug/team-member-success?email=${teamMemberEmailFromState}&error=token_storage_failed`);
       }
     }
+    
+    // For regular user authentication, require canonical user ID
+    if (!canonicalUserId) {
+      console.error('OAuth callback failure: Email not recognized', { email, targetEmail, query: req.query, state });
+      const origin = `${req.protocol}://${req.headers.host}`;
+      return res.redirect(303, `${origin}/my-tasks?calendar=error`);
+    }
+
+    // Look up team member ID for the resolved user
+    let teamMemberId = null;
+    try {
+      const teamResult = await db.query('SELECT id FROM team_members WHERE email = $1', [targetEmail]);
+      if (teamResult.rows.length > 0) {
+        teamMemberId = teamResult.rows[0].id;
+      }
+    } catch (err) {
+      console.error('Error querying team_members for session:', err);
+    }
+
+    // Team member authentication is handled earlier in the function
 
     const scopes = (tokens.scope as string) || 'https://www.googleapis.com/auth/calendar.events openid email profile';
     await saveTokens(db, canonicalUserId, tokens, scopes, teamMemberId);
