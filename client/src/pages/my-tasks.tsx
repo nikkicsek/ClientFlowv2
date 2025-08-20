@@ -6,9 +6,9 @@ import { CalendarSyncDialog } from '@/components/calendar-sync-dialog';
 import { CalendarSettings } from '@/components/CalendarSettings';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { User, AlertCircle, Calendar, LogIn } from 'lucide-react';
+import { User, AlertCircle, Calendar, LogIn, Settings } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 
 export function MyTasksPage() {
   const [showCalendarDialog, setShowCalendarDialog] = useState(false);
@@ -144,6 +144,15 @@ export function MyTasksPage() {
             )}
           </div>
           <div className="flex items-center gap-2">
+            {/* Show Agency Dashboard link if user is admin */}
+            {(user as any)?.role === 'admin' && (
+              <Link href="/admin">
+                <Button variant="default" className="flex items-center gap-2">
+                  <Settings className="h-4 w-4" />
+                  Agency Dashboard
+                </Button>
+              </Link>
+            )}
             <Button
               onClick={() => window.location.href = `/oauth/google/connect?returnTo=${encodeURIComponent('/my-tasks')}`}
               variant="outline"
