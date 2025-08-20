@@ -9,8 +9,7 @@ import { googleCalendarService } from "./googleCalendar";
 import { computeDueAt, getDebugTimeInfo } from "./utils/timeHandling";
 import { syncAllCalendarEventsForTask, getTaskCalendarDebugInfo } from "./calendarEvents";
 import { DateTime } from 'luxon';
-import { getMyTasks } from './lib/tasks';
-import type { Identity } from './middleware/identity';
+import { debugSyncRouter } from './routes/debugSync';
 
 // Environment variable for sync control
 export let CALENDAR_SYNC_ENABLED = process.env.CALENDAR_SYNC_ENABLED !== 'false';
@@ -326,6 +325,13 @@ export function registerDebugRoutes(app: Express) {
         'GET /debug/my-tasks?as=<email> - Get tasks assigned to user (with identity resolution)',
         'GET /debug/calendar-status?as=<email> - Check calendar tokens for user',
         'GET /debug/tokens/dump?as=<email> - Show token information',
+        'GET /debug/sync/upsert-task?taskId=<id>&as=<email> - Force sync single task',
+        'GET /debug/sync/get-mapping?taskId=<id>&as=<email> - Get task calendar mapping',
+        'GET /debug/sync/get-event?eventId=<id>&as=<email> - Get calendar event details',
+        'GET /debug/sync/flush?as=<email> - Sync all tasks for user',
+        'GET /debug/sync/self-test?as=<email>&tz=<timezone> - Run comprehensive self-test',
+        'POST /debug/sync/enable - Enable calendar sync',
+        'POST /debug/sync/disable - Disable calendar sync',
         'POST /debug/create-test-task - Create test task with timezone',
         'POST /debug/sync/disable - Emergency disable calendar sync',
         'POST /debug/sync/enable - Re-enable calendar sync',
@@ -336,9 +342,7 @@ export function registerDebugRoutes(app: Express) {
         'GET /debug/sync/flush?taskId=<id> - Single-task calendar flush',
         'GET /debug/sync/upsert-task?taskId=<id>&as=<email> - Push this task now (direct upsert)',
         'GET /debug/sync/run?hours=12&as=<email> - Run once sync sweep for user',
-        'GET /debug/sync/self-test?as=<email>&tz=<timezone> - Run comprehensive calendar sync self-test',
-        'GET /debug/sync/get-mapping?taskId=<id> - Get task event mapping',
-        'GET /debug/sync/get-event?eventId=<id>&as=<email> - Get calendar event details'
+        '/auth/status - Check session status'
       ]
     });
   });

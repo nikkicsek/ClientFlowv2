@@ -17,6 +17,8 @@ import {
   onAssignmentCreated,
   onAssignmentDeleted
 } from './hooks/taskCalendarHooks';
+import { AutoCalendarSync } from './hooks/autoCalendarSync';
+import { CalendarService } from './services/CalendarService';
 import { syncAllCalendarEventsForTask } from "./calendarEvents";
 
 // Configure multer for file uploads
@@ -474,22 +476,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { selectedTeamMembers = [], ...bodyData } = req.body;
       
-      // Compute due_at using comprehensive time computation per specification  
-      const userTz = bodyData.timezone || process.env.APP_TIMEZONE || "America/Vancouver";
-      const timeResult = computeDueAt(bodyData.dueDate, bodyData.dueTime, userTz);
-      
-      const taskData = insertTaskSchema.parse({
+      // Compute due_at using new CalendarService time normalization
+      let finalTaskData = {
         ...bodyData,
-        projectId: req.params.projectId,
-      });
-      
-      // Prepare final task data with enhanced time handling
-      const finalTaskData = {
-        ...taskData,
-        dueAt: timeResult.due_at ? new Date(timeResult.due_at) : null,
-        dueDate: timeResult.due_date_db ? new Date(timeResult.due_date_db) : null,
-        dueTime: timeResult.due_time_db || null, // Store 24-hour format in DB
+        projectId: req.params.projectId
       };
+
+      // Normalize due_at using Luxon (America/Vancouver)
+      if (bodyData.dueDate) {
+        try {
+          finalTaskData.dueAt = new Date(CalendarService.computeDueAt(bodyData.dueDate, bodyData.dueTime));
+        } catch (error: any) {
+          console.warn('Time computation failed:', error.message);
+          // Keep original data if time computation fails
+        }
+      }
+      
+      const taskData = insertTaskSchema.parse(finalTaskData);
       
       // Remove timezone from the final data (not a database field)
       delete (finalTaskData as any).timezone;
@@ -503,15 +506,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         task = await storage.createTask(finalTaskData);
         console.log('Created task:', { taskId: task.id, title: task.title, dueDate: task.dueDate, dueTime: task.dueTime });
         
-        // Auto-sync calendar events for task assignments (enhanced system)
-        if (task.dueAt && assignments.length > 0) {
-          try {
-            await syncAllCalendarEventsForTask(task.id);
-            console.log(`Auto-synced calendar events for task ${task.id} with ${assignments.length} assignments`);
-          } catch (calendarError) {
-            console.warn('Auto calendar sync failed:', calendarError);
-            // Don't fail task creation if calendar sync fails
-          }
+        // Auto-sync calendar events for task using new system
+        try {
+          await AutoCalendarSync.onTaskChanged(task.id);
+          console.log(`Auto-synced calendar events for task ${task.id}`);
+        } catch (calendarError) {
+          console.warn('Auto calendar sync failed:', calendarError);
+          // Don't fail task creation if calendar sync fails
         }
         
         // Create task assignments for each selected team member
@@ -657,9 +658,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Use new auto-sync system
-      const { calendarAutoSync } = await import('./calendarAutoSync');
-      const result = await calendarAutoSync.syncTaskIfEligible(taskId, userId);
-      res.json(result);
+      await AutoCalendarSync.onTaskChanged(taskId);
+      res.json({ ok: true, message: 'Calendar sync triggered successfully' });
     } catch (error) {
       console.error('Manual sync error:', error);
       res.status(500).json({ message: 'Failed to sync calendar' });
@@ -692,19 +692,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Parse and validate the request body
       const { title, description, status, priority, dueDate, dueTime, timezone, assigneeUserIds } = req.body;
       
-      // Compute due_at using comprehensive time computation per specification
-      const userTz = timezone || process.env.APP_TIMEZONE || "America/Vancouver";
-      const timeResult = computeDueAt(dueDate, dueTime, userTz);
-      
       const updateData: any = {
         title,
         description,
         status,
         priority,
-        dueDate: timeResult.due_date_db ? new Date(timeResult.due_date_db) : undefined,
-        dueTime: timeResult.due_time_db || undefined, // Store 24-hour format
-        dueAt: timeResult.due_at ? new Date(timeResult.due_at) : undefined,
+        dueDate: dueDate ? new Date(dueDate) : undefined,
+        dueTime,
       };
+
+      // Normalize due_at using new CalendarService time normalization
+      if (dueDate) {
+        try {
+          updateData.dueAt = new Date(CalendarService.computeDueAt(dueDate, dueTime));
+        } catch (error: any) {
+          console.warn('Time computation failed during update:', error.message);
+        }
+      }
       
       // Remove undefined values
       Object.keys(updateData).forEach(key => {
@@ -716,15 +720,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Update the task
       const updatedTask = await storage.updateTask(taskId, updateData);
 
-      // Auto-sync calendar event if eligible
+      // Auto-sync calendar event using new system
       try {
-        const { calendarAutoSync } = await import('./calendarAutoSync');
-        const syncResult = await calendarAutoSync.syncTaskIfEligible(taskId, userId);
-        if (syncResult.ok) {
-          console.log(`Auto-synced calendar for updated task ${taskId}:`, syncResult.eventId);
-        } else {
-          console.log(`Auto-sync skipped for updated task ${taskId}:`, syncResult.error);
-        }
+        await AutoCalendarSync.onTaskChanged(taskId);
+        console.log(`Auto-synced calendar for updated task ${taskId}`);
       } catch (calendarError) {
         console.error('Auto-sync error for updated task:', taskId, calendarError);
         // Don't fail task update if calendar sync fails
