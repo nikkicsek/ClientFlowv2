@@ -2188,9 +2188,80 @@ export function registerDebugRoutes(app: Express) {
     }
   });
 
+  // TEST ROUTE: Simulate team member auth using your own Google account  
+  app.get('/debug/test-team-member-auth', async (req: any, res) => {
+    try {
+      const email = 'alexa@csekcreative.com'; // Simulate Alexa's email
+      
+      // Look up team member by email
+      const memberResult = await pool.query('SELECT * FROM team_members WHERE email = $1', [email]);
+      if (memberResult.rows.length === 0) {
+        return res.status(404).json({ error: 'Team member not found' });
+      }
+      
+      const teamMember = memberResult.rows[0];
+      
+      // Use the existing authorized redirect URI
+      const redirect = process.env.GOOGLE_REDIRECT_URI || `${req.protocol}://${req.headers.host}/auth/google/callback`;
+      
+      // Create OAuth2 client
+      const { google } = await import('googleapis');
+      const oauth2Client = new google.auth.OAuth2(
+        process.env.GOOGLE_CLIENT_ID,
+        process.env.GOOGLE_CLIENT_SECRET,
+        redirect
+      );
+      
+      const scopes = [
+        'https://www.googleapis.com/auth/calendar.events',
+        'openid',
+        'email', 
+        'profile'
+      ];
+      
+      // Generate auth URL with team member state - use existing callback system
+      const authUrl = oauth2Client.generateAuthUrl({
+        access_type: 'offline',
+        scope: scopes,
+        state: `team_member_auth=true&team_member_id=${teamMember.id}&email=${encodeURIComponent(email)}&returnTo=/debug/team-member-success&test_mode=true`
+      });
+      
+      // Return a clickable test page
+      res.send(`
+        <html>
+          <head><title>SAFE TESTING: Team Member Auth Simulation</title></head>
+          <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px;">
+            <div style="background: #fff3cd; border: 1px solid #ffeaa7; padding: 20px; border-radius: 5px;">
+              <h2>🧪 SAFE TEST MODE</h2>
+              <p><strong>Testing team member authentication flow for Alexa Anderson</strong></p>
+              <p>This will use YOUR Google account to test the team member authentication process safely.</p>
+              <p><strong>What this test does:</strong></p>
+              <ul>
+                <li>Uses your Google account (safe for you to test)</li>
+                <li>Simulates Alexa's team member ID in the authentication flow</li>
+                <li>Tests the OAuth callback handling for team members</li>
+                <li>Verifies token storage works correctly</li>
+              </ul>
+              <p><strong>Click below to run the test:</strong></p>
+              <a href="${authUrl}" style="display: inline-block; background: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">🔗 Test Team Member Authentication</a>
+              <p style="margin-top: 20px; font-size: 0.9em; color: #666;">
+                <strong>Note:</strong> This will connect YOUR calendar temporarily for testing. 
+                We can disconnect it afterward if needed.
+              </p>
+            </div>
+          </body>
+        </html>
+      `);
+      
+    } catch (error) {
+      console.error('Test team member auth error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Team member success page
   app.get('/debug/team-member-success', (req: any, res) => {
-    const { email, connected, error } = req.query;
+    const { email, connected, error, test_mode } = req.query;
     
     if (error) {
       return res.send(`
