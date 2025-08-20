@@ -541,7 +541,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Normalize due_at using Luxon (America/Vancouver)
       if (bodyData.dueDate) {
         try {
-          finalTaskData.dueAt = new Date(CalendarService.computeDueAt(bodyData.dueDate, bodyData.dueTime));
+          finalTaskData.dueAt = CalendarService.computeDueAt(bodyData.dueDate, bodyData.dueTime);
         } catch (error: any) {
           console.warn('Time computation failed:', error.message);
           // Keep original data if time computation fails
@@ -760,7 +760,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Normalize due_at using new CalendarService time normalization
       if (dueDate) {
         try {
-          updateData.dueAt = new Date(CalendarService.computeDueAt(dueDate, dueTime));
+          updateData.dueAt = CalendarService.computeDueAt(dueDate, dueTime);
         } catch (error: any) {
           console.warn('Time computation failed during update:', error.message);
         }
