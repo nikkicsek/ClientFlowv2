@@ -38,6 +38,7 @@ import { ProposalManagement } from "@/components/proposal-management";
 import { LiveDiseaseFreeProposal } from "@/components/live-disease-free-proposal";
 import { RestoreDeletedItems } from "@/components/restore-deleted-items";
 import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog";
+import { DashboardToggle } from "@/components/dashboard-toggle";
 import type { Project, Task, Service, User, Organization } from "@shared/schema";
 
 type ProjectWithOrganization = Project & { organization?: Organization };
@@ -527,6 +528,11 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Dashboard Toggle */}
+      <div className="p-6 pb-0">
+        <DashboardToggle />
+      </div>
+      
       {/* Header */}
       <div className="bg-white shadow-sm border-b">
         <div className="px-6 py-4">
