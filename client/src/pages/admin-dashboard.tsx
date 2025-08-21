@@ -163,12 +163,13 @@ export default function AdminDashboard() {
     queryKey: ["/api/admin/tasks"],
   });
 
-  const { data: allAssignments = [] } = useQuery({
+  const { data: allAssignments = [], isError: assignmentsError } = useQuery({
     queryKey: ["/api/admin/task-assignments"],
   });
 
   // Helper function to get task assignments
   const getTaskAssignments = (taskId: string) => {
+    if (!Array.isArray(allAssignments)) return [];
     return allAssignments.filter((assignment: any) => assignment.taskId === taskId);
   };
 
