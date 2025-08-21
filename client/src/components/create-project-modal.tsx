@@ -29,14 +29,14 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
     expectedCompletion: "",
   });
 
-  // Fetch all clients to populate company dropdown
-  const { data: clients = [] } = useQuery({
-    queryKey: ["/api/admin/clients"],
+  // Fetch all organizations to populate company dropdown
+  const { data: organizations = [] } = useQuery({
+    queryKey: ["/api/admin/organizations"],
     enabled: isOpen,
   });
 
-  // Get selected client details
-  const selectedClient = clients.find((client: any) => client.id === formData.selectedClientId);
+  // Get selected organization details
+  const selectedOrganization = organizations.find((org: any) => org.id === formData.selectedClientId);
 
   const createProjectMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -80,7 +80,7 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
     if (!formData.name || !formData.selectedClientId) {
       toast({
         title: "Missing Information",
-        description: "Please fill in the project name and select a client company.",
+        description: "Please fill in the project name and select an organization.",
         variant: "destructive",
       });
       return;
@@ -89,8 +89,7 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
     createProjectMutation.mutate({
       name: formData.name,
       description: formData.description,
-      clientId: formData.selectedClientId,
-      organizationId: selectedClient?.organizationId || null,
+      organizationId: formData.selectedClientId,
       budget: formData.budget ? parseFloat(formData.budget) : null,
       startDate: formData.startDate ? new Date(formData.startDate) : null,
       expectedCompletion: formData.expectedCompletion ? new Date(formData.expectedCompletion) : null,
@@ -113,30 +112,26 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
           <div className="space-y-4">
             <h3 className="font-medium text-gray-900 flex items-center gap-2">
               <Building2 className="h-4 w-4" />
-              Select Client Company
+              Select Organization
             </h3>
             
             <div className="space-y-2">
-              <Label htmlFor="client">Company Name *</Label>
+              <Label htmlFor="organization">Organization *</Label>
               <Select
                 value={formData.selectedClientId}
                 onValueChange={(value) => handleInputChange('selectedClientId', value)}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select a client company..." />
+                  <SelectValue placeholder="Select an organization..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {clients.map((client: any) => (
-                    <SelectItem key={client.id} value={client.id}>
+                  {organizations.map((org: any) => (
+                    <SelectItem key={org.id} value={org.id}>
                       <div className="flex items-center gap-2">
-                        <span className="font-medium">
-                          {client.companyName || `${client.firstName} ${client.lastName}`}
-                        </span>
-                        {client.organizationId && (
-                          <Badge variant="secondary" className="text-xs">
-                            Organization
-                          </Badge>
-                        )}
+                        <span className="font-medium">{org.name}</span>
+                        <Badge variant="secondary" className="text-xs">
+                          {org.industry}
+                        </Badge>
                       </div>
                     </SelectItem>
                   ))}
@@ -144,27 +139,27 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
               </Select>
             </div>
 
-            {/* Show selected client details */}
-            {selectedClient && (
+            {/* Show selected organization details */}
+            {selectedOrganization && (
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                 <div className="flex items-start gap-3">
                   <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                    <User className="h-4 w-4 text-blue-600" />
+                    <Building2 className="h-4 w-4 text-blue-600" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <h4 className="font-medium text-blue-900">
-                      {selectedClient.firstName} {selectedClient.lastName}
+                      {selectedOrganization.name}
                     </h4>
-                    <p className="text-sm text-blue-700">{selectedClient.email}</p>
-                    {selectedClient.companyName && (
-                      <p className="text-sm text-blue-600">{selectedClient.companyName}</p>
+                    {selectedOrganization.description && (
+                      <p className="text-sm text-blue-700">{selectedOrganization.description}</p>
                     )}
-                    {selectedClient.organizationId && (
-                      <Badge variant="secondary" className="mt-2 text-xs">
-                        <Building2 className="h-3 w-3 mr-1" />
-                        Organization Member
-                      </Badge>
+                    {selectedOrganization.website && (
+                      <p className="text-sm text-blue-600">{selectedOrganization.website}</p>
                     )}
+                    <Badge variant="secondary" className="mt-2 text-xs">
+                      <Building2 className="h-3 w-3 mr-1" />
+                      {selectedOrganization.industry}
+                    </Badge>
                   </div>
                 </div>
               </div>
