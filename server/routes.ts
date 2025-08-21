@@ -1468,25 +1468,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log("Creating project with data:", req.body);
 
-      if (!name || !clientId) {
-        return res.status(400).json({ message: "Project name and client selection are required" });
+      if (!name || !organizationId) {
+        return res.status(400).json({ message: "Project name and organization selection are required" });
       }
 
-      // Verify that the client exists
-      const client = await storage.getUser(clientId);
-      if (!client) {
-        return res.status(400).json({ message: "Selected client not found" });
-      }
-
-      if (client.role !== 'client') {
-        return res.status(400).json({ message: "Selected user is not a client" });
+      // Verify that the organization exists
+      const organization = await storage.getOrganization(organizationId);
+      if (!organization) {
+        return res.status(400).json({ message: "Selected organization not found" });
       }
 
       const projectData = {
         name,
         description: description || null,
-        clientId: client.id,
-        organizationId: organizationId || client.organizationId || null,
+        clientId: clientId || null, // Optional - can be assigned later
+        organizationId: organization.id,
         budget: budget || null,
         startDate: startDate ? new Date(startDate) : null,
         expectedCompletion: expectedCompletion ? new Date(expectedCompletion) : null,
