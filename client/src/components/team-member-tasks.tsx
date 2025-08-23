@@ -175,10 +175,18 @@ export function TeamMemberTasks({ teamMemberId, teamMemberName }: TeamMemberTask
                           )}
                           
                           <div className="flex items-center gap-4 text-xs text-gray-500 mb-3">
-                            {assignment.project && (
-                              <div className="flex items-center gap-1">
-                                <Building2 className="h-3 w-3" />
-                                <span>{assignment.project.name}</span>
+                            {(assignment.project || assignment.organization) && (
+                              <div className="flex items-center gap-2">
+                                {assignment.organization && (
+                                  <span className="flex items-center gap-1">
+                                    <Building2 className="h-3 w-3" />
+                                    {assignment.organization.name}
+                                  </span>
+                                )}
+                                {assignment.project && assignment.organization && <span>•</span>}
+                                {assignment.project && (
+                                  <span>{assignment.project.name}</span>
+                                )}
                               </div>
                             )}
                             {assignment.task.estimatedHours && (
@@ -256,10 +264,18 @@ export function TeamMemberTasks({ teamMemberId, teamMemberName }: TeamMemberTask
                           </div>
                           
                           <div className="flex items-center gap-4 text-xs text-gray-500">
-                            {assignment.project && (
-                              <div className="flex items-center gap-1">
-                                <Building2 className="h-3 w-3" />
-                                <span>{assignment.project.name}</span>
+                            {(assignment.project || assignment.organization) && (
+                              <div className="flex items-center gap-2">
+                                {assignment.organization && (
+                                  <span className="flex items-center gap-1">
+                                    <Building2 className="h-3 w-3" />
+                                    {assignment.organization.name}
+                                  </span>
+                                )}
+                                {assignment.project && assignment.organization && <span>•</span>}
+                                {assignment.project && (
+                                  <span>{assignment.project.name}</span>
+                                )}
                               </div>
                             )}
                             {(assignment.task.dueAt || assignment.task.dueDate) && (
