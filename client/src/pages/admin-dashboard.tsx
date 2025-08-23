@@ -17,7 +17,7 @@ import { apiRequest } from "@/lib/queryClient";
 import CreateProjectModal from "@/components/create-project-modal";
 import EditProjectModal from "@/components/edit-project-modal";
 import CreateTaskModal from "@/components/create-task-modal";
-import { TeamManagementModal } from "@/components/team-management-modal";
+
 import { OrganizationManagementModal } from "@/components/organization-management-modal";
 import { AssignOrganizationModal } from "@/components/assign-organization-modal";
 import { CreateClientModal } from "@/components/create-client-modal";
@@ -39,6 +39,7 @@ import { LiveDiseaseFreeProposal } from "@/components/live-disease-free-proposal
 import { RestoreDeletedItems } from "@/components/restore-deleted-items";
 import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog";
 import { DashboardToggle } from "@/components/dashboard-toggle";
+import { TeamManagementContent } from "@/components/team-management-content";
 import type { Project, Task, Service, User, Organization } from "@shared/schema";
 
 type ProjectWithOrganization = Project & { organization?: Organization };
@@ -56,7 +57,7 @@ export default function AdminDashboard() {
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [showAgencyTasks, setShowAgencyTasks] = useState(false);
   const [selectedProjectForTasks, setSelectedProjectForTasks] = useState<Project | null>(null);
-  const [showTeamManagement, setShowTeamManagement] = useState(false);
+
   const [activeTab, setActiveTab] = useState("organizations");
   const [organizationViewMode, setOrganizationViewMode] = useState<"grid" | "list">("list");
   const [projectViewMode, setProjectViewMode] = useState<"grid" | "list">("list");
@@ -553,11 +554,11 @@ export default function AdminDashboard() {
               </Button>
               <Button
                 variant="outline"
-                onClick={() => setShowTeamManagement(true)}
+                onClick={() => setActiveTab("team")}
                 className="flex items-center gap-2"
               >
                 <Users className="h-4 w-4" />
-                Team Members
+                Team
               </Button>
               <Button
                 variant="outline"
@@ -611,37 +612,7 @@ export default function AdminDashboard() {
           </TabsContent>
 
           <TabsContent value="team" className="space-y-6">
-            <div className="flex justify-between items-center">
-              <div>
-                <h2 className="text-xl font-semibold text-gray-900">Team Management</h2>
-                <p className="text-gray-600">Manage agency team members and invitations</p>
-              </div>
-              <Button
-                onClick={() => setShowTeamManagement(true)}
-                className="flex items-center gap-2"
-              >
-                <UserPlus className="h-4 w-4" />
-                Invite Team Member
-              </Button>
-            </div>
-
-            <Card>
-              <CardContent className="p-8 text-center">
-                <Users className="h-16 w-16 mx-auto mb-4 text-gray-400" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">Team Management</h3>
-                <p className="text-gray-600 mb-4">
-                  Invite agency team members to get admin access to the dashboard. 
-                  Team members can manage all projects, clients, and tasks.
-                </p>
-                <Button
-                  onClick={() => setShowTeamManagement(true)}
-                  className="flex items-center gap-2 mx-auto"
-                >
-                  <UserPlus className="h-4 w-4" />
-                  Open Team Management
-                </Button>
-              </CardContent>
-            </Card>
+            <TeamManagementContent />
           </TabsContent>
 
           <TabsContent value="tasks" className="space-y-6">
@@ -1304,10 +1275,7 @@ export default function AdminDashboard() {
         }}
       />
 
-      <TeamManagementModal
-        isOpen={showTeamManagement}
-        onClose={() => setShowTeamManagement(false)}
-      />
+
 
       <EditOrganizationModal
         organization={editingOrganization}
