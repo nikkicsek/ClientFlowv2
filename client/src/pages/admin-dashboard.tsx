@@ -552,14 +552,7 @@ export default function AdminDashboard() {
                 <CheckSquare className="h-4 w-4" />
                 My Tasks
               </Button>
-              <Button
-                variant="outline"
-                onClick={() => setActiveTab("team")}
-                className="flex items-center gap-2"
-              >
-                <Users className="h-4 w-4" />
-                Team
-              </Button>
+
               <Button
                 variant="outline"
                 onClick={() => setActiveTab("organizations")}
