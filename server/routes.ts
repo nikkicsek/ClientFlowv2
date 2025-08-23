@@ -271,6 +271,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Debug route to test organization data in task assignments
+  app.get('/debug/assignments-with-org/:teamMemberId', async (req, res) => {
+    try {
+      const { teamMemberId } = req.params;
+      const assignments = await storage.getTaskAssignmentsByTeamMember(teamMemberId);
+      
+      res.json({
+        teamMemberId,
+        assignmentCount: assignments.length,
+        assignments: assignments.map(a => ({
+          id: a.id,
+          taskTitle: a.task.title,
+          projectName: a.project?.name || 'No project',
+          organizationName: a.organization?.name || 'No organization',
+          hasOrganization: !!a.organization,
+          hasProject: !!a.project
+        }))
+      });
+    } catch (error) {
+      console.error('Debug assignment error:', error);
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
+  // Direct debug route for Kassie's assignments (bypasses auth)
+  app.get('/debug/kassie-assignments', async (req, res) => {
+    try {
+      // Find Kassie's team member ID
+      const allTeamMembers = await storage.getAllTeamMembers();
+      const kassie = allTeamMembers.find((m: any) => m.name.includes('Kassie'));
+      
+      if (!kassie) {
+        return res.json({ error: 'Kassie not found', allMembers: allTeamMembers.map((m: any) => ({ id: m.id, name: m.name, email: m.email })) });
+      }
+
+      const assignments = await storage.getTaskAssignmentsByTeamMember(kassie.id);
+      
+      res.json({
+        kassieInfo: { id: kassie.id, name: kassie.name, email: kassie.email },
+        assignmentCount: assignments.length,
+        assignments: assignments.map(a => ({
+          id: a.id,
+          taskTitle: a.task.title,
+          projectName: a.project?.name || null,
+          organizationName: a.organization?.name || null,
+          organizationId: a.organization?.id || null,
+          projectId: a.project?.id || null,
+          hasOrganization: !!a.organization,
+          hasProject: !!a.project,
+          fullOrgData: a.organization,
+          fullProjectData: a.project
+        }))
+      });
+    } catch (error) {
+      console.error('Debug Kassie assignment error:', error);
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
   app.post('/debug/create-test-task', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
