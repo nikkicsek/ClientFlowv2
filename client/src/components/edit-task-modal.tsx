@@ -7,10 +7,11 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Calendar, Clock, Link as LinkIcon, Save, Users, Loader2 } from "lucide-react";
+import { Calendar, Clock, Link as LinkIcon, Save, Users, Loader2, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { getUserTimezone, formatDueAt } from "@/utils/timeFormatting";
+import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog";
 
 interface EditTaskModalProps {
   isOpen: boolean;
@@ -22,6 +23,7 @@ interface EditTaskModalProps {
 export function EditTaskModal({ isOpen, onClose, task, taskId }: EditTaskModalProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   const [formData, setFormData] = useState({
     title: "",
@@ -130,6 +132,32 @@ export function EditTaskModal({ isOpen, onClose, task, taskId }: EditTaskModalPr
       toast({
         title: "Update Failed",
         description: "Failed to update task. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteTaskMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("DELETE", `/api/tasks/${currentTask.id}/soft`);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/task-assignments"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      toast({
+        title: "Task Deleted",
+        description: "Task has been moved to deleted items and can be restored.",
+      });
+      setShowDeleteDialog(false);
+      onClose();
+    },
+    onError: (error) => {
+      console.error("Delete task error:", error);
+      toast({
+        title: "Delete Failed", 
+        description: "Failed to delete task. Please try again.",
         variant: "destructive",
       });
     },
@@ -356,25 +384,49 @@ export function EditTaskModal({ isOpen, onClose, task, taskId }: EditTaskModalPr
             </div>
           </div>
 
-          <div className="flex justify-end gap-3">
+          <div className="flex justify-between">
             <Button
               type="button"
-              variant="outline"
-              onClick={onClose}
-              disabled={updateTaskMutation.isPending}
+              variant="destructive"
+              onClick={() => setShowDeleteDialog(true)}
+              disabled={updateTaskMutation.isPending || deleteTaskMutation.isPending}
+              className="flex items-center gap-2"
             >
-              Cancel
+              <Trash2 className="h-4 w-4" />
+              Delete Task
             </Button>
-            <Button
-              type="submit"
-              disabled={updateTaskMutation.isPending}
-              className="bg-blue-600 hover:bg-blue-700"
-            >
-              {updateTaskMutation.isPending ? "Updating..." : "Update Task"}
-            </Button>
+            
+            <div className="flex gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={onClose}
+                disabled={updateTaskMutation.isPending || deleteTaskMutation.isPending}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={updateTaskMutation.isPending || deleteTaskMutation.isPending}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                {updateTaskMutation.isPending ? "Updating..." : "Update Task"}
+              </Button>
+            </div>
           </div>
         </form>
       </DialogContent>
+      
+      <DeleteConfirmationDialog
+        isOpen={showDeleteDialog}
+        onClose={() => setShowDeleteDialog(false)}
+        onConfirm={() => deleteTaskMutation.mutate()}
+        title="Delete Task"
+        description="This task will be moved to deleted items and can be restored later."
+        itemName={currentTask?.title || ""}
+        itemType="task"
+        isLoading={deleteTaskMutation.isPending}
+      />
     </Dialog>
   );
 }
