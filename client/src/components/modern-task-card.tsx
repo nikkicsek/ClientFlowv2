@@ -13,7 +13,8 @@ import {
   AlertCircle,
   Timer,
   ExternalLink,
-  User
+  User,
+  Building2
 } from "lucide-react";
 import { TaskCalendarSync } from "./task-calendar-sync";
 import { useToast } from "@/hooks/use-toast";
@@ -151,6 +152,22 @@ export function ModernTaskCard({ task, assignments = [], showProjectName = false
                   <p className="text-xs text-gray-600 line-clamp-2 leading-relaxed">
                     {task.description}
                   </p>
+                )}
+
+                {/* Project and Organization Context */}
+                {(task.project || task.organization) && (
+                  <div className="flex items-center gap-2 text-xs text-gray-500 mt-1">
+                    {task.organization && (
+                      <span className="flex items-center gap-1">
+                        <Building2 className="h-3 w-3" />
+                        {task.organization.name}
+                      </span>
+                    )}
+                    {task.project && task.organization && <span>•</span>}
+                    {task.project && (
+                      <span>{task.project.name}</span>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
