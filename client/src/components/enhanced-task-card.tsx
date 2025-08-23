@@ -47,7 +47,7 @@ export function EnhancedTaskCard({ task, assignments = [], showProjectName = fal
 
   const updateTaskMutation = useMutation({
     mutationFn: async (updates: { status?: string }) => {
-      const response = await apiRequest("PUT", `/api/admin/tasks/${task.id}`, updates);
+      const response = await apiRequest("PUT", `/api/tasks/${task.id}`, updates);
       return response.json();
     },
     onSuccess: () => {
