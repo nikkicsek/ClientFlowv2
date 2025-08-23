@@ -5,7 +5,7 @@ AgencyPro is a customizable client-facing project management dashboard web appli
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
-UI preferences: Clean, functional interfaces without promotional or instructional content. Direct organization lists instead of benefits information. Streamlined navigation - eliminate redundant buttons and modal overlays in favor of direct tab access.
+UI preferences: Clean, functional interfaces without promotional or instructional content. Direct organization lists instead of benefits information. Streamlined navigation - eliminate redundant buttons and modal overlays in favor of direct tab access. Navigation order should follow logical business workflow: Organizations → Clients → Proposals → Services → Tasks → Team → Admin functions.
 
 ## System Architecture
 AgencyPro is a full-stack TypeScript application featuring a React frontend and an Express backend.
