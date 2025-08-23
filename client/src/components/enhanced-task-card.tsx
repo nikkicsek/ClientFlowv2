@@ -13,7 +13,8 @@ import {
   PlayCircle,
   PauseCircle,
   ExternalLink,
-  Edit3
+  Edit3,
+  Building2
 } from "lucide-react";
 import { TaskCalendarSync } from "./task-calendar-sync";
 import { useToast } from "@/hooks/use-toast";
@@ -121,6 +122,22 @@ export function EnhancedTaskCard({ task, assignments = [], showProjectName = fal
               
               {task.description && (
                 <p className="text-sm text-gray-600 line-clamp-2">{task.description}</p>
+              )}
+
+              {/* Project and Organization Context */}
+              {(task.project || task.organization) && (
+                <div className="flex items-center gap-2 text-xs text-gray-500 mt-1">
+                  {task.organization && (
+                    <span className="flex items-center gap-1">
+                      <Building2 className="h-3 w-3" />
+                      {task.organization.name}
+                    </span>
+                  )}
+                  {task.project && task.organization && <span>•</span>}
+                  {task.project && (
+                    <span>{task.project.name}</span>
+                  )}
+                </div>
               )}
             </div>
             
