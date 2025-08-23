@@ -26,11 +26,11 @@ export function TeamMemberTasks({ teamMemberId, teamMemberName }: TeamMemberTask
     queryFn: async () => {
       const response = await apiRequest("GET", `/api/team-members/${teamMemberId}/assignments`);
       const data = await response.json();
-      console.log('TeamMemberTasks API response:', data);
-      console.log('First assignment data:', data[0]);
+      console.log('===== MY TASKS API RESPONSE =====', data);
       if (data[0]) {
-        console.log('Organization data:', data[0].organization);
-        console.log('Project data:', data[0].project);
+        console.log('FIRST TASK:', data[0].task?.title);
+        console.log('ORG DATA:', data[0].organization?.name || 'NO ORG');
+        console.log('PROJECT DATA:', data[0].project?.name || 'NO PROJECT');
       }
       return data;
     }
