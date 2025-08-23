@@ -25,7 +25,14 @@ export function TeamMemberTasks({ teamMemberId, teamMemberName }: TeamMemberTask
     queryKey: ["/api/team-members", teamMemberId, "assignments"],
     queryFn: async () => {
       const response = await apiRequest("GET", `/api/team-members/${teamMemberId}/assignments`);
-      return response.json();
+      const data = await response.json();
+      console.log('TeamMemberTasks API response:', data);
+      console.log('First assignment data:', data[0]);
+      if (data[0]) {
+        console.log('Organization data:', data[0].organization);
+        console.log('Project data:', data[0].project);
+      }
+      return data;
     }
   });
 
