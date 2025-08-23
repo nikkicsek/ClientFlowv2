@@ -207,6 +207,25 @@ export function EditTaskModal({ isOpen, onClose, task, taskId }: EditTaskModalPr
           </DialogTitle>
         </DialogHeader>
 
+        {/* Project and Organization Context */}
+        {(currentTask.project || currentTask.organizationId) && (
+          <div className="border rounded-lg p-3 bg-gray-50 dark:bg-gray-800">
+            <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Task Context</h3>
+            {currentTask.project && (
+              <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                <span className="font-medium">Project:</span>
+                <span>{currentTask.project.name}</span>
+              </div>
+            )}
+            {currentTask.project?.organization && (
+              <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 mt-1">
+                <span className="font-medium">Organization:</span>
+                <span>{currentTask.project.organization.name}</span>
+              </div>
+            )}
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="space-y-2">
             <Label htmlFor="title">Task Title</Label>

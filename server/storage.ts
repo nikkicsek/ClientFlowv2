@@ -378,16 +378,18 @@ export class DatabaseStorage implements IStorage {
         task: tasks,
         service: services,
         project: projects,
+        organization: organizations,
       })
       .from(tasks)
       .leftJoin(services, eq(tasks.serviceId, services.id))
       .leftJoin(projects, eq(tasks.projectId, projects.id))
+      .leftJoin(organizations, eq(projects.organizationId, organizations.id))
       .where(isNull(tasks.deletedAt))
       .orderBy(desc(tasks.createdAt));
 
     // Get assignments for all tasks
     const tasksWithAssignments = await Promise.all(
-      result.map(async ({ task, service, project }) => {
+      result.map(async ({ task, service, project, organization }) => {
         const assignments = await this.getTaskAssignments(task.id);
         
         // If there are assignments, use the first one's team member as assignedTo
@@ -396,11 +398,17 @@ export class DatabaseStorage implements IStorage {
           assignedTo = assignments[0].teamMember?.name || assignments[0].teamMember?.email;
         }
         
+        // Include organization information as part of project if available
+        const projectWithOrg = project ? {
+          ...project,
+          organization: organization || undefined
+        } : undefined;
+        
         return {
           ...task,
           assignedTo, // Update assignedTo with assignment data if needed
           service: service || undefined,
-          project: project || undefined,
+          project: projectWithOrg,
           assignments,
         };
       })
