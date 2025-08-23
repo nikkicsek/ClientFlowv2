@@ -1203,7 +1203,7 @@ export function registerDebugRoutes(app: Express) {
         dueAt: dueAtResult?.due_at || null,
         status: 'in_progress' as const,
         priority: 'medium' as const,
-        taskScope: 'project' as const,
+
         projectId: null,
         organizationId: null,
         serviceId: null

@@ -1941,107 +1941,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Organization tasks routes
-  app.get('/api/organizations/:organizationId/tasks', isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.claims.sub;
-      const user = await storage.getUser(userId);
-      
-      if (user?.role !== 'admin') {
-        return res.status(403).json({ message: "Only admins can view organization tasks" });
-      }
-
-      const tasks = await storage.getOrganizationTasks(req.params.organizationId);
-      res.json(tasks);
-    } catch (error) {
-      console.error("Error fetching organization tasks:", error);
-      res.status(500).json({ message: "Failed to fetch organization tasks" });
-    }
-  });
-
-  app.post('/api/organizations/:organizationId/tasks', isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.claims.sub;
-      const user = await storage.getUser(userId);
-      
-      if (user?.role !== 'admin') {
-        return res.status(403).json({ message: "Only admins can create organization tasks" });
-      }
-
-      const { selectedTeamMembers = [], ...bodyData } = req.body;
-      
-      // Compute due_at using comprehensive time computation per specification  
-      const userTz = bodyData.timezone || process.env.APP_TIMEZONE || "America/Vancouver";
-      const timeResult = computeDueAt(bodyData.dueDate, bodyData.dueTime, userTz);
-      
-      const taskData = insertTaskSchema.parse({
-        ...bodyData,
-        organizationId: req.params.organizationId,
-        taskScope: 'organization',
-        projectId: null,
-        serviceId: null, // Organization tasks don't require service
-      });
-      
-      // Prepare final task data with enhanced time handling
-      const finalTaskData = {
-        ...taskData,
-        dueAt: timeResult.due_at ? new Date(timeResult.due_at) : null,
-        dueDate: timeResult.due_date_db ? new Date(timeResult.due_date_db) : null,
-        dueTime: timeResult.due_time_db || null, // Store 24-hour format in DB
-      };
-      
-      // Remove timezone from the final data (not a database field)
-      delete (finalTaskData as any).timezone;
-
-      // Start transaction for task creation and assignments
-      let task: any;
-      let assignments: any[] = [];
-      
-      try {
-        // Create the organization task
-        task = await storage.createOrganizationTask(finalTaskData);
-        console.log('Created organization task:', { taskId: task.id, title: task.title, dueDate: task.dueDate, dueTime: task.dueTime });
-        
-        // Create task assignments for each selected team member
-        for (const teamMemberId of selectedTeamMembers) {
-          const assignment = await storage.createTaskAssignment({
-            taskId: task.id,
-            teamMemberId: teamMemberId,
-            assignedBy: userId,
-          });
-          assignments.push(assignment);
-          console.log('Created task assignment:', { assignmentId: assignment.id, taskId: task.id, teamMemberId });
-        }
-        
-        // Fire assignment creation hooks for each assignment (idempotent)
-        for (const assignment of assignments) {
-          try {
-            await onAssignmentCreated(assignment.id);
-          } catch (calendarError) {
-            console.error('Calendar hook error for assignment:', assignment.id, calendarError);
-            // Don't fail task creation if calendar sync fails
-          }
-        }
-        
-        // Sync all calendar events for the task using new unified system
-        try {
-          await syncAllCalendarEventsForTask(task.id);
-          console.log(`Synced calendar events for organization task ${task.id}`);
-        } catch (calendarError) {
-          console.error('Calendar sync error for task:', task.id, calendarError);
-          // Don't fail task creation if calendar sync fails
-        }
-
-        res.status(201).json({ task, assignments });
-      } catch (transactionError) {
-        console.error('Organization task creation transaction failed:', transactionError);
-        throw transactionError;
-      }
-    } catch (error) {
-      console.error("Error creating organization task:", error);
-      res.status(500).json({ message: "Failed to create organization task" });
-    }
-  });
+  // Organization task routes removed - all tasks are now project-based
 
   // Organization management routes (admin only)
   app.get('/api/admin/organizations', isAuthenticated, async (req: any, res) => {
@@ -3270,47 +3170,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Compute due_at using the unified system
       const timeResult = computeDueAt(today, dueTime, timezone);
       
-      const debugTaskData = {
-        title: `Debug Task ${dueTime}`,
-        description: `Test task created at ${new Date().toISOString()}`,
-        status: 'in_progress',
-        priority: 'medium',
-        taskScope: 'organization', // For testing without requiring project
-        dueDate: timeResult.due_date_db ? new Date(timeResult.due_date_db) : null,
-        dueTime: timeResult.due_time_db,
-        dueAt: timeResult.due_at ? new Date(timeResult.due_at) : null,
-      };
-      
-      // Create the task
-      const task = await storage.createOrganizationTask(debugTaskData);
-      
-      // Try to sync calendar (will show if calendar event ID is created)
-      let calendarEventId = null;
-      try {
-        await syncAllCalendarEventsForTask(task.id);
-        
-        // Check if calendar event was created
-        const { pool } = await import('./db');
-        const calendarCheck = await pool.query(
-          'SELECT calendar_event_id FROM tasks WHERE id = $1',
-          [task.id]
-        );
-        calendarEventId = calendarCheck.rows[0]?.calendar_event_id || null;
-      } catch (calendarError) {
-        console.error('Calendar sync error:', calendarError);
-      }
-      
-      res.json({
-        message: `Created debug task with time ${dueTime}`,
-        task: {
-          id: task.id,
-          title: task.title,
-          computed_due_at: timeResult.due_at,
-          stored_due_time: timeResult.due_time_db,
-          calendar_event_id: calendarEventId,
-          timezone_used: timezone
-        },
-        time_computation: timeResult
+      // Debug route disabled - organization tasks removed
+      res.status(400).json({ 
+        error: "Debug task creation disabled - organization tasks have been eliminated",
+        message: "Use project-based task creation instead"
       });
     } catch (error) {
       res.status(500).json({ error: error.message });
