@@ -347,8 +347,7 @@ export class DatabaseStorage implements IStorage {
   // Task operations
   async getTasksByProject(projectId: string): Promise<Task[]> {
     return db.select().from(tasks).where(and(
-      eq(tasks.projectId, projectId), 
-      or(eq(tasks.taskScope, 'project'), isNull(tasks.taskScope)), // Include both explicit project tasks and legacy tasks
+      eq(tasks.projectId, projectId),
       isNull(tasks.deletedAt)
     )).orderBy(desc(tasks.createdAt));
   }
@@ -362,8 +361,7 @@ export class DatabaseStorage implements IStorage {
       .from(tasks)
       .leftJoin(services, eq(tasks.serviceId, services.id))
       .where(and(
-        eq(tasks.projectId, projectId), 
-        or(eq(tasks.taskScope, 'project'), isNull(tasks.taskScope)), // Include both explicit project tasks and legacy tasks
+        eq(tasks.projectId, projectId),
         isNull(tasks.deletedAt)
       ))
       .orderBy(desc(tasks.createdAt));
@@ -437,7 +435,7 @@ export class DatabaseStorage implements IStorage {
         organizationId: tasks.organizationId,
         serviceId: tasks.serviceId,
         assignedTo: tasks.assignedTo,
-        taskScope: tasks.taskScope,
+
         googleDriveLink: tasks.googleDriveLink,
         googleCalendarEventId: tasks.googleCalendarEventId,
         createdAt: tasks.createdAt,
@@ -463,7 +461,7 @@ export class DatabaseStorage implements IStorage {
     // Handle input format - convert string fields to proper Date objects for database
     const finalData: any = {
       ...task,
-      taskScope: task.taskScope || 'project', // Default to project scope if not specified
+
     };
     
     // Convert ISO string timestamps to Date objects for database
@@ -498,30 +496,7 @@ export class DatabaseStorage implements IStorage {
     return newTask;
   }
 
-  async createOrganizationTask(task: InsertTask & { dueAt?: string }): Promise<Task> {
-    // Handle input format - trust the route computation for time fields
-    const { dueAt, ...restData } = task as any;
-    const finalData = {
-      ...restData,
-      taskScope: 'organization',
-      projectId: null, // Organization tasks don't belong to projects
-    };
-    
-    const [newTask] = await db.insert(tasks).values(finalData).returning();
-    return newTask;
-  }
-
-  async getOrganizationTasks(organizationId: string): Promise<Task[]> {
-    return await db
-      .select()
-      .from(tasks)
-      .where(and(
-        eq(tasks.organizationId, organizationId),
-        eq(tasks.taskScope, 'organization'),
-        isNull(tasks.deletedAt)
-      ))
-      .orderBy(desc(tasks.createdAt));
-  }
+  // Organization task methods removed - all tasks are now project-based
 
   async updateTask(id: string, updates: Partial<InsertTask> & { dueAt?: string | Date }): Promise<Task> {
     // Normalize dueAt to due_date + due_time and compute UTC due_at
