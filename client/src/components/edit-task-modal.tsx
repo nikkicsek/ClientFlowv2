@@ -64,11 +64,16 @@ export function EditTaskModal({ isOpen, onClose, task, taskId }: EditTaskModalPr
       
       // Prioritize due_at field over legacy dueDate/dueTime
       if (currentTask.dueAt) {
-        // Use due_at (unified UTC timestamp) - convert to local timezone for form
+        // Use due_at (unified UTC timestamp) - convert back to Vancouver timezone for editing
         const dueAtDate = new Date(currentTask.dueAt);
         if (!isNaN(dueAtDate.getTime())) {
-          dateValue = dueAtDate.toISOString().split('T')[0];
-          timeValue = dueAtDate.toTimeString().slice(0, 5); // Local time for editing
+          // Simple conversion: Vancouver is UTC-8 (PDT) or UTC-7 (PST)
+          // For now, use UTC-7 offset (PDT - Pacific Daylight Time)
+          const vancouverOffset = -7 * 60; // minutes
+          const vancouverTime = new Date(dueAtDate.getTime() + (vancouverOffset * 60 * 1000));
+          
+          dateValue = vancouverTime.toISOString().split('T')[0];
+          timeValue = vancouverTime.toISOString().split('T')[1].slice(0, 5);
         }
       } else if (currentTask.dueDate) {
         // Fallback to legacy dueDate/dueTime fields
