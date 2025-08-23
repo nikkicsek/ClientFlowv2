@@ -1219,6 +1219,7 @@ export default function AdminDashboard() {
         isOpen={showCreateProject}
         onClose={() => setShowCreateProject(false)}
         onSuccess={handleProjectCreated}
+        preSelectedOrganizationId={selectedOrgForProjects}
       />
 
       <CreateTaskModal

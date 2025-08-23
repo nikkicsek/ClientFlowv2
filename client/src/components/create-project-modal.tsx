@@ -16,9 +16,10 @@ interface CreateProjectModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  preSelectedOrganizationId?: string | null;
 }
 
-export default function CreateProjectModal({ isOpen, onClose, onSuccess }: CreateProjectModalProps) {
+export default function CreateProjectModal({ isOpen, onClose, onSuccess, preSelectedOrganizationId }: CreateProjectModalProps) {
   const { toast } = useToast();
   const [formData, setFormData] = useState({
     name: "",
@@ -35,6 +36,16 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
     enabled: isOpen,
   });
 
+  // Auto-select organization if preSelectedOrganizationId is provided
+  useEffect(() => {
+    if (preSelectedOrganizationId && organizations.length > 0) {
+      setFormData(prev => ({
+        ...prev,
+        selectedClientId: preSelectedOrganizationId
+      }));
+    }
+  }, [preSelectedOrganizationId, organizations]);
+
   // Get selected organization details
   const selectedOrganization = organizations.find((org: any) => org.id === formData.selectedClientId);
 
@@ -48,7 +59,7 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
       setFormData({
         name: "",
         description: "",
-        selectedClientId: "",
+        selectedClientId: preSelectedOrganizationId || "",
         budget: "",
         startDate: "",
         expectedCompletion: "",
@@ -112,32 +123,41 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
           <div className="space-y-4">
             <h3 className="font-medium text-gray-900 flex items-center gap-2">
               <Building2 className="h-4 w-4" />
-              Select Organization
+              {preSelectedOrganizationId ? "Organization" : "Select Organization"}
             </h3>
             
-            <div className="space-y-2">
-              <Label htmlFor="organization">Organization *</Label>
-              <Select
-                value={formData.selectedClientId}
-                onValueChange={(value) => handleInputChange('selectedClientId', value)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select an organization..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {organizations.map((org: any) => (
-                    <SelectItem key={org.id} value={org.id}>
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium">{org.name}</span>
-                        <Badge variant="secondary" className="text-xs">
-                          {org.industry}
-                        </Badge>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {preSelectedOrganizationId ? (
+              <div className="space-y-2">
+                <Label>Organization *</Label>
+                <div className="text-sm text-gray-600 mb-2">
+                  Creating project for: <strong>{selectedOrganization?.name || "Loading..."}</strong>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Label htmlFor="organization">Organization *</Label>
+                <Select
+                  value={formData.selectedClientId}
+                  onValueChange={(value) => handleInputChange('selectedClientId', value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select an organization..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {organizations.map((org: any) => (
+                      <SelectItem key={org.id} value={org.id}>
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{org.name}</span>
+                          <Badge variant="secondary" className="text-xs">
+                            {org.industry}
+                          </Badge>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             {/* Show selected organization details */}
             {selectedOrganization && (
