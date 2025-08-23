@@ -667,7 +667,7 @@ export default function AdminDashboard() {
                   <div key={i} className="h-24 bg-gray-200 rounded"></div>
                 ))}
               </div>
-            ) : !allTasks || allTasks.length === 0 ? (
+            ) : !Array.isArray(allTasks) || allTasks.length === 0 ? (
               <Card>
                 <CardContent className="p-8 text-center">
                   <Settings className="h-16 w-16 mx-auto mb-4 text-gray-400" />
@@ -679,6 +679,7 @@ export default function AdminDashboard() {
               <div className="space-y-6">
                 {/* Overdue Tasks Section */}
                 {(() => {
+                  if (!Array.isArray(allTasks)) return null;
                   const overdueTasks = allTasks.filter((task: any) => 
                     task.dueDate && 
                     new Date(task.dueDate) < new Date() && 
