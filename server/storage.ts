@@ -98,7 +98,7 @@ export interface IStorage {
   getTasksByProject(projectId: string): Promise<Task[]>;
   getProjectTasks(projectId: string): Promise<Task[]>; // Alias for getTasksByProject for calendar integration
   getTasksByProjectWithDetails(projectId: string): Promise<(Task & { service?: Service })[]>;
-  getAllTasksWithDetails(): Promise<(Task & { service?: Service; project?: Project })[]>;
+  getAllTasksWithDetails(): Promise<(Task & { service?: Service; project?: Project; assignments?: any[] })[]>;
   getTasksQuery(filters: { title?: string; createdAfter?: Date; createdBefore?: Date; assignedToTeamMember?: string; }): Promise<Task[]>;
   createTask(task: InsertTask): Promise<Task>;
   updateTask(id: string, updates: Partial<InsertTask>): Promise<Task>;
@@ -372,7 +372,7 @@ export class DatabaseStorage implements IStorage {
     }));
   }
 
-  async getAllTasksWithDetails(): Promise<(Task & { service?: Service; project?: Project })[]> {
+  async getAllTasksWithDetails(): Promise<(Task & { service?: Service; project?: Project; assignments?: any[] })[]> {
     const result = await db
       .select({
         task: tasks,
@@ -385,11 +385,28 @@ export class DatabaseStorage implements IStorage {
       .where(isNull(tasks.deletedAt))
       .orderBy(desc(tasks.createdAt));
 
-    return result.map(({ task, service, project }) => ({
-      ...task,
-      service: service || undefined,
-      project: project || undefined,
-    }));
+    // Get assignments for all tasks
+    const tasksWithAssignments = await Promise.all(
+      result.map(async ({ task, service, project }) => {
+        const assignments = await this.getTaskAssignments(task.id);
+        
+        // If there are assignments, use the first one's team member as assignedTo
+        let assignedTo = task.assignedTo;
+        if (assignments.length > 0 && !assignedTo) {
+          assignedTo = assignments[0].teamMember?.name || assignments[0].teamMember?.email;
+        }
+        
+        return {
+          ...task,
+          assignedTo, // Update assignedTo with assignment data if needed
+          service: service || undefined,
+          project: project || undefined,
+          assignments,
+        };
+      })
+    );
+
+    return tasksWithAssignments;
   }
 
   async getTask(id: string): Promise<Task | undefined> {
