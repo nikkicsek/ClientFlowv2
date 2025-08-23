@@ -98,7 +98,7 @@ export interface IStorage {
   getTasksByProject(projectId: string): Promise<Task[]>;
   getProjectTasks(projectId: string): Promise<Task[]>; // Alias for getTasksByProject for calendar integration
   getTasksByProjectWithDetails(projectId: string): Promise<(Task & { service?: Service })[]>;
-  getAllTasksWithDetails(): Promise<(Task & { service?: Service; project?: Project; assignments?: any[] })[]>;
+  getAllTasksWithDetails(): Promise<(Task & { service?: Service; project?: Project; organization?: Organization; assignments?: any[] })[]>;
   getTasksQuery(filters: { title?: string; createdAfter?: Date; createdBefore?: Date; assignedToTeamMember?: string; }): Promise<Task[]>;
   createTask(task: InsertTask): Promise<Task>;
   updateTask(id: string, updates: Partial<InsertTask>): Promise<Task>;
@@ -409,6 +409,7 @@ export class DatabaseStorage implements IStorage {
           assignedTo, // Update assignedTo with assignment data if needed
           service: service || undefined,
           project: projectWithOrg,
+          organization: organization || undefined, // Add organization directly to task
           assignments,
         };
       })
