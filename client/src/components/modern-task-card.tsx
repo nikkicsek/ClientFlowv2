@@ -142,7 +142,8 @@ export function ModernTaskCard({ task, assignments = [], showProjectName = false
                   {task.title}
                 </h3>
                 
-                {showProjectName && task.project?.name && (
+                {/* Only show simple project name if no organization data available */}
+                {showProjectName && task.project?.name && !task.organization && (
                   <p className="text-xs text-gray-500 mb-1">
                     {task.project.name}
                   </p>
@@ -154,7 +155,7 @@ export function ModernTaskCard({ task, assignments = [], showProjectName = false
                   </p>
                 )}
 
-                {/* Project and Organization Context */}
+                {/* Project and Organization Context - only show when we have organization or project data */}
                 {(task.project || task.organization) && (
                   <div className="flex items-center gap-2 text-xs text-gray-500 mt-1">
                     {task.organization && (
