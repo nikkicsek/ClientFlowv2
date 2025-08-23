@@ -992,7 +992,7 @@ export default function AdminDashboard() {
                               setSelectedOrgForProjects(org.id);
                               // Navigate to organization projects;
                             }}
-                            title={`View Projects (${projects?.filter(p => p.organizationId === org.id).length || 0})`}
+                            title={`View Projects (${Array.isArray(projects) ? projects.filter(p => p.organizationId === org.id).length : 0})`}
                           >
                             <FolderOpen className="h-4 w-4" />
                           </Button>
@@ -1054,7 +1054,7 @@ export default function AdminDashboard() {
                           Created: {new Date(org.createdAt).toLocaleDateString()}
                         </div>
                         <div className="text-xs text-blue-600">
-                          {projects?.filter(p => p.organizationId === org.id).length || 0} projects
+                          {Array.isArray(projects) ? projects.filter(p => p.organizationId === org.id).length : 0} projects
                         </div>
                       </div>
                     </CardContent>
@@ -1106,7 +1106,7 @@ export default function AdminDashboard() {
                               setSelectedOrgForProjects(org.id);
                               // Navigate to organization projects;
                             }}
-                            title={`View Projects (${projects?.filter(p => p.organizationId === org.id).length || 0})`}
+                            title={`View Projects (${Array.isArray(projects) ? projects.filter(p => p.organizationId === org.id).length : 0})`}
                           >
                             <FolderOpen className="h-4 w-4" />
                           </Button>
