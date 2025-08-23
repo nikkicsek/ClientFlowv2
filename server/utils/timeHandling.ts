@@ -56,14 +56,13 @@ export function computeDueAt(dueDate: string, dueTime: string, timezone?: string
     // Fixed timezone - America/Vancouver (no double offset)
     const TZ = 'America/Vancouver';
     
-    // dueDateISO like '2025-08-18', dueTimeHHmm like '10:30'  
-    const local = DateTime.fromISO(`${dueDate}T${dueTime}`, { zone: TZ })
-                     .set({ second: 0, millisecond: 0 });
+    // Use proper time parsing function instead of raw ISO parsing
+    const local = parseLocal(dueDate, dueTime, TZ);
     
     const result = {
       due_at: local.toUTC().toISO({ suppressMilliseconds: true }),  // UTC for scheduling and calendar
-      due_time_db: DateTime.fromISO(`${dueDate}T${dueTime}`, { zone: TZ }).toFormat('HH:mm'), // keep canonical
-      due_date_db: local.toISODate()             // Normalized date (display helper)
+      due_time_db: local.toFormat('HH:mm'), // Keep canonical time format
+      due_date_db: local.toISODate()        // Normalized date (display helper)
     };
     
     console.log('computeDueAt (fixed TZ):', { dueDate, dueTime, TZ, result });

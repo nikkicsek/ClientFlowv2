@@ -121,9 +121,21 @@ export function EditTaskModal({ isOpen, onClose, task, taskId }: EditTaskModalPr
       queryClient.invalidateQueries({ queryKey: ["/api/admin/task-assignments"] });
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
       queryClient.invalidateQueries({ queryKey: ["/api/tasks"] }); // Invalidate individual task queries
+      queryClient.invalidateQueries({ queryKey: ["/api/team-members"] }); // Invalidate team member assignments
       toast({
         title: "Task Updated",
         description: "Task has been updated successfully.",
+      });
+      // Reset the form data state
+      setFormData({
+        title: "",
+        description: "",
+        status: "in_progress",
+        priority: "medium",
+        dueDate: "",
+        dueTime: "",
+        googleDriveLink: "",
+        assigneeTeamMemberIds: [],
       });
       onClose();
     },
