@@ -136,7 +136,7 @@ export interface IStorage {
 
   // Task assignment operations
   getTaskAssignments(taskId: string): Promise<(TaskAssignment & { teamMember: TeamMember })[]>;
-  getTaskAssignmentsByTeamMember(teamMemberId: string): Promise<(TaskAssignment & { task: Task; project?: Project })[]>;
+  getTaskAssignmentsByTeamMember(teamMemberId: string): Promise<(TaskAssignment & { task: Task; project?: Project; organization?: Organization })[]>;
   getTaskAssignmentById(assignmentId: string): Promise<TaskAssignment | undefined>;
   getAllTaskAssignments(): Promise<(TaskAssignment & { teamMember: TeamMember; task: Task })[]>;
   createTaskAssignment(assignment: InsertTaskAssignment): Promise<TaskAssignment>;
@@ -932,16 +932,18 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
-  async getTaskAssignmentsByTeamMember(teamMemberId: string): Promise<(TaskAssignment & { task: Task; project?: Project })[]> {
+  async getTaskAssignmentsByTeamMember(teamMemberId: string): Promise<(TaskAssignment & { task: Task; project?: Project; organization?: Organization })[]> {
     const results = await db
       .select({
         assignment: taskAssignments,
         task: tasks,
         project: projects,
+        organization: organizations,
       })
       .from(taskAssignments)
       .innerJoin(tasks, eq(taskAssignments.taskId, tasks.id))
       .leftJoin(projects, eq(tasks.projectId, projects.id))
+      .leftJoin(organizations, eq(projects.organizationId, organizations.id))
       .where(and(
         eq(taskAssignments.teamMemberId, teamMemberId),
         isNull(tasks.deletedAt)
@@ -953,11 +955,12 @@ export class DatabaseStorage implements IStorage {
       ...row.assignment,
       task: row.task,
       project: row.project || undefined,
+      organization: row.organization || undefined,
     }));
   }
 
   // New method to get task assignments by userId (for My Tasks functionality) - DIRECT QUERY
-  async getTaskAssignmentsByUserId(userId: string): Promise<(TaskAssignment & { task: Task; project?: Project })[]> {
+  async getTaskAssignmentsByUserId(userId: string): Promise<(TaskAssignment & { task: Task; project?: Project; organization?: Organization })[]> {
     try {
       // First get the user to find their email
       const user = await this.getUser(userId);
@@ -980,10 +983,12 @@ export class DatabaseStorage implements IStorage {
           assignment: taskAssignments,
           task: tasks,
           project: projects,
+          organization: organizations,
         })
         .from(taskAssignments)
         .innerJoin(tasks, eq(taskAssignments.taskId, tasks.id))
         .leftJoin(projects, eq(tasks.projectId, projects.id))
+        .leftJoin(organizations, eq(projects.organizationId, organizations.id))
         .where(and(
           eq(taskAssignments.teamMemberId, teamMemberId),
           isNull(tasks.deletedAt)
@@ -994,6 +999,7 @@ export class DatabaseStorage implements IStorage {
         ...row.assignment,
         task: row.task,
         project: row.project || undefined,
+        organization: row.organization || undefined,
       }));
     } catch (error) {
       console.error('Error in getTaskAssignmentsByUserId:', error);
