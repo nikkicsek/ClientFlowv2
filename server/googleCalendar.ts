@@ -170,16 +170,17 @@ class GoogleCalendarService {
       const { DateTime } = await import('luxon');
       const TZ = 'America/Vancouver';
       
-      // Handle different dueDate formats (string ISO, Date object, or null)
+      // Use the properly computed due_at timestamp (UTC) from database
       let startLocal: DateTime;
-      if (!task.dueDate) {
-        console.warn('[CAL CREATE] No dueDate provided, using current time');
-        startLocal = DateTime.now().setZone(TZ);
-      } else if (typeof task.dueDate === 'string') {
-        startLocal = DateTime.fromISO(task.dueDate, { zone: 'utc' }).setZone(TZ);
-      } else if (task.dueDate instanceof Date) {
-        startLocal = DateTime.fromJSDate(task.dueDate, { zone: 'utc' }).setZone(TZ);
+      if (task.due_at) {
+        // Convert the UTC due_at to Vancouver time for display
+        startLocal = DateTime.fromISO(task.due_at, { zone: 'utc' }).setZone(TZ);
+      } else if (task.dueDate) {
+        console.warn('[CAL CREATE] No due_at found, falling back to dueDate');
+        // Fallback: treat dueDate as Vancouver date
+        startLocal = DateTime.fromISO(task.dueDate, { zone: TZ });
       } else {
+        console.warn('[CAL CREATE] No dueDate provided, using current time');
         startLocal = DateTime.now().setZone(TZ);
       }
       
@@ -191,6 +192,7 @@ class GoogleCalendarService {
 
       console.info('[CAL CREATE]', { 
         taskId: task.title, 
+        originalDueAt: task.due_at,
         originalDueDate: task.dueDate,
         startDateTime,
         endDateTime,
@@ -253,15 +255,15 @@ class GoogleCalendarService {
       const { DateTime } = await import('luxon');
       const TZ = 'America/Vancouver';
       
-      // Handle different dueDate formats (string ISO, Date object, or null)
+      // Use the properly computed due_at timestamp (UTC) from database
       let startLocal: DateTime;
-      if (!task.dueDate) {
-        console.warn('[CAL UPDATE] No dueDate provided, using current time');
-        startLocal = DateTime.now().setZone(TZ);
-      } else if (typeof task.dueDate === 'string') {
-        startLocal = DateTime.fromISO(task.dueDate, { zone: 'utc' }).setZone(TZ);
-      } else if (task.dueDate instanceof Date) {
-        startLocal = DateTime.fromJSDate(task.dueDate, { zone: 'utc' }).setZone(TZ);
+      if (task.due_at) {
+        // Convert the UTC due_at to Vancouver time for display
+        startLocal = DateTime.fromISO(task.due_at, { zone: 'utc' }).setZone(TZ);
+      } else if (task.dueDate) {
+        console.warn('[CAL UPDATE] No due_at found, falling back to dueDate');
+        // Fallback: treat dueDate as Vancouver date
+        startLocal = DateTime.fromISO(task.dueDate, { zone: TZ });
       } else {
         startLocal = DateTime.now().setZone(TZ);
       }
