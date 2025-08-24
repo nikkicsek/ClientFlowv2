@@ -768,7 +768,7 @@ export default function AdminDashboard() {
               <CreateClientModal />
             </div>
 
-            {!clients || clients.length === 0 ? (
+            {!clients || !Array.isArray(clients) || clients.length === 0 ? (
               <Card>
                 <CardContent className="p-8 text-center">
                   <Users className="h-16 w-16 mx-auto mb-4 text-gray-400" />
@@ -780,7 +780,7 @@ export default function AdminDashboard() {
               <Card>
                 <CardContent className="p-6">
                   <div className="space-y-4">
-                    {clients.map((client: any) => (
+                    {(clients || []).map((client: any) => (
                       <div key={client.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50">
                         <div className="flex items-center gap-4">
                           <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
