@@ -170,11 +170,18 @@ class GoogleCalendarService {
       const { DateTime } = await import('luxon');
       const TZ = 'America/Vancouver';
       
+      // Debug: Check what fields are available in the task object
+      console.log('[CAL CREATE] Task object fields:', Object.keys(task));
+      console.log('[CAL CREATE] Task due_at/dueAt:', { due_at: task.due_at, dueAt: task.dueAt });
+      
       // Use the properly computed due_at timestamp (UTC) from database
       let startLocal: DateTime;
-      if (task.due_at) {
+      if (task.due_at || task.dueAt) {
+        // Try both field names (database vs JS camelCase)
+        const dueAtValue = task.due_at || task.dueAt;
         // Convert the UTC due_at to Vancouver time for display
-        startLocal = DateTime.fromISO(task.due_at, { zone: 'utc' }).setZone(TZ);
+        startLocal = DateTime.fromISO(dueAtValue, { zone: 'utc' }).setZone(TZ);
+        console.log('[CAL CREATE] Using due_at:', { dueAtValue, startLocal: startLocal.toString() });
       } else if (task.dueDate) {
         console.warn('[CAL CREATE] No due_at found, falling back to dueDate');
         // Fallback: treat dueDate as Vancouver date
@@ -182,6 +189,17 @@ class GoogleCalendarService {
       } else {
         console.warn('[CAL CREATE] No dueDate provided, using current time');
         startLocal = DateTime.now().setZone(TZ);
+      }
+      
+      // Validate the datetime
+      if (!startLocal.isValid) {
+        console.error('[CAL CREATE] Invalid datetime computed:', { 
+          task_due_at: task.due_at, 
+          task_dueDate: task.dueDate, 
+          startLocal: startLocal.toString(),
+          error: startLocal.invalidReason 
+        });
+        throw new Error(`Invalid datetime: ${startLocal.invalidReason}`);
       }
       
       const endLocal = startLocal.plus({ minutes: 60 });
@@ -255,17 +273,35 @@ class GoogleCalendarService {
       const { DateTime } = await import('luxon');
       const TZ = 'America/Vancouver';
       
+      // Debug: Check what fields are available in the task object
+      console.log('[CAL UPDATE] Task object fields:', Object.keys(task));
+      console.log('[CAL UPDATE] Task due_at/dueAt:', { due_at: task.due_at, dueAt: task.dueAt });
+      
       // Use the properly computed due_at timestamp (UTC) from database
       let startLocal: DateTime;
-      if (task.due_at) {
+      if (task.due_at || task.dueAt) {
+        // Try both field names (database vs JS camelCase)
+        const dueAtValue = task.due_at || task.dueAt;
         // Convert the UTC due_at to Vancouver time for display
-        startLocal = DateTime.fromISO(task.due_at, { zone: 'utc' }).setZone(TZ);
+        startLocal = DateTime.fromISO(dueAtValue, { zone: 'utc' }).setZone(TZ);
+        console.log('[CAL UPDATE] Using due_at:', { dueAtValue, startLocal: startLocal.toString() });
       } else if (task.dueDate) {
         console.warn('[CAL UPDATE] No due_at found, falling back to dueDate');
         // Fallback: treat dueDate as Vancouver date
         startLocal = DateTime.fromISO(task.dueDate, { zone: TZ });
       } else {
         startLocal = DateTime.now().setZone(TZ);
+      }
+      
+      // Validate the datetime
+      if (!startLocal.isValid) {
+        console.error('[CAL UPDATE] Invalid datetime computed:', { 
+          task_due_at: task.due_at, 
+          task_dueDate: task.dueDate, 
+          startLocal: startLocal.toString(),
+          error: startLocal.invalidReason 
+        });
+        throw new Error(`Invalid datetime: ${startLocal.invalidReason}`);
       }
       
       const endLocal = startLocal.plus({ minutes: 60 });

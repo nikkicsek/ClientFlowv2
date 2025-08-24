@@ -820,6 +820,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (dueDate) {
         try {
           updateData.dueAt = CalendarService.computeDueAt(dueDate, dueTime);
+          console.log('✓ Task update time computation:', { dueDate, dueTime, computed: updateData.dueAt });
         } catch (error: any) {
           console.warn('Time computation failed during update:', error.message);
         }
