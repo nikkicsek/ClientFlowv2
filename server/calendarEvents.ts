@@ -186,9 +186,35 @@ export async function syncAllCalendarEventsForTask(taskId: string): Promise<numb
     // Create/update calendar event for each assigned team member
     for (const memberId of assignedMembers) {
       try {
+        // Get the user ID that corresponds to this team member's email
+        const teamMemberResult = await pool.query(
+          'SELECT email FROM team_members WHERE id = $1', 
+          [memberId]
+        );
+        
+        if (teamMemberResult.rows.length === 0) {
+          console.warn(`Team member ${memberId} not found`);
+          continue;
+        }
+        
+        const teamMemberEmail = teamMemberResult.rows[0].email;
+        
+        // Find the user ID with OAuth tokens for this email
+        const userResult = await pool.query(
+          'SELECT id FROM users WHERE email = $1', 
+          [teamMemberEmail]
+        );
+        
+        if (userResult.rows.length === 0) {
+          console.warn(`User not found for email ${teamMemberEmail}`);
+          continue;
+        }
+        
+        const actualUserId = userResult.rows[0].id;
+        
         const eventData: CalendarEventData = {
           taskId: task.id,
-          userId: memberId,
+          userId: actualUserId, // Use the actual user ID, not team member ID
           title: task.title,
           description: task.description,
           dueAt: task.due_at,
