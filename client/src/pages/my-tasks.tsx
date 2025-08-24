@@ -144,15 +144,13 @@ export function MyTasksPage() {
             )}
           </div>
           <div className="flex items-center gap-2">
-            {/* Show Agency Dashboard link if user is admin */}
-            {(user as any)?.role === 'admin' && (
-              <Link href="/admin">
-                <Button variant="default" className="flex items-center gap-2">
-                  <Settings className="h-4 w-4" />
-                  Agency Dashboard
-                </Button>
-              </Link>
-            )}
+            {/* Show Agency Dashboard link - always show for authenticated users */}
+            <Link href="/">
+              <Button variant="default" className="flex items-center gap-2">
+                <Settings className="h-4 w-4" />
+                Agency Dashboard
+              </Button>
+            </Link>
             <Button
               onClick={() => window.location.href = `/oauth/google/connect?returnTo=${encodeURIComponent('/my-tasks')}`}
               variant="outline"
