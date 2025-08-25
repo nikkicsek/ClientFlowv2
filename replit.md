@@ -88,29 +88,37 @@ AgencyPro is a full-stack TypeScript application featuring a React frontend and 
 ### Utility Libraries
 - **Luxon**: For robust date and time handling, including timezones.
 
-## Critical System Safeguards (Added 2025-08-25)
+## Critical System Safeguards (Updated 2025-08-25)
 
 ### Task Assignment Protection
 **CRITICAL**: Task assignments must be preserved during task updates to prevent tasks from disappearing from user views.
 
 **Implemented Safeguards**:
-1. **Defensive Assignment Logic** (`server/routes.ts` line ~861): Only processes assignment changes when `assigneeUserIds` is explicitly provided in request body
-2. **Comprehensive Logging**: All assignment additions/removals are logged with `[TASK-UPDATE-SAFEGUARD]` prefix
-3. **Post-Update Validation**: Warns when tasks have zero assignments after non-assignment updates
-4. **Database Query Protection**: Fixed queries to use correct column names (`user_id_direct` instead of non-existent `user_id`)
+1. **Frontend Protection** (`client/src/components/edit-task-modal.tsx` line ~236): Only sends `assigneeUserIds` when assignments are actually loaded and available
+2. **Backend Defensive Logic** (`server/routes.ts` line ~861): Only processes assignment changes when `assigneeUserIds` is explicitly provided in request body
+3. **Comprehensive Logging**: All assignment additions/removals are logged with `[TASK-UPDATE-SAFEGUARD]` prefix
+4. **Post-Update Validation**: Warns when tasks have zero assignments after non-assignment updates
+5. **Database Query Protection**: Fixed queries to use correct column names (`user_id_direct` instead of non-existent `user_id`)
 
 **Key Implementation Details**:
-- Uses `'assigneeUserIds' in req.body` check to distinguish between assignment updates vs. other task updates
+- Frontend uses `...(taskAssignments && taskAssignments.length > 0 ? { assigneeUserIds: formData.assigneeTeamMemberIds } : {})` to prevent sending empty assignment arrays
+- Backend uses `'assigneeUserIds' in req.body` check to distinguish between assignment updates vs. other task updates
 - Prevents accidental unassignment when updating task time, title, or other properties
 - Maintains audit trail through detailed console logging
 
-### Calendar Sync Stability
-**CRITICAL**: Calendar sync must not fail due to database schema mismatches.
+**Root Cause Fixed (2025-08-25)**: Edit modal was sending empty `assigneeUserIds: []` arrays when admin assignment API failed to load, causing unintentional assignment removal. Now conditional assignment updates prevent this.
+
+### Calendar Sync Stability  
+**CRITICAL**: Calendar sync must not fail due to database schema mismatches or date formatting issues.
 
 **Implemented Fixes**:
-1. **Corrected Database Queries**: Fixed `team_members` table queries to use existing columns
-2. **Error Resilience**: Calendar sync failures don't block task updates
-3. **Timezone Consistency**: All time calculations use Luxon with America/Vancouver timezone
+1. **Date Object Conversion** (`server/services/CalendarService.ts` line ~156): Automatically converts Date objects to ISO strings before concatenation
+2. **Corrected Database Queries**: Fixed `team_members` table queries to use existing columns
+3. **Error Resilience**: Calendar sync failures don't block task updates
+4. **Timezone Consistency**: All time calculations use Luxon with America/Vancouver timezone
+5. **Production Ready**: Calendar sync works with Google OAuth tokens and will function in production deployment
+
+**Root Cause Fixed (2025-08-25)**: Database `due_date` fields were returning Date objects instead of strings, causing malformed concatenation like "Mon Aug 25 2025...T12:15" instead of "2025-08-25T12:15". Now automatically detects and converts Date objects to proper ISO format.
 
 ### Google Calendar OAuth Protection (Added 2025-08-25)
 **CRITICAL**: Google Calendar OAuth routes must match environment configuration exactly.
