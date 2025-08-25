@@ -1175,7 +1175,7 @@ export default function AdminDashboard() {
               </div>
             </div>
 
-            {!services || services.length === 0 ? (
+            {!services || !Array.isArray(services) || services.length === 0 ? (
               <Card>
                 <CardContent className="p-8 text-center">
                   <Settings className="h-16 w-16 mx-auto mb-4 text-gray-400" />
@@ -1186,7 +1186,7 @@ export default function AdminDashboard() {
               </Card>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {services.map((service: Service) => (
+                {(services || []).map((service: Service) => (
                   <Card key={service.id} className="hover:shadow-md transition-shadow cursor-pointer">
                     <CardContent className="p-4">
                       <div className="flex justify-between items-start mb-3">
