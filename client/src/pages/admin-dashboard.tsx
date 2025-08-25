@@ -148,7 +148,7 @@ export default function AdminDashboard() {
     queryKey: ["/api/admin/projects"],
   });
 
-  const { data: services } = useQuery<Service[]>({
+  const { data: services = [] } = useQuery<Service[]>({
     queryKey: ["/api/services"],
   });
 

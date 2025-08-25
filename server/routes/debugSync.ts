@@ -214,6 +214,19 @@ router.get('/self-test', async (req, res) => {
     
     log(`Creating task with data: ${JSON.stringify(taskData)}`);
     
+    const dueDateValue = dueDateTime.toISODate();
+    const dueTimeValue = dueDateTime.toFormat('HH:mm');
+    log(`Due date/time values: ${dueDateValue} / ${dueTimeValue}`);
+    
+    let dueAtValue;
+    try {
+      dueAtValue = CalendarService.computeDueAt(dueDateValue!, dueTimeValue);
+      log(`Computed due_at: ${dueAtValue}`);
+    } catch (error: any) {
+      log(`Error computing due_at: ${error.message}`);
+      throw error;
+    }
+    
     const taskResult = await pool.query(`
       INSERT INTO tasks (title, description, status, priority, project_id, due_date, due_time, due_at)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -224,9 +237,9 @@ router.get('/self-test', async (req, res) => {
       taskData.status,
       taskData.priority,
       taskData.projectId,
-      dueDateTime.toISODate(),
-      dueDateTime.toFormat('HH:mm'),
-      CalendarService.computeDueAt(dueDateTime.toISODate()!, dueDateTime.toFormat('HH:mm'))
+      dueDateValue,
+      dueTimeValue,
+      dueAtValue
     ]);
     
     const taskId = taskResult.rows[0].id;
@@ -242,8 +255,27 @@ router.get('/self-test', async (req, res) => {
     log(`Updated task with due date: ${dueDateTime.toISO()}`);
     
     // Step 3: Test calendar sync
-    const syncResult = await CalendarService.upsertTaskEvent(taskId, userId, teamMemberId);
-    log(`Calendar sync successful: ${syncResult.htmlLink}`);
+    let syncResult;
+    try {
+      syncResult = await CalendarService.upsertTaskEvent(taskId, userId, teamMemberId);
+      log(`Calendar sync successful: ${syncResult.htmlLink}`);
+    } catch (error: any) {
+      log(`Create test failed: ${error.message}`);
+      // Clean up test task
+      await pool.query('DELETE FROM task_assignments WHERE task_id = $1', [taskId]);
+      await pool.query('DELETE FROM tasks WHERE id = $1', [taskId]);
+      log(`Cleaned up test task`);
+      
+      return res.json({
+        ok: false,
+        tz: tz as string,
+        logs,
+        create: {
+          ok: false,
+          error: error.message
+        }
+      });
+    }
     
     // Step 4: Test update
     log('Testing task update and calendar sync...');

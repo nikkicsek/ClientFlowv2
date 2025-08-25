@@ -816,11 +816,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         dueTime,
       };
 
-      // Normalize due_at using new CalendarService time normalization
+      // Normalize due_at using the correct time handling function
       if (dueDate) {
         try {
-          updateData.dueAt = CalendarService.computeDueAt(dueDate, dueTime);
-          console.log('✓ Task update time computation:', { dueDate, dueTime, computed: updateData.dueAt });
+          const { computeDueAt } = await import('./utils/timeHandling');
+          const timeResult = computeDueAt(dueDate, dueTime);
+          updateData.dueAt = timeResult.due_at;
+          updateData.dueTime = timeResult.due_time_db;
+          updateData.dueDate = timeResult.due_date_db ? new Date(timeResult.due_date_db) : updateData.dueDate;
+          console.log('✓ Task update time computation:', { dueDate, dueTime, timeResult });
         } catch (error: any) {
           console.warn('Time computation failed during update:', error.message);
         }
@@ -836,7 +840,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Update the task
       const updatedTask = await storage.updateTask(taskId, updateData);
 
-      // Auto-sync calendar event using new system
+      // Auto-sync calendar event using new system (single call to avoid double-sync)
       try {
         await AutoCalendarSync.onTaskChanged(taskId);
         console.log(`Auto-synced calendar for updated task ${taskId}`);
@@ -878,16 +882,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // Fire calendar hook for task update if due date/time changed
-      if (updateData.dueDate || updateData.dueTime || updateData.dueAt) {
-        try {
-          await syncAllCalendarEventsForTask(taskId);
-          console.log(`Synced calendar events for updated task ${taskId}`);
-        } catch (calendarError) {
-          console.error('Calendar sync error for task update:', taskId, calendarError);
-          // Don't fail task update if calendar sync fails
-        }
-      }
+      // Note: Calendar sync is handled above in the AutoCalendarSync.onTaskChanged() call
+      // Removed duplicate calendar sync to prevent conflicts
 
       res.json({ task: updatedTask });
     } catch (error) {
