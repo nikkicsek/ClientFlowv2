@@ -36,19 +36,30 @@ googleRouter.get('/oauth/google/connect', async (req: any, res) => {
   console.log('>> HIT', req.path, req.query);
   
   // Check if user has a valid Replit session first - ROBUST CHECK
-  const sessionUser = (req.session as any)?.user;
-  const replitUser = req.user?.claims;
-  const altSessionUser = (req.session as any)?.userId; // Alternative session structure
+  const session = req.session as any;
+  const sessionUser = session?.user;  // Standard format
+  const replitUser = req.user?.claims; // Passport format
+  const altSessionUser = session?.userId; // Alternative format
+  const directUser = session?.passport?.user; // Another possible format
   
   // Log session details for debugging
   console.log('OAuth Session Debug:', {
     hasSessionUser: !!sessionUser,
     hasReplitUser: !!replitUser,
-    hasAltSession: !!altSessionUser,
-    sessionKeys: req.session ? Object.keys(req.session) : 'no session'
+    hasAltSession: !!altSessionUser, 
+    hasDirectUser: !!directUser,
+    sessionKeys: req.session ? Object.keys(req.session) : 'no session',
+    sessionData: session ? {
+      hasUser: !!session.user,
+      hasUserId: !!session.userId,
+      hasPassport: !!session.passport
+    } : null
   });
   
-  if (!sessionUser && !replitUser && !altSessionUser) {
+  // Accept session if ANY of these formats exist
+  const hasValidSession = sessionUser || replitUser || altSessionUser || directUser;
+  
+  if (!hasValidSession) {
     console.log('No session for Google OAuth - redirecting to Replit auth');
     const returnTo = req.query.returnTo || req.originalUrl || '/my-tasks';
     const origin = `${req.protocol}://${req.headers.host}`;
