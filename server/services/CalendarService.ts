@@ -119,23 +119,57 @@ export class CalendarService {
 
   // Compute due_at timestamp using Luxon
   static computeDueAt(due_date: string, due_time?: string): string {
+    console.log(`[CALENDAR] computeDueAt called with: due_date=${due_date}, due_time=${due_time}`);
+    
     if (due_date && due_time) {
-      const dtLocal = DateTime.fromISO(`${due_date}T${due_time}`, { zone: ZONE });
-      return dtLocal.toUTC().toISO()!;
+      const inputString = `${due_date}T${due_time}`;
+      console.log(`[CALENDAR] Creating DateTime from: ${inputString} in zone ${ZONE}`);
+      const dtLocal = DateTime.fromISO(inputString, { zone: ZONE });
+      
+      if (!dtLocal.isValid) {
+        console.error(`[CALENDAR] Invalid DateTime in computeDueAt:`, { 
+          inputString, 
+          invalidReason: dtLocal.invalidReason,
+          invalidExplanation: dtLocal.invalidExplanation 
+        });
+        throw new Error(`Invalid time value in computeDueAt: ${inputString} - ${dtLocal.invalidReason}`);
+      }
+      
+      const result = dtLocal.toUTC().toISO()!;
+      console.log(`[CALENDAR] computeDueAt result: ${result}`);
+      return result;
     } else if (due_date) {
-      return DateTime.fromISO(due_date, { zone: ZONE }).startOf('day').toUTC().toISO()!;
+      const result = DateTime.fromISO(due_date, { zone: ZONE }).startOf('day').toUTC().toISO()!;
+      console.log(`[CALENDAR] computeDueAt (date only) result: ${result}`);
+      return result;
     }
     throw new Error('due_date is required');
   }
 
   // Build Google Calendar event payload
   static buildEventPayload(task: any): calendar_v3.Schema$Event {
-    const { title, description, due_date, due_time } = task;
+    // Handle both database field names (due_date/due_time) and JS object field names (dueDate/dueTime)
+    const { title, description } = task;
+    const due_date = task.due_date || task.dueDate;
+    const due_time = task.due_time || task.dueTime;
     const eventTitle = title || 'Untitled Task';
+    
+    console.log(`[CALENDAR] Building event payload for task:`, { title, due_date, due_time });
     
     if (due_time) {
       // Timed event
+      console.log(`[CALENDAR] Creating timed event: ${due_date}T${due_time} in ${ZONE}`);
       const dtLocal = DateTime.fromISO(`${due_date}T${due_time}`, { zone: ZONE });
+      
+      if (!dtLocal.isValid) {
+        console.error(`[CALENDAR] Invalid DateTime created:`, { 
+          inputString: `${due_date}T${due_time}`, 
+          invalidReason: dtLocal.invalidReason,
+          invalidExplanation: dtLocal.invalidExplanation 
+        });
+        throw new Error(`Invalid time value: ${due_date}T${due_time} - ${dtLocal.invalidReason}`);
+      }
+      
       const endTime = dtLocal.plus({ minutes: 60 });
       
       return {
@@ -152,6 +186,7 @@ export class CalendarService {
       };
     } else {
       // All-day event
+      console.log(`[CALENDAR] Creating all-day event for date: ${due_date}`);
       const endDate = DateTime.fromISO(due_date).plus({ days: 1 }).toISODate();
       
       return {
@@ -177,6 +212,13 @@ export class CalendarService {
       throw new Error(`Task not found: ${taskId}`);
     }
     const task = taskResult.rows[0];
+    console.log(`[CALENDAR] Task data from DB:`, { 
+      id: task.id, 
+      title: task.title, 
+      due_date: task.due_date, 
+      due_time: task.due_time, 
+      due_at: task.due_at 
+    });
     
     // Get OAuth client
     const { client, email } = await this.getOAuthClientFor(userId, teamMemberId);
@@ -187,6 +229,13 @@ export class CalendarService {
       'SELECT * FROM calendar_event_mappings WHERE task_id = $1 AND user_id = $2',
       [taskId, userId]
     );
+    
+    // Check if the task has the required date/time fields - handle field name variations
+    const due_date = task.due_date || task.dueDate;
+    if (!due_date) {
+      console.log(`[CALENDAR] Task has no due date, skipping calendar sync for task: ${task.title}`);
+      throw new Error('Task has no due date - calendar sync not needed');
+    }
     
     const eventPayload = this.buildEventPayload(task);
     
