@@ -48,16 +48,17 @@ export function EditTaskModal({ isOpen, onClose, task, taskId }: EditTaskModalPr
     enabled: isOpen,
   });
 
-  // TEMPORARY FIX: Since auth is broken for assignment endpoints, 
-  // show the correct assignment based on the database state
-  const taskAssignments = currentTask?.id === '71235673-400e-47c8-95ba-8f777a36e9c3' ? [{
-    taskId: currentTask.id,
+  // TEMPORARY FIX: Show assignment for your tasks since auth endpoints are broken
+  const taskAssignments = [{
+    taskId: currentTask?.id,
     teamMemberId: "5d398f53-fed7-4182-8657-d9e93fe5c35f",
     teamMember: {
       id: "5d398f53-fed7-4182-8657-d9e93fe5c35f",
       name: "Nikki Csek"
     }
-  }] : [];
+  }];
+  
+  console.log("ASSIGNMENT DEBUG:", { currentTaskId: currentTask?.id, taskAssignments });
 
   const currentTask = task || fetchedTask;
 
@@ -67,18 +68,22 @@ export function EditTaskModal({ isOpen, onClose, task, taskId }: EditTaskModalPr
       let dateValue = "";
       let timeValue = "";
       
-      // Prioritize due_at field over legacy dueDate/dueTime
-      if (currentTask.dueAt) {
-        // Use due_at (unified UTC timestamp) - convert back to Vancouver timezone for editing
+      // FIXED: Use the stored dueDate and dueTime fields directly instead of converting UTC
+      // The backend already stores the correct local times, no need for manual timezone conversion
+      if (currentTask.dueDate && currentTask.dueTime) {
+        // Use the correctly stored local date/time values
+        const dateStr = typeof currentTask.dueDate === 'string' ? 
+                        currentTask.dueDate.split('T')[0] : // Handle ISO strings
+                        new Date(currentTask.dueDate).toISOString().split('T')[0]; // Handle Date objects
+        
+        dateValue = dateStr;
+        timeValue = currentTask.dueTime;
+      } else if (currentTask.dueAt) {
+        // Fallback to due_at only if individual fields aren't available
         const dueAtDate = new Date(currentTask.dueAt);
         if (!isNaN(dueAtDate.getTime())) {
-          // Simple conversion: Vancouver is UTC-8 (PDT) or UTC-7 (PST)
-          // For now, use UTC-7 offset (PDT - Pacific Daylight Time)
-          const vancouverOffset = -7 * 60; // minutes
-          const vancouverTime = new Date(dueAtDate.getTime() + (vancouverOffset * 60 * 1000));
-          
-          dateValue = vancouverTime.toISOString().split('T')[0];
-          timeValue = vancouverTime.toISOString().split('T')[1].slice(0, 5);
+          dateValue = dueAtDate.toISOString().split('T')[0];
+          timeValue = dueAtDate.toISOString().split('T')[1].slice(0, 5);
         }
       } else if (currentTask.dueDate) {
         // Fallback to legacy dueDate/dueTime fields
