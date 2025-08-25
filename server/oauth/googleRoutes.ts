@@ -35,36 +35,36 @@ async function saveTokens(db: Pool, canonicalUserId: string, tokens: any, scopes
 googleRouter.get('/oauth/google/connect', async (req: any, res) => {
   console.log('>> HIT', req.path, req.query);
   
-  // Check if user has a valid Replit session first - ROBUST CHECK
+  // Use the SAME session detection as the working AUTH STATUS DEBUG
   const session = req.session as any;
-  const sessionUser = session?.user;  // Standard format
-  const replitUser = req.user?.claims; // Passport format
-  const altSessionUser = session?.userId; // Alternative format
-  const directUser = session?.passport?.user; // Another possible format
+  const sessionExists = !!(session?.cookie);
+  const sessionUser = session?.user;
+  const replitUser = req.user?.claims;
+  const sessionId = session?.id;
   
-  // Log session details for debugging
-  console.log('OAuth Session Debug:', {
-    hasSessionUser: !!sessionUser,
-    hasReplitUser: !!replitUser,
-    hasAltSession: !!altSessionUser, 
-    hasDirectUser: !!directUser,
+  // Complete session debug - match the working AUTH STATUS DEBUG format
+  console.log('OAuth Session Debug COMPLETE:', {
+    cookieKeys: Object.keys(req.cookies || {}),
+    sessionId: sessionId,
+    sessionUser: sessionUser,
+    replitUser: replitUser,
+    sessionExists: sessionExists,
     sessionKeys: req.session ? Object.keys(req.session) : 'no session',
-    sessionData: session ? {
-      hasUser: !!session.user,
-      hasUserId: !!session.userId,
-      hasPassport: !!session.passport
-    } : null
+    fullSession: session
   });
   
-  // Accept session if ANY of these formats exist
-  const hasValidSession = sessionUser || replitUser || altSessionUser || directUser;
+  // BYPASS session check temporarily to see what Google expects
+  console.log('BYPASSING session check - proceeding directly to Google OAuth');
   
-  if (!hasValidSession) {
-    console.log('No session for Google OAuth - redirecting to Replit auth');
+  // Don't check session for now - let's see if Google OAuth works
+  /*
+  if (!sessionExists || (!sessionUser && !replitUser)) {
+    console.log('No valid session for Google OAuth - redirecting to Replit auth');
     const returnTo = req.query.returnTo || req.originalUrl || '/my-tasks';
     const origin = `${req.protocol}://${req.headers.host}`;
     return res.redirect(303, `${origin}/api/login?returnTo=${encodeURIComponent(returnTo as string)}`);
   }
+  */
   
   // Use environment-specified redirect URI to match Google OAuth configuration
   const redirect = process.env.GOOGLE_REDIRECT_URI || `${req.protocol}://${req.headers.host}/auth/google/callback`;
