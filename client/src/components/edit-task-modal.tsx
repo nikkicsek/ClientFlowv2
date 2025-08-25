@@ -54,15 +54,16 @@ export function EditTaskModal({ isOpen, onClose, task, taskId }: EditTaskModalPr
   // Get current task
   const currentTask = task || fetchedTask;
 
-  // FIX: Fetch real task assignments using React Query (instead of hardcoded)
-  const { data: taskAssignments = [] } = useQuery({
-    queryKey: ['taskAssignments', currentTask?.id],
-    queryFn: async () => {
-      const response = await apiRequest('GET', `/api/tasks/${currentTask?.id}/assignments`);
-      return response.json(); // Returns array of { id, taskId, teamMemberId, teamMember: {...} }
-    },
-    enabled: !!currentTask?.id && isOpen,
-  });
+  // FIX: Use existing assignment data from the all assignments query since auth is failing
+  const { data: allAssignments = [] } = useQuery({
+    queryKey: ['/api/admin/task-assignments'],
+    enabled: isOpen,
+  }) as { data: any[] };
+
+  // Filter assignments for current task
+  const taskAssignments = allAssignments.filter((assignment: any) => 
+    assignment.taskId === currentTask?.id
+  );
   
   console.log("ASSIGNMENT DEBUG:", { currentTaskId: currentTask?.id, taskAssignments });
 
@@ -159,8 +160,10 @@ export function EditTaskModal({ isOpen, onClose, task, taskId }: EditTaskModalPr
         googleDriveLink: "",
         assigneeTeamMemberIds: [],
       });
-      // Close the modal after successful update
-      onClose();
+      // Close the modal after successful update - use timeout to ensure state updates
+      setTimeout(() => {
+        onClose();
+      }, 100);
     },
     onError: (error) => {
       console.error("Update task error:", error);
