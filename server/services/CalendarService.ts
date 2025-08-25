@@ -178,11 +178,11 @@ export class CalendarService {
         summary: eventTitle,
         description: description || '',
         start: {
-          dateTime: dtLocal.toISO(),
+          dateTime: dtLocal.toISO({ includeOffset: false }),  // FIX: Send without offset to let Google apply timezone data correctly
           timeZone: ZONE
         },
         end: {
-          dateTime: endTime.toISO(),
+          dateTime: endTime.toISO({ includeOffset: false }),  // FIX: Same for end time
           timeZone: ZONE
         }
       };

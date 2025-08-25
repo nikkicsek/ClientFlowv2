@@ -24,6 +24,9 @@ export function EditTaskModal({ isOpen, onClose, task, taskId }: EditTaskModalPr
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  
+  // Track if assignments were changed to prevent unintentional removal
+  const [assignmentChanged, setAssignmentChanged] = useState(false);
 
   const [formData, setFormData] = useState({
     title: "",
@@ -117,8 +120,11 @@ export function EditTaskModal({ isOpen, onClose, task, taskId }: EditTaskModalPr
         dueDate: dateValue,
         dueTime: timeValue,
         googleDriveLink: currentTask.googleDriveLink || "",
-        assigneeTeamMemberIds: assigneeIds,
+        assigneeTeamMemberIds: assigneeIds,  // FIX: Initialize with current assignments
       });
+      
+      // FIX: Reset assignment change tracking when loading a task
+      setAssignmentChanged(false);
     }
   }, [currentTask, taskAssignments]);
 
@@ -205,6 +211,8 @@ export function EditTaskModal({ isOpen, onClose, task, taskId }: EditTaskModalPr
         ? [...prev.assigneeTeamMemberIds, teamMemberId]
         : prev.assigneeTeamMemberIds.filter(id => id !== teamMemberId)
     }));
+    // FIX: Track that assignments have changed
+    setAssignmentChanged(true);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -227,10 +235,13 @@ export function EditTaskModal({ isOpen, onClose, task, taskId }: EditTaskModalPr
       priority: formData.priority,
       dueDate: formData.dueDate || null,
       dueTime: formData.dueTime || null,
-      googleDriveLink: formData.googleDriveLink || null,
-      // CRITICAL FIX: Always send assignments to prevent unassignment
-      assigneeUserIds: formData.assigneeTeamMemberIds
+      googleDriveLink: formData.googleDriveLink || null
     };
+    
+    // FIX: Only send assignments if they were actually changed
+    if (assignmentChanged) {
+      taskData.assigneeUserIds = formData.assigneeTeamMemberIds;
+    }
 
     console.log("Updating task with data:", taskData);
     updateTaskMutation.mutate(taskData);
