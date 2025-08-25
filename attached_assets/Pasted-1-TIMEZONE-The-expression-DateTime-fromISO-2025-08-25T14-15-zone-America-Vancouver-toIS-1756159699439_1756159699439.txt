@@ -1,0 +1,128 @@
+1. TIMEZONE: The expression DateTime.fromISO('2025-08-25T14:15', { zone: 'America/Vancouver' }).toISO() interprets the input string as a local time in the 'America/Vancouver' timezone (PDT, UTC-7 on that date) and outputs an ISO string with the offset, like '2025-08-25T14:15:00.000-07:00'. This should create the event at the correct absolute time. However, the 1-hour offset in Google Calendar likely occurs due to a mismatch in DST handling: if the local environment's timezone data (used by Luxon via the Intl API) is outdated or incorrectly applies the standard offset (-08:00 PST) instead of DST (-07:00 PDT), it computes an incorrect UTC equivalent, causing Google Calendar (with up-to-date data) to display the event 1 hour later.
+
+2. ASSIGNMENTS: The backend removes assignments because its logic fully synchronizes the current assignments to match exactly the sent assigneeUserIds array—adding new IDs and removing any existing ones not present in the array. When the frontend sends assigneeUserIds: ["5d398f53-fed7-4182-8657-d9e93fe5c35f"], if this array doesn't include all current teamMemberIds (e.g., due to the form not being initialized with existing assignments or only sending partial/updated data when editing other properties), the backend identifies the missing IDs as "toRemove" and deletes them.
+
+3. FIXES: Below are specific code changes with line-by-line modifications to permanently fix both issues. For the timezone bug, we modify the payload to send the dateTime without the offset (using toISO({ includeOffset: false })), allowing Google's up-to-date timezone data to handle the conversion correctly and avoiding local DST mismatches. For the assignment bug, we ensure the frontend only sends assigneeUserIds if assignments have changed (requiring a new state flag), preventing unintended sync/removals when editing other properties. We also assume the form initializes with current assignments (added as a note/comment for completeness).
+
+**Timezone Fix (in buildEventPayload function):**
+
+Original (relevant lines):
+```
+    const dtLocal = DateTime.fromISO(`${due_date}T${due_time}`, { zone: ZONE });
+   
+    // ... validation ...
+   
+    const endTime = dtLocal.plus({ minutes: 60 });
+   
+    return {
+      summary: eventTitle,
+      description: description || '',
+      start: {
+        dateTime: dtLocal.toISO(), // BUG: This creates wrong time in calendar
+        timeZone: ZONE
+      },
+      end: {
+        dateTime: endTime.toISO(),
+        timeZone: ZONE
+      }
+    };
+```
+
+Fixed:
+```
+    const dtLocal = DateTime.fromISO(`${due_date}T${due_time}`, { zone: ZONE });
+   
+    // ... validation ...
+   
+    const endTime = dtLocal.plus({ minutes: 60 });
+   
+    return {
+      summary: eventTitle,
+      description: description || '',
+      start: {
+        dateTime: dtLocal.toISO({ includeOffset: false }), // FIX: Send without offset to let Google apply timezone data correctly, avoiding local DST issues
+        timeZone: ZONE
+      },
+      end: {
+        dateTime: endTime.toISO({ includeOffset: false }), // FIX: Same for end time
+        timeZone: ZONE
+      }
+    };
+```
+
+**Assignment Fix (in handleSubmit function and related):**
+
+Note: This assumes you add a state variable (e.g., via useState) to track if assignments changed, and that the form initializes assigneeTeamMemberIds with current values (e.g., in useEffect: setFormData({ ...formData, assigneeTeamMemberIds: currentTask?.assigneeTeamMemberIds || taskAssignments.map(a => a.teamMember.id) || [] })). If the form component doesn't load current assignments, add that initialization to prevent incomplete sends.
+
+Original (relevant lines):
+```
+const handleSubmit = (e: React.FormEvent) => {
+  e.preventDefault();
+ 
+  if (!formData.title) {
+    // ... toast ...
+    return;
+  }
+  // Send separate dueDate and dueTime fields to match unified time handling
+  const taskData = {
+    title: formData.title,
+    description: formData.description || null,
+    status: formData.status,
+    priority: formData.priority,
+    dueDate: formData.dueDate || null,
+    dueTime: formData.dueTime || null,
+    googleDriveLink: formData.googleDriveLink || null,
+    // CRITICAL FIX: Always send assignments to prevent unassignment
+    assigneeUserIds: formData.assigneeTeamMemberIds // BUG: Still loses assignments
+  };
+  console.log("Updating task with data:", taskData);
+  updateTaskMutation.mutate(taskData);
+};
+```
+
+Fixed (add state outside function, conditional send in handleSubmit):
+```
+// Add this state in the component (e.g., above handleSubmit):
+const [assignmentChanged, setAssignmentChanged] = useState(false);
+
+// In the form handler for assignee changes (not shown, e.g., onSelectAssignee):
+// setFormData({ ...formData, assigneeTeamMemberIds: newIds });
+// setAssignmentChanged(true); // FIX: Flag when assignments are modified
+
+// Also, initialize formData with current assignments (e.g., in useEffect):
+useEffect(() => {
+  if (currentTask) {
+    setFormData({
+      ...formData,
+      assigneeTeamMemberIds: currentTask.assigneeTeamMemberIds || taskAssignments.map(a => a.teamMember.id) || [] // FIX: Load current to prevent incomplete data
+    });
+  }
+}, [currentTask]);
+
+const handleSubmit = (e: React.FormEvent) => {
+  e.preventDefault();
+ 
+  if (!formData.title) {
+    // ... toast ...
+    return;
+  }
+  // Send separate dueDate and dueTime fields to match unified time handling
+  const taskData = {
+    title: formData.title,
+    description: formData.description || null,
+    status: formData.status,
+    priority: formData.priority,
+    dueDate: formData.dueDate || null,
+    dueTime: formData.dueTime || null,
+    googleDriveLink: formData.googleDriveLink || null,
+    // FIX: Only send if changed to prevent unintended removal; assumes formData is initialized with current
+  };
+  if (assignmentChanged) {
+    taskData.assigneeUserIds = formData.assigneeTeamMemberIds;
+  }
+  console.log("Updating task with data:", taskData);
+  updateTaskMutation.mutate(taskData);
+};
+```
+
+No changes needed to the backend code, as the sync logic is correct when the field is intentionally sent. This prevents removals during non-assignment edits while allowing sync when needed.
