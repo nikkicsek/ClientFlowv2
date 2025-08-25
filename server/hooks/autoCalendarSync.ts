@@ -14,7 +14,7 @@ export class AutoCalendarSync {
         FROM task_assignments ta
         LEFT JOIN team_members tm ON ta.team_member_id = tm.id
         LEFT JOIN users u ON tm.email = u.email
-        WHERE ta.task_id = $1 AND ta.deleted_at IS NULL
+        WHERE ta.task_id = $1
       `, [taskId]);
       
       if (assignmentResult.rows.length === 0) {
