@@ -849,8 +849,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Don't fail task update if calendar sync fails
       }
 
-      // Handle assignment changes if provided
-      if (assigneeUserIds && Array.isArray(assigneeUserIds)) {
+      // Handle assignment changes if explicitly provided (not undefined/null)
+      if (assigneeUserIds !== undefined && assigneeUserIds !== null && Array.isArray(assigneeUserIds)) {
         // Get current assignments
         const currentAssignments = await storage.getTaskAssignments(taskId);
         const currentTeamMemberIds = currentAssignments.map(a => a.teamMemberId);
