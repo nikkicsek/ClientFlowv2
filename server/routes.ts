@@ -1339,8 +1339,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Check if user has Google Calendar tokens
-      const tokenResult = await pool.query('SELECT COUNT(*) as count FROM oauth_tokens WHERE user_id = $1', [userId]);
-      const hasTokens = tokenResult.rows[0].count > 0;
+      const tokens = await storage.getOAuthTokensByUserId(userId);
+      const hasTokens = !!tokens;
 
       res.json({ connected: hasTokens, userId });
     } catch (error) {
