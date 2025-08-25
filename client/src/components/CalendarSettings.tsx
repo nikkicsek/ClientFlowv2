@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -48,8 +48,24 @@ export function CalendarSettings({ user }: CalendarSettingsProps) {
     }
   };
 
-  // Check if calendar is connected (would need real implementation)
-  const isConnected = false; // placeholder for now
+  // Check if calendar is connected by checking for tokens
+  const [isConnected, setIsConnected] = useState(false);
+  
+  // Check connection status when component mounts
+  useEffect(() => {
+    const checkConnection = async () => {
+      try {
+        const response = await fetch('/api/calendar/status');
+        if (response.ok) {
+          const data = await response.json();
+          setIsConnected(data.connected);
+        }
+      } catch (error) {
+        console.log('Could not check calendar status:', error);
+      }
+    };
+    checkConnection();
+  }, []);
 
   return (
     <Card>

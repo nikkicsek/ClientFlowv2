@@ -1328,6 +1328,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Calendar connection status 
+  app.get("/api/calendar/status", isAuthenticated, async (req, res) => {
+    try {
+      const user = req.user?.claims || req.session?.user;
+      const userId = user?.sub || user?.userId;
+      
+      if (!userId) {
+        return res.json({ connected: false, reason: 'no_user' });
+      }
+
+      // Check if user has Google Calendar tokens
+      const tokenResult = await pool.query('SELECT COUNT(*) as count FROM oauth_tokens WHERE user_id = $1', [userId]);
+      const hasTokens = tokenResult.rows[0].count > 0;
+
+      res.json({ connected: hasTokens, userId });
+    } catch (error) {
+      console.error('Calendar status check error:', error);
+      res.json({ connected: false, error: 'check_failed' });
+    }
+  });
+
   // QA Calendar Test route - One-click self-test
   app.get('/api/qa/calendar-test', isAuthenticated, async (req: any, res) => {
     try {
