@@ -36,22 +36,19 @@ export class CalendarService {
   static async getOAuthClientFor(userId: string, teamMemberId?: string): Promise<{ client: OAuth2Client; email: string }> {
     let tokens: TokenRecord | null = null;
     
-    // Try userId first
+    // Try userId first - use the actual oauth_tokens table
     if (userId) {
       const userResult = await pool.query(
-        'SELECT * FROM google_tokens WHERE owner_type = $1 AND owner_id = $2',
-        ['userId', userId]
+        'SELECT user_id as owner_id, \'userId\' as owner_type, access_token, refresh_token, expiry as expiry_date, scopes as scope, \'\' as email FROM oauth_tokens WHERE user_id = $1',
+        [userId]
       );
       tokens = userResult.rows[0] || null;
     }
     
-    // Fallback to teamMemberId
+    // Fallback to teamMemberId (check if team member email matches user)
     if (!tokens && teamMemberId) {
-      const teamResult = await pool.query(
-        'SELECT * FROM google_tokens WHERE owner_type = $1 AND owner_id = $2',
-        ['teamMemberId', teamMemberId]
-      );
-      tokens = teamResult.rows[0] || null;
+      // For now, skip teamMemberId lookup since tokens are stored by userId
+      console.log('No tokens found for userId, skipping teamMemberId lookup');
     }
     
     if (!tokens) {
@@ -67,13 +64,12 @@ export class CalendarService {
     
     // Handle token refresh
     oauth2Client.on('tokens', async (newTokens) => {
-      console.log('Refreshing OAuth tokens for', tokens?.email);
+      console.log('Refreshing OAuth tokens for userId:', tokens?.owner_id);
       await pool.query(
-        'UPDATE google_tokens SET access_token = $1, expiry_date = $2, updated_at = CURRENT_TIMESTAMP WHERE owner_type = $3 AND owner_id = $4',
+        'UPDATE oauth_tokens SET access_token = $1, expiry = $2, updated_at = CURRENT_TIMESTAMP WHERE user_id = $3',
         [
           newTokens.access_token,
           newTokens.expiry_date ? new Date(newTokens.expiry_date) : null,
-          tokens?.owner_type,
           tokens?.owner_id
         ]
       );
