@@ -112,6 +112,25 @@ AgencyPro is a full-stack TypeScript application featuring a React frontend and 
 2. **Error Resilience**: Calendar sync failures don't block task updates
 3. **Timezone Consistency**: All time calculations use Luxon with America/Vancouver timezone
 
+### Google Calendar OAuth Protection (Added 2025-08-25)
+**CRITICAL**: Google Calendar OAuth routes must match environment configuration exactly.
+
+**Protected Configuration**:
+1. **Route Path**: `/auth/google/callback` (matches GOOGLE_REDIRECT_URI environment variable)
+2. **Session Detection**: Robust checking for multiple session structures (`req.session.user`, `req.user.claims`, `req.session.userId`)
+3. **Redirect URI Consistency**: Environment variable GOOGLE_REDIRECT_URI must match actual route paths
+4. **Error Protection**: Comprehensive logging for OAuth session debugging
+
+**Critical Files**:
+- `server/oauth/googleRoutes.ts`: Main OAuth route handler
+- Environment: `GOOGLE_REDIRECT_URI` must match route registration exactly
+
+**Testing Protocol**:
+1. Verify "Connect Google Calendar" button in UI works
+2. Test OAuth flow completes without "invalid_redirect_uri" errors
+3. Check OAuth tokens are stored in `google_tokens` table after connection
+4. Verify calendar sync works after successful connection
+
 ### Development Best Practices
 **CRITICAL**: Always test assignment functionality when modifying task update routes.
 

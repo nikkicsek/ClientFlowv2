@@ -35,11 +35,20 @@ async function saveTokens(db: Pool, canonicalUserId: string, tokens: any, scopes
 googleRouter.get('/oauth/google/connect', async (req: any, res) => {
   console.log('>> HIT', req.path, req.query);
   
-  // Check if user has a valid Replit session first
+  // Check if user has a valid Replit session first - ROBUST CHECK
   const sessionUser = (req.session as any)?.user;
   const replitUser = req.user?.claims;
+  const altSessionUser = (req.session as any)?.userId; // Alternative session structure
   
-  if (!sessionUser && !replitUser) {
+  // Log session details for debugging
+  console.log('OAuth Session Debug:', {
+    hasSessionUser: !!sessionUser,
+    hasReplitUser: !!replitUser,
+    hasAltSession: !!altSessionUser,
+    sessionKeys: req.session ? Object.keys(req.session) : 'no session'
+  });
+  
+  if (!sessionUser && !replitUser && !altSessionUser) {
     console.log('No session for Google OAuth - redirecting to Replit auth');
     const returnTo = req.query.returnTo || req.originalUrl || '/my-tasks';
     const origin = `${req.protocol}://${req.headers.host}`;
@@ -86,7 +95,7 @@ googleRouter.get('/oauth/google/connect', async (req: any, res) => {
 
 
 
-googleRouter.get('/oauth/google/callback', async (req: any, res) => {
+googleRouter.get('/auth/google/callback', async (req: any, res) => {
   console.log('>> HIT', req.path, req.query);
   try {
     // Use environment-specified redirect URI to match Google OAuth configuration
