@@ -146,8 +146,14 @@ export class CalendarService {
   static buildEventPayload(task: any): calendar_v3.Schema$Event {
     // Handle both database field names (due_date/due_time) and JS object field names (dueDate/dueTime)
     const { title, description } = task;
-    const due_date = task.due_date || task.dueDate;
+    let due_date = task.due_date || task.dueDate;
     const due_time = task.due_time || task.dueTime;
+    
+    // Fix: Convert Date object to ISO date string if needed
+    if (due_date instanceof Date) {
+      due_date = due_date.toISOString().split('T')[0]; // "2025-08-25"
+      console.log(`[CALENDAR] Converted Date object to ISO string: ${due_date}`);
+    }
     const eventTitle = title || 'Untitled Task';
     
     console.log(`[CALENDAR] Building event payload for task:`, { title, due_date, due_time });
