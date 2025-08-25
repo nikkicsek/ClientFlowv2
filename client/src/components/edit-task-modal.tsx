@@ -58,7 +58,7 @@ export function EditTaskModal({ isOpen, onClose, task, taskId }: EditTaskModalPr
 
   // Initialize form data when task changes
   useEffect(() => {
-    if (currentTask) {
+    if (currentTask && taskAssignments.length >= 0) { // Wait for taskAssignments to load (even if empty)
       let dateValue = "";
       let timeValue = "";
       
@@ -142,6 +142,7 @@ export function EditTaskModal({ isOpen, onClose, task, taskId }: EditTaskModalPr
         googleDriveLink: "",
         assigneeTeamMemberIds: [],
       });
+      // Close the modal after successful update
       onClose();
     },
     onError: (error) => {
