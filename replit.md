@@ -87,3 +87,36 @@ AgencyPro is a full-stack TypeScript application featuring a React frontend and 
 
 ### Utility Libraries
 - **Luxon**: For robust date and time handling, including timezones.
+
+## Critical System Safeguards (Added 2025-08-25)
+
+### Task Assignment Protection
+**CRITICAL**: Task assignments must be preserved during task updates to prevent tasks from disappearing from user views.
+
+**Implemented Safeguards**:
+1. **Defensive Assignment Logic** (`server/routes.ts` line ~861): Only processes assignment changes when `assigneeUserIds` is explicitly provided in request body
+2. **Comprehensive Logging**: All assignment additions/removals are logged with `[TASK-UPDATE-SAFEGUARD]` prefix
+3. **Post-Update Validation**: Warns when tasks have zero assignments after non-assignment updates
+4. **Database Query Protection**: Fixed queries to use correct column names (`user_id_direct` instead of non-existent `user_id`)
+
+**Key Implementation Details**:
+- Uses `'assigneeUserIds' in req.body` check to distinguish between assignment updates vs. other task updates
+- Prevents accidental unassignment when updating task time, title, or other properties
+- Maintains audit trail through detailed console logging
+
+### Calendar Sync Stability
+**CRITICAL**: Calendar sync must not fail due to database schema mismatches.
+
+**Implemented Fixes**:
+1. **Corrected Database Queries**: Fixed `team_members` table queries to use existing columns
+2. **Error Resilience**: Calendar sync failures don't block task updates
+3. **Timezone Consistency**: All time calculations use Luxon with America/Vancouver timezone
+
+### Development Best Practices
+**CRITICAL**: Always test assignment functionality when modifying task update routes.
+
+**Testing Protocol**:
+1. Edit task time/title without changing assignments → verify task remains assigned
+2. Check console logs for `[TASK-UPDATE-SAFEGUARD]` messages
+3. Verify tasks don't disappear from user task lists
+4. Test calendar sync doesn't break after schema changes

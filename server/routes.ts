@@ -807,6 +807,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Parse and validate the request body
       const { title, description, status, priority, dueDate, dueTime, timezone, assigneeUserIds } = req.body;
       
+      // SAFEGUARD: Prevent accidental unassignment when assigneeUserIds is not explicitly provided
+      const isAssignmentUpdate = 'assigneeUserIds' in req.body;
+      console.log(`[TASK-UPDATE-SAFEGUARD] Task: ${taskId}, Assignment update: ${isAssignmentUpdate}, AssigneeIds:`, assigneeUserIds);
+      
       const updateData: any = {
         title,
         description,
@@ -849,8 +853,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Don't fail task update if calendar sync fails
       }
 
-      // Handle assignment changes if explicitly provided (not undefined/null)
-      if (assigneeUserIds !== undefined && assigneeUserIds !== null && Array.isArray(assigneeUserIds)) {
+      // Handle assignment changes ONLY if explicitly provided in request body
+      // This prevents accidental unassignment when updating other task fields
+      if (isAssignmentUpdate && assigneeUserIds !== undefined && assigneeUserIds !== null && Array.isArray(assigneeUserIds)) {
+        console.log(`[TASK-UPDATE-SAFEGUARD] Processing assignment changes for task: ${taskId}`);
         // Get current assignments
         const currentAssignments = await storage.getTaskAssignments(taskId);
         const currentTeamMemberIds = currentAssignments.map(a => a.teamMemberId);
@@ -862,6 +868,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Remove old assignments
         for (const assignment of currentAssignments) {
           if (toRemove.includes(assignment.teamMemberId)) {
+            console.log(`[TASK-UPDATE-SAFEGUARD] Removing assignment: task ${taskId} ← teamMember ${assignment.teamMemberId}`);
             await storage.deleteTaskAssignment(assignment.id);
             // Fire calendar hook for removal
             const { onAssignmentDeleted } = await import('./hooks/taskCalendarHooks');
@@ -876,6 +883,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             teamMemberId,
             assignedBy: userId,
           });
+          console.log(`[TASK-UPDATE-SAFEGUARD] Added assignment: task ${taskId} → teamMember ${teamMemberId}`);
           // Fire calendar hook for new assignment
           const { onAssignmentCreated } = await import('./hooks/taskCalendarHooks');
           await onAssignmentCreated(newAssignment.id);
@@ -885,6 +893,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Note: Calendar sync is handled above in the AutoCalendarSync.onTaskChanged() call
       // Removed duplicate calendar sync to prevent conflicts
 
+      // SAFEGUARD: Verify task still has assignments after update
+      const finalAssignments = await storage.getTaskAssignments(taskId);
+      if (finalAssignments.length === 0 && !isAssignmentUpdate) {
+        console.warn(`[TASK-UPDATE-WARNING] Task ${taskId} (${updatedTask.title}) has no assignments after update. This might be unintentional.`);
+      }
+      
       res.json({ task: updatedTask });
     } catch (error) {
       console.error('Error updating task:', error);
