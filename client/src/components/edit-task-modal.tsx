@@ -228,9 +228,8 @@ export function EditTaskModal({ isOpen, onClose, task, taskId }: EditTaskModalPr
       dueDate: formData.dueDate || null,
       dueTime: formData.dueTime || null,
       googleDriveLink: formData.googleDriveLink || null,
-      // CRITICAL FIX: Only send assigneeUserIds if assignments were actually loaded
-      // This prevents accidental unassignment when just updating task time/title
-      ...(taskAssignments && taskAssignments.length > 0 ? { assigneeUserIds: formData.assigneeTeamMemberIds } : {})
+      // CRITICAL FIX: Always send assignments to prevent unassignment
+      assigneeUserIds: formData.assigneeTeamMemberIds
     };
 
     console.log("Updating task with data:", taskData);
