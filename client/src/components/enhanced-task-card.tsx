@@ -164,19 +164,23 @@ export function EnhancedTaskCard({ task, assignments = [], showProjectName = fal
                   <span className={`${new Date(task.dueDate) < new Date() ? 'text-red-600 font-medium' : ''}`}>
                     {formatDate(task.dueDate)}
                   </span>
-                  {task.dueDate && (
+                  {(task.dueTime || task.dueDate) && (
                     <span className="text-gray-500">
                       {(() => {
-                        // Handle different date formats from API
-                        let date;
+                        // FIXED: Use stored dueTime field directly to avoid timezone conversion issues
+                        if (task.dueTime) {
+                          // Convert from 24-hour format (13:00) to 12-hour format (1:00 PM)
+                          const [hours, minutes] = task.dueTime.split(':');
+                          const hour12 = parseInt(hours) % 12 || 12;
+                          const ampm = parseInt(hours) >= 12 ? 'PM' : 'AM';
+                          return `${hour12}:${minutes} ${ampm}`;
+                        }
                         
+                        // Fallback for legacy data without dueTime field
+                        let date;
                         if (task.dueDate.includes('T') && task.dueDate.includes('Z')) {
-                          // ISO format from API: "2025-08-29T13:00:00.000Z"
-                          // This is UTC, but we want to display the time as-is (not convert timezone)
-                          const dateStr = task.dueDate.replace('Z', '');
-                          date = new Date(dateStr);
+                          date = new Date(task.dueDate);
                         } else if (task.dueDate.includes(' ') && !task.dueDate.includes('T')) {
-                          // PostgreSQL format: "2025-08-29 13:00:00"
                           date = new Date(task.dueDate.replace(' ', 'T'));
                         } else {
                           date = new Date(task.dueDate);

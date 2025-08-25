@@ -49,6 +49,8 @@ export function EditTaskModal({ isOpen, onClose, task, taskId }: EditTaskModalPr
   });
 
   // TEMPORARY FIX: Show assignment for your tasks since auth endpoints are broken
+  const currentTask = task || fetchedTask;
+
   const taskAssignments = [{
     taskId: currentTask?.id,
     teamMemberId: "5d398f53-fed7-4182-8657-d9e93fe5c35f",
@@ -59,8 +61,6 @@ export function EditTaskModal({ isOpen, onClose, task, taskId }: EditTaskModalPr
   }];
   
   console.log("ASSIGNMENT DEBUG:", { currentTaskId: currentTask?.id, taskAssignments });
-
-  const currentTask = task || fetchedTask;
 
   // Initialize form data when task changes
   useEffect(() => {
