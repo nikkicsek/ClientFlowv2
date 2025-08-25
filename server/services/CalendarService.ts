@@ -228,7 +228,7 @@ export class CalendarService {
     
     // Check for existing mapping
     const mappingResult = await pool.query(
-      'SELECT * FROM calendar_event_mappings WHERE task_id = $1 AND user_id = $2',
+      'SELECT * FROM task_event_mappings WHERE task_id = $1 AND user_id = $2',
       [taskId, userId]
     );
     
@@ -273,7 +273,7 @@ export class CalendarService {
       
       // Store mapping
       await pool.query(`
-        INSERT INTO calendar_event_mappings (task_id, user_id, event_id, calendar_id)
+        INSERT INTO task_event_mappings (task_id, user_id, event_id, calendar_id)
         VALUES ($1, $2, $3, $4)
       `, [taskId, userId, event.id, 'primary']);
       
@@ -292,7 +292,7 @@ export class CalendarService {
     console.log(`[CALENDAR] Deleting event for taskId: ${taskId}, userId: ${userId}`);
     
     const mappingResult = await pool.query(
-      'SELECT * FROM calendar_event_mappings WHERE task_id = $1 AND user_id = $2',
+      'SELECT * FROM task_event_mappings WHERE task_id = $1 AND user_id = $2',
       [taskId, userId]
     );
     
@@ -321,7 +321,7 @@ export class CalendarService {
     
     // Remove mapping
     await pool.query(
-      'DELETE FROM calendar_event_mappings WHERE id = $1',
+      'DELETE FROM task_event_mappings WHERE id = $1',
       [mapping.id]
     );
     
@@ -345,7 +345,7 @@ export class CalendarService {
   // Get mapping for task
   static async getTaskMapping(taskId: string, userId: string): Promise<CalendarMapping | null> {
     const result = await pool.query(
-      'SELECT * FROM calendar_event_mappings WHERE task_id = $1 AND user_id = $2',
+      'SELECT * FROM task_event_mappings WHERE task_id = $1 AND user_id = $2',
       [taskId, userId]
     );
     
@@ -355,7 +355,7 @@ export class CalendarService {
   // Get all mappings for task (multiple users)
   static async getTaskMappings(taskId: string): Promise<CalendarMapping[]> {
     const result = await pool.query(
-      'SELECT * FROM calendar_event_mappings WHERE task_id = $1',
+      'SELECT * FROM task_event_mappings WHERE task_id = $1',
       [taskId]
     );
     

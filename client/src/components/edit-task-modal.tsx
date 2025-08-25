@@ -49,19 +49,20 @@ export function EditTaskModal({ isOpen, onClose, task, taskId }: EditTaskModalPr
   const { data: teamMembers = [] } = useQuery({
     queryKey: ["/api/admin/team-members"],
     enabled: isOpen,
-  });
+  }) as { data: any[] };
 
-  // TEMPORARY FIX: Show assignment for your tasks since auth endpoints are broken
+  // Get current task
   const currentTask = task || fetchedTask;
 
-  const taskAssignments = [{
-    taskId: currentTask?.id,
-    teamMemberId: "5d398f53-fed7-4182-8657-d9e93fe5c35f",
-    teamMember: {
-      id: "5d398f53-fed7-4182-8657-d9e93fe5c35f",
-      name: "Nikki Csek"
-    }
-  }];
+  // FIX: Fetch real task assignments using React Query (instead of hardcoded)
+  const { data: taskAssignments = [] } = useQuery({
+    queryKey: ['taskAssignments', currentTask?.id],
+    queryFn: async () => {
+      const response = await apiRequest('GET', `/api/tasks/${currentTask?.id}/assignments`);
+      return response.json(); // Returns array of { id, taskId, teamMemberId, teamMember: {...} }
+    },
+    enabled: !!currentTask?.id && isOpen,
+  });
   
   console.log("ASSIGNMENT DEBUG:", { currentTaskId: currentTask?.id, taskAssignments });
 
@@ -228,7 +229,7 @@ export function EditTaskModal({ isOpen, onClose, task, taskId }: EditTaskModalPr
     }
 
     // Send separate dueDate and dueTime fields to match unified time handling
-    const taskData = {
+    const taskData: any = {
       title: formData.title,
       description: formData.description || null,
       status: formData.status,

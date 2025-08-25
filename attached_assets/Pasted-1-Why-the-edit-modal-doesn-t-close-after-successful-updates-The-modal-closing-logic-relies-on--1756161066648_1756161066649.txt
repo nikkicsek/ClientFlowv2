@@ -1,0 +1,193 @@
+1. **Why the edit modal doesn't close after successful updates**: The modal closing logic relies on `onClose()` being called in the `onSuccess` callback of `updateTaskMutation`. However, the backend API route throws a ReferenceError when attempting `res.json({ task: updatedTask })` because `updatedTask` is never defined or assigned (the code is missing the actual database update for the task). This causes the API to hit the catch block, return a 500 error, and trigger the mutation's `onError` instead of `onSuccess`. As a result, the toast shows "Update Failed" (or silently fails if not handled), but the modal doesn't close. There is no race condition in the modal logic itself—the issue is upstream in the API failing silently on the server side.
+
+2. **Why assignments disappear despite the safeguards we implemented**: The safeguards (conditional sending of `assigneeUserIds` only if `assignmentChanged` is true) are bypassed because the form initialization in `useEffect` sets `assigneeTeamMemberIds` to an empty or incorrect array. This happens due to the hardcoded `taskAssignments` array, which has `taskId: currentTask?.id` (potentially `undefined` at declaration time), leading to no matches in the filter. When the user notices the assignment isn't displayed and "readds" it (triggering `handleAssigneeChange`), `assignmentChanged` becomes true, and the backend receives a partial/incomplete `assigneeUserIds` list. The backend's sync logic then removes any existing assignments not in this list (via `toRemove`). If multiple assignees exist or the list is empty, this unintentionally unassigns "Nikki Csek" or others. The queries use correct field names (`teamMemberId`), but the relationships fail due to bad initialization data.
+
+3. **Why old calendar events aren't cleaned up when task times change**: The cleanup and update logic in `CalendarService` relies on querying the `calendar_event_mappings` table to find existing mappings and update/delete events. However, the actual table name in the schema is `task_event_mappings`—a mismatch that causes all queries (SELECT, INSERT, DELETE) to fail silently (no rows found, no errors thrown in this code). As a result, `upsertTaskEvent` always treats events as new (creating duplicates instead of updating times), and `deleteTaskEvent` finds no mappings to delete. When task times change via `AutoCalendarSync.onTaskChanged` (called unconditionally in the API), new events are created without removing/updating old ones. This is bypassed because of the table name error, not missing awaits (all critical operations are awaited).
+
+4. **Assignment display bug**: The edit modal doesn't show "Nikki Csek" because the `useEffect` initialization uses a hardcoded `taskAssignments` array that doesn't reflect real database data. The filter often returns an empty array (due to potential `undefined` mismatches in `taskId`), setting `formData.assigneeTeamMemberIds` to `[]`. This prevents the UI from rendering current assignees. The hardcoded data is a placeholder and doesn't query the actual `task_assignments` table. No wrong field names, but missing a proper data fetch for assignments.
+
+**Key Questions Answered**:
+- **Race condition in modal closing logic?** No, the issue is the API throwing an error due to undefined `updatedTask`, preventing `onSuccess`.
+- **Wrong field names or relationships in assignment queries?** No, fields like `teamMemberId` and references to `tasks.id`/`teamMembers.id` are correct; the problem is bad frontend data initialization leading to incomplete sends.
+- **Calendar cleanup logic bypassed?** Yes, due to table name mismatch (`calendar_event_mappings` vs. `task_event_mappings`), causing all mapping operations to fail.
+- **Missing await statements or promise issues?** No, all async operations (e.g., `await storage.deleteTaskAssignment`, `await calendar.events.update`) are properly awaited; the issues are logical errors, not unresolved promises.
+
+**Specific Line-by-Line Fixes**:
+These changes permanently resolve the issues by adding the missing task update in the API (fixing modal close by ensuring success), fetching real assignments (fixing display and disappearance), and correcting table names (fixing calendar cleanup). Assume `storage` has methods like `updateTask` and `getTask` (inferred from usage); add if needed. For assignments display, add a `useQuery` to fetch real data (using React Query, as `queryClient` is already used).
+
+**Fix for Edit Modal Not Closing (Add Task Update in API Route):**
+Original (in app.put('/api/tasks/:taskId')):
+```
+    // ... after assignment processing ...
+
+    // Auto-sync calendar event - CRITICAL: May create new events without cleaning old ones
+    try {
+      await AutoCalendarSync.onTaskChanged(taskId);
+      console.log(`Auto-synced calendar for updated task ${taskId}`);
+    } catch (calendarError) {
+      console.error('Auto-sync error for updated task:', taskId, calendarError);
+    }
+    res.json({ task: updatedTask });
+```
+Fixed:
+```
+    // ... after assignment processing ...
+
+    // FIX: Actually update the task in the database with other fields (e.g., title, dueDate, dueTime)
+    // Compute dueAt if needed (canonical UTC from dueDate, dueTime, timezone)
+    let dueAt = null;
+    if (dueDate && dueTime && req.body.timezone) {
+      const dtLocal = DateTime.fromISO(`${dueDate}T${dueTime}`, { zone: req.body.timezone });
+      dueAt = dtLocal.toUTC().toISO();
+    }
+    const updatedTask = await storage.updateTask(taskId, {
+      ...otherUpdates,
+      dueDate,
+      dueTime,
+      dueAt, // If your storage.updateTask handles it
+    });
+    console.log(`[TASK-UPDATE] Updated task ${taskId} with new data:`, { dueDate, dueTime, ...otherUpdates });
+
+    // Auto-sync calendar event
+    try {
+      await AutoCalendarSync.onTaskChanged(taskId);
+      console.log(`Auto-synced calendar for updated task ${taskId}`);
+    } catch (calendarError) {
+      console.error('Auto-sync error for updated task:', taskId, calendarError);
+    }
+    res.json({ task: updatedTask }); // Now defined
+```
+
+**Fix for Assignments Disappearing and Display Bug (Fetch Real Assignments in EditTaskModal):**
+Original (in EditTaskModal):
+```
+  const [assignmentChanged, setAssignmentChanged] = useState(false);
+ 
+  // HARDCODED ASSIGNMENT FIX (supposed to show Nikki Csek but fails)
+  const taskAssignments = [{
+    taskId: currentTask?.id,
+    teamMemberId: "5d398f53-fed7-4182-8657-d9e93fe5c35f",
+    teamMember: {
+      id: "5d398f53-fed7-4182-8657-d9e93fe5c35f",
+      name: "Nikki Csek"
+    }
+  }];
+  // FORM INITIALIZATION - May not be getting current assignments
+  useEffect(() => {
+    if (currentTask && taskAssignments.length >= 0) {
+      // ... time parsing logic ...
+     
+      const currentAssignments = taskAssignments.filter((assignment: any) =>
+        assignment.taskId === currentTask.id
+      );
+      const assigneeIds = currentAssignments.map((assignment: any) => assignment.teamMemberId);
+     
+      setFormData({
+        // ... other fields ...
+        assigneeTeamMemberIds: assigneeIds, // FIX: Initialize with current assignments
+      });
+     
+      setAssignmentChanged(false); // FIX: Reset tracking
+    }
+  }, [currentTask, taskAssignments]);
+```
+Fixed (remove hardcoded, add useQuery for real data; assume currentTask = task):
+```
+  const [assignmentChanged, setAssignmentChanged] = useState(false);
+ 
+  // FIX: Fetch real task assignments using React Query (instead of hardcoded)
+  const { data: taskAssignments = [] } = useQuery({
+    queryKey: ['taskAssignments', currentTask?.id],
+    queryFn: async () => {
+      const response = await apiRequest('GET', `/api/task-assignments/${currentTask.id}`);
+      return response.json(); // Assume returns array of { id, taskId, teamMemberId, ... }
+    },
+    enabled: !!currentTask?.id,
+  });
+
+  // FORM INITIALIZATION - Now uses fetched data
+  useEffect(() => {
+    if (currentTask && taskAssignments.length >= 0) {
+      // ... time parsing logic ...
+     
+      const currentAssignments = taskAssignments.filter((assignment: any) =>
+        assignment.taskId === currentTask.id
+      );
+      const assigneeIds = currentAssignments.map((assignment: any) => assignment.teamMemberId);
+     
+      setFormData({
+        // ... other fields ...
+        assigneeTeamMemberIds: assigneeIds, // Now initializes with real current assignments
+      });
+     
+      setAssignmentChanged(false);
+    }
+  }, [currentTask, taskAssignments]); // Dependency on fetched data
+```
+
+**Fix for Calendar Cleanup Failure (Correct Table Names in CalendarService):**
+Original (in upsertTaskEvent):
+```
+    // Check for existing mapping
+    const mappingResult = await pool.query(
+      'SELECT * FROM calendar_event_mappings WHERE task_id = $1 AND user_id = $2',
+      [taskId, userId]
+    );
+   
+    if (mappingResult.rows.length > 0) {
+      // Update existing event ...
+    } else {
+      // Create new event ...
+      await pool.query(`
+        INSERT INTO calendar_event_mappings (task_id, user_id, event_id, calendar_id)
+        VALUES ($1, $2, $3, $4)
+      `, [taskId, userId, event.id, 'primary']);
+    }
+```
+Fixed:
+```
+    // FIX: Correct table name to match schema (task_event_mappings)
+    const mappingResult = await pool.query(
+      'SELECT * FROM task_event_mappings WHERE task_id = $1 AND user_id = $2',
+      [taskId, userId]
+    );
+   
+    if (mappingResult.rows.length > 0) {
+      // Update existing event ...
+    } else {
+      // Create new event ...
+      await pool.query(`
+        INSERT INTO task_event_mappings (task_id, user_id, event_id, calendar_id)
+        VALUES ($1, $2, $3, $4)
+      `, [taskId, userId, event.id, 'primary']);
+    }
+```
+
+Original (in deleteTaskEvent):
+```
+    const mappingResult = await pool.query(
+      'SELECT * FROM calendar_event_mappings WHERE task_id = $1 AND user_id = $2',
+      [taskId, userId]
+    );
+   
+    // ... if found ...
+   
+    await pool.query(
+      'DELETE FROM calendar_event_mappings WHERE id = $1',
+      [mapping.id]
+    );
+```
+Fixed:
+```
+    const mappingResult = await pool.query(
+      'SELECT * FROM task_event_mappings WHERE task_id = $1 AND user_id = $2',
+      [taskId, userId]
+    );
+   
+    // ... if found ...
+   
+    await pool.query(
+      'DELETE FROM task_event_mappings WHERE id = $1',
+      [mapping.id]
+    );
+```
