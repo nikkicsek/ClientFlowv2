@@ -10,7 +10,7 @@ export class AutoCalendarSync {
     try {
       // Get task assignments
       const assignmentResult = await pool.query(`
-        SELECT ta.*, tm.email, tm.user_id, u.id as user_id_direct
+        SELECT ta.*, tm.email, u.id as user_id_direct
         FROM task_assignments ta
         LEFT JOIN team_members tm ON ta.team_member_id = tm.id
         LEFT JOIN users u ON tm.email = u.email
@@ -24,7 +24,7 @@ export class AutoCalendarSync {
       
       // Process each assignment
       for (const assignment of assignmentResult.rows) {
-        const userId = assignment.user_id || assignment.user_id_direct;
+        const userId = assignment.user_id_direct;
         const teamMemberId = assignment.team_member_id;
         
         if (!userId) {
