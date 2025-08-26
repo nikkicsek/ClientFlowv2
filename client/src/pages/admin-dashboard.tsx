@@ -942,14 +942,14 @@ export default function AdminDashboard() {
                   onDragEnd={handleDragEnd}
                 >
                   <SortableContext 
-                    items={projects.filter(p => p.organizationId === selectedOrgForProjects)
+                    items={(Array.isArray(projects) ? projects : []).filter(p => p.organizationId === selectedOrgForProjects)
                       .sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0))
                       .map(p => p.id)}
                     strategy={verticalListSortingStrategy}
                   >
                     {projectViewMode === "grid" ? (
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {projects.filter(p => p.organizationId === selectedOrgForProjects)
+                        {(Array.isArray(projects) ? projects : []).filter(p => p.organizationId === selectedOrgForProjects)
                           .sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0))
                           .map((project: Project) => (
                             <SortableProjectCard key={project.id} project={project} />
@@ -957,7 +957,7 @@ export default function AdminDashboard() {
                       </div>
                     ) : (
                       <div className="space-y-3">
-                        {projects.filter(p => p.organizationId === selectedOrgForProjects)
+                        {(Array.isArray(projects) ? projects : []).filter(p => p.organizationId === selectedOrgForProjects)
                           .sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0))
                           .map((project: Project) => (
                             <SortableProjectListItem key={project.id} project={project} />
@@ -1074,7 +1074,7 @@ export default function AdminDashboard() {
               </div>
             ) : (
               <div className="space-y-3">
-                {(organizations || [])
+                {(Array.isArray(organizations) ? organizations : [])
                   .sort((a, b) => a.name.localeCompare(b.name))
                   .map((org) => (
                   <Card key={org.id} className="group hover:shadow-sm transition-shadow">
