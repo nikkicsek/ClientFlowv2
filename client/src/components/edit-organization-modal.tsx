@@ -158,7 +158,7 @@ export function EditOrganizationModal({ organization, isOpen, onClose }: EditOrg
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">No primary contact</SelectItem>
-                {clients?.map((client) => (
+                {Array.isArray(clients) && clients.map((client) => (
                   <SelectItem key={client.id} value={client.id}>
                     {client.firstName} {client.lastName} ({client.email})
                   </SelectItem>

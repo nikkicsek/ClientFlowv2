@@ -34,9 +34,9 @@ export function OrganizationContactsModal({ organization, isOpen, onClose }: Org
   });
 
   // Get unassigned clients (not in any organization or not in this organization)
-  const unassignedClients = allClients?.filter(client => 
+  const unassignedClients = Array.isArray(allClients) ? allClients.filter(client => 
     !client.organizationId || client.organizationId !== organization?.id
-  ) || [];
+  ) : [];
 
   const assignUserMutation = useMutation({
     mutationFn: async (userId: string) => {
@@ -139,7 +139,7 @@ export function OrganizationContactsModal({ organization, isOpen, onClose }: Org
                   {unassignedClients.length === 0 ? (
                     <SelectItem value="none" disabled>No available clients</SelectItem>
                   ) : (
-                    unassignedClients.map((client) => (
+                    Array.isArray(unassignedClients) && unassignedClients.map((client) => (
                       <SelectItem key={client.id} value={client.id}>
                         {client.firstName} {client.lastName} ({client.email})
                       </SelectItem>
