@@ -60,10 +60,10 @@ export function EditTaskModal({ isOpen, onClose, task, taskId }: EditTaskModalPr
     enabled: isOpen,
   }) as { data: any[] };
 
-  // Filter assignments for current task
-  const taskAssignments = allAssignments.filter((assignment: any) => 
-    assignment.taskId === currentTask?.id
-  );
+  // Filter assignments for current task - with safety check
+  const taskAssignments = Array.isArray(allAssignments) 
+    ? allAssignments.filter((assignment: any) => assignment.taskId === currentTask?.id)
+    : [];
   
   console.log("ASSIGNMENT DEBUG:", { currentTaskId: currentTask?.id, taskAssignments });
 
